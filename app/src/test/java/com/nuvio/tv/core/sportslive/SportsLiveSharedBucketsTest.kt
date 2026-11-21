@@ -50,7 +50,10 @@ class SportsLiveSharedBucketsTest {
     fun `a new load, catalogs, team directory, tip-off or age builds it again`() {
         val shared = SportsLiveSharedBuckets(maxAgeMs = 5 * 60_000L)
         val live = shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L)
-        assertNotSame(live, shared.tab(load.copy(), keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L))
+        // live.24: a new load listing the same games keeps the rows built (incremental bucketing); a changed game does not.
+        assertSame(live, shared.tab(load.copy(), keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L))
+        val renamed = load.copy(items = listOf(describe("live", "Alpha vs Beta II", "2026-11-20T17:00:00Z")) + load.items.drop(1))
+        assertNotSame(live, shared.tab(renamed, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L))
         val again = shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L)
         assertNotSame(again, shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 1L))
         val stamped = shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 1L)

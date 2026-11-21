@@ -39,7 +39,13 @@ class SportsLiveSharedBuckets(
         val raw: List<SportsLiveItem>,
         /** [raw] reclocked at [builtAtMs]. */
         val clocked: List<SportsLiveItem>,
-        val tabs: HashMap<SportsLiveTab, List<SportsLiveItem>> = HashMap()
+        /**
+         * Each tab's bucket of an earlier sorting of the same catalogs in the same order (live.24): a new load or clock
+         * merges again only what changed ([SportsLiveItemBucketer.bucketClockedIncremental]).
+         */
+        val previous: Map<SportsLiveTab, SportsLiveTabBucket> = emptyMap(),
+        val tabs: HashMap<SportsLiveTab, List<SportsLiveItem>> = HashMap(),
+        val buckets: HashMap<SportsLiveTab, SportsLiveTabBucket> = HashMap()
     )
 
     private var entry: Entry? = null
@@ -56,11 +62,24 @@ class SportsLiveSharedBuckets(
     ): List<SportsLiveItem> {
         val entry = entryFor(load, claimedKeys, addonOrder, stamp, nowMs)
         return entry.tabs.getOrPut(tab) {
-            SportsLiveItemBucketer.bucketClocked(entry.clocked, tab, entry.builtAtMs, entry.addonOrder).also { games ->
+            val startedAt = System.nanoTime()
+            val previous = entry.previous[tab]
+            val bucket = SportsLiveItemBucketer.bucketClockedIncremental(previous, entry.clocked, tab, entry.builtAtMs, entry.addonOrder, entry.stamp)
+            entry.buckets[tab] = bucket
+            SportsLiveDebugTiming.log { "sportsOpen stage=bucketTab tab=${tab.name} ms=${(System.nanoTime() - startedAt) / 1_000_000} ${countsOf(bucket, previous)}" }
+            bucket.rows.also { games ->
                 // live.20: the rows no rule could place, kept for the continuous cleanup ([SportsLiveUnidentified]).
                 if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) unidentified?.record(games, System.identityHashCode(load), nowMs)
             }
         }
+    }
+
+    // live.24 debug counters: the items a tab read, how many were new or changed since the last sorting, and how many
+    // were merged again (the rest kept their groups' rows).
+    private fun countsOf(bucket: SportsLiveTabBucket, previous: SportsLiveTabBucket?): String {
+        val merge = bucket.merge ?: return "rows=${bucket.rows.size} merged=0"
+        if (bucket === previous) return "rows=${bucket.rows.size} items=${merge.inputCount} reused=all"
+        return "rows=${bucket.rows.size} items=${merge.inputCount} changed=${merge.changedCount} merged=${merge.remergedCount} full=${merge.full}"
     }
 
     /** Every tab of [load] ([SportsLiveItemBucketer.bucket]), each built once. */
@@ -90,7 +109,9 @@ class SportsLiveSharedBuckets(
             matchedEvents?.retain(listed)
             womenGames?.retain(listed)
         }
-        return Entry(load, claimedKeys, addonOrder, stamp, nowMs, raw, SportsLiveItemBucketer.reclock(raw, nowMs)).also { entry = it }
+        // The same catalogs in the same order (a refresh, a tip-off, the directory moving): the last buckets are the base.
+        val previous = entry?.takeIf { it.claimedKeys == claimedKeys && it.addonOrder == addonOrder }?.let { old -> old.previous + old.buckets }.orEmpty()
+        return Entry(load, claimedKeys, addonOrder, stamp, nowMs, raw, SportsLiveItemBucketer.reclock(raw, nowMs), previous).also { entry = it }
     }
 
     companion object {

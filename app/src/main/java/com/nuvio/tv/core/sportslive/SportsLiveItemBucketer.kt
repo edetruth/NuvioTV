@@ -232,11 +232,37 @@ object SportsLiveItemBucketer {
         nowMs: Long,
         addonOrder: List<String>
     ): List<SportsLiveItem> =
+        listedIn(items, tab, nowMs)
+            .let { if (tab == SportsLiveTab.REPLAYS) it else mergeSameTitle(merge(it, addonOrder, nowMs), addonOrder) }
+            .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
+
+    /** The items [tab] lists at [nowMs], before copies are merged: not finished, each stream key once (its first). */
+    internal fun listedIn(items: List<SportsLiveItem>, tab: SportsLiveTab, nowMs: Long): List<SportsLiveItem> =
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
             // The stream key (`addonId|id`) is built once per item: no pair per item and tab.
             .distinctBy { it.streamKey }
-            .let { if (tab == SportsLiveTab.REPLAYS) it else mergeSameTitle(merge(it, addonOrder, nowMs), addonOrder) }
-            .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
+
+    /**
+     * [bucketClocked] by way of [previous], the same tab's bucket of the last load or clock (live.24): only the groups of
+     * copies a changed, new or removed item touches are merged again ([mergeIncremental]); the rows equal
+     * [bucketClocked]'s. With nothing changed, [previous] itself.
+     */
+    internal fun bucketClockedIncremental(
+        previous: SportsLiveTabBucket?,
+        items: List<SportsLiveItem>,
+        tab: SportsLiveTab,
+        nowMs: Long,
+        addonOrder: List<String>,
+        stamp: Long,
+        directory: TeamDirectory = TeamDirectory.shared,
+        matchedEvents: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared
+    ): SportsLiveTabBucket {
+        val listed = listedIn(items, tab, nowMs)
+        if (tab == SportsLiveTab.REPLAYS) return SportsLiveTabBucket(listed.sortedWith(replayOrder), null)
+        val merged = mergeIncremental(previous?.merge, listed, addonOrder, nowMs, stamp, directory, matchedEvents)
+        if (previous != null && merged === previous.merge) return previous
+        return SportsLiveTabBucket(mergeSameTitle(merged.output, addonOrder).sortedWith(tabOrder), merged)
+    }
 
     /**
      * [item] as it is at [nowMs] (live.20 C1): an item whose start alone says whether it is on ([SportsLiveItem.liveByClock])
@@ -350,87 +376,44 @@ object SportsLiveItemBucketer {
         directory: TeamDirectory = TeamDirectory.shared,
         matchedEvents: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared
     ): List<SportsLiveItem> {
-        val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
+        val rank = rankOf(addonOrder)
         // Each copy's id view ([idView]: league inference and #168 identity) once per merge, not four times per pair
         // compared. It is a pure function of the item, so one per item object (an adopted start makes a new primary).
         val views = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
         fun view(item: SportsLiveItem): SportsLiveItem = views.getOrPut(item) { idView(item, directory) }
         // Copies of one game share a team-pair key (by name, or by ESPN team ids), so only plausible matches are compared.
-        val candidates = candidateGroups(
-            items.filter {
-                it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null &&
-                    !SportsLiveTeams.isPlaceholderGame(it.teams)
-            }
-        ) { item -> idKeys(view(item), directory) }
+        val candidates = candidateGroups(items.filter(::isMergeCandidate)) { item -> idKeys(view(item), directory) }
         if (candidates.isEmpty()) return items
-        // Keyed by the primary's stream key; a source joins at most one primary.
+        val merging = Merging()
+        for (group in candidates) mergeGroup(group, rank, nowMs, directory, matchedEvents, ::view, merging)
+        if (merging.folded.isEmpty()) return items
+        return items.mapNotNull { merging.rowOf(it) }
+    }
+
+    /** The items [merge] compares at all: events (not channels) naming two sides, never a "TBD vs TBD" placeholder. */
+    private fun isMergeCandidate(item: SportsLiveItem): Boolean =
+        item.kind == SportsLiveKind.EVENTS && !item.isChannel && item.teams != null &&
+            !SportsLiveTeams.isPlaceholderGame(item.teams)
+
+    private fun rankOf(addonOrder: List<String>): Map<String, Int> =
+        addonOrder.withIndex().associate { (index, id) -> id to index }
+
+    /** What [merge] decided, by the primary's stream key; each group of copies fills only its own primaries' entries. */
+    private class Merging {
+        // A source joins at most one primary.
         val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
-        // A primary with no timed start takes its first timed copy's, by the primary's stream key.
+
+        // A primary with no timed start takes its first timed copy's.
         val adoptedStart = HashMap<String, SportsLiveItem>()
         val folded = HashSet<String>()
-        // Primaries that took a copy by ESPN team ids, and the copy whose league is named, by the primary's stream key.
+
+        // Primaries that took a copy by ESPN team ids, and the copy whose league is named.
         val presentedBy = HashMap<String, SportsLiveItem>()
-        for (group in candidates) {
-            // Each primary as later copies are compared with it: with the start it adopted, if any.
-            val primaries = mutableListOf<SportsLiveItem>()
-            // Deterministic primary: addon order, then catalog name, then id (independent of input order).
-            val ordered = group.sortedWith(
-                compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id })
-            )
-            for (item in ordered) {
-                var byIds = false
-                var byEvent = false
-                val index = primaries.indexOfFirst { primary ->
-                    // A source already pooled under this primary is not pooled twice (no list built per pair).
-                    if (primary.streamKey == item.streamKey ||
-                        alternatesOf[primary.streamKey]?.any { it.streamKey == item.streamKey } == true
-                    ) {
-                        return@indexOfFirst false
-                    }
-                    // Matched to one ESPN game (live.23, TV report #10): one game, whatever the addons call it.
-                    if (matchedEvents.sameEvent(primary.streamKey, item.streamKey)) {
-                        byEvent = true
-                        return@indexOfFirst true
-                    }
-                    // ESPN team ids decide first; names only for teams the directory does not know.
-                    val viewA = view(primary)
-                    val viewB = view(item)
-                    when (idVerdictOfViews(viewA, viewB, directory)) {
-                        IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs, directory)) {
-                            null -> true.also { byIds = true }
-                            // A copy of unknown sport: its teams were read in the other copy's league; names decide.
-                            SPORT_UNKNOWN -> sameGame(primary, item, nowMs)
-                            else -> false
-                        }
-                        IdVerdict.DIFFERENT -> false
-                        IdVerdict.UNKNOWN -> sameGame(primary, item, nowMs)
-                    }
-                }
-                if (index < 0) {
-                    primaries += item
-                } else {
-                    val primary = primaries[index]
-                    alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
-                    folded += item.streamKey
-                    if (byIds && !namesLeague(primary) && namesLeague(item)) presentedBy.putIfAbsent(primary.streamKey, item)
-                    // The copy naming the matched game's league ("WSL", not "Premier League") is the one shown.
-                    if (byEvent) {
-                        val league = matchedEvents.leagueOf(item.streamKey)
-                        if (league != null && league in EspnLeagueMap.leaguesFor(item) && league !in EspnLeagueMap.leaguesFor(primary)) {
-                            presentedBy[primary.streamKey] = item
-                        }
-                    }
-                    if (timedStart(primary) == null && timedStart(item) != null) {
-                        adoptedStart[primary.streamKey] = item
-                        primaries[index] = primary.copy(startMs = item.startMs, startHasTimeOfDay = true)
-                    }
-                }
-            }
-        }
-        if (folded.isEmpty()) return items
-        return items.mapNotNull { item ->
-            if (item.streamKey in folded) return@mapNotNull null
-            val alternates = alternatesOf[item.streamKey] ?: return@mapNotNull item
+
+        /** [item]'s row: null when it folded into another copy, itself when it took none. */
+        fun rowOf(item: SportsLiveItem): SportsLiveItem? {
+            if (item.streamKey in folded) return null
+            val alternates = alternatesOf[item.streamKey] ?: return item
             val timed = adoptedStart[item.streamKey]
             val merged = item.copy(
                 alternates = alternates,
@@ -439,10 +422,181 @@ object SportsLiveItemBucketer {
                 startHasTimeOfDay = timed != null || item.startHasTimeOfDay
             )
             // The copy naming the league lends the row its title, sides and sport (it is the one ESPN matches).
-            presentedBy[item.streamKey]?.let { named ->
+            return presentedBy[item.streamKey]?.let { named ->
                 merged.copy(meta = merged.meta.copy(name = named.meta.name), teams = named.teams, sport = named.sport)
             } ?: merged
         }
+    }
+
+    /** One group of possible copies ([candidateGroups]) folded into primaries, recorded in [into] ([merge]). */
+    private fun mergeGroup(
+        group: List<SportsLiveItem>,
+        rank: Map<String, Int>,
+        nowMs: Long,
+        directory: TeamDirectory,
+        matchedEvents: SportsLiveMatchedEvents,
+        view: (SportsLiveItem) -> SportsLiveItem,
+        into: Merging
+    ) {
+        val alternatesOf = into.alternatesOf
+        val adoptedStart = into.adoptedStart
+        val folded = into.folded
+        val presentedBy = into.presentedBy
+        // Each primary as later copies are compared with it: with the start it adopted, if any.
+        val primaries = mutableListOf<SportsLiveItem>()
+        // Deterministic primary: addon order, then catalog name, then id (independent of input order).
+        val ordered = group.sortedWith(
+            compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id })
+        )
+        for (item in ordered) {
+            var byIds = false
+            var byEvent = false
+            val index = primaries.indexOfFirst { primary ->
+                // A source already pooled under this primary is not pooled twice (no list built per pair).
+                if (primary.streamKey == item.streamKey ||
+                    alternatesOf[primary.streamKey]?.any { it.streamKey == item.streamKey } == true
+                ) {
+                    return@indexOfFirst false
+                }
+                // Matched to one ESPN game (live.23, TV report #10): one game, whatever the addons call it.
+                if (matchedEvents.sameEvent(primary.streamKey, item.streamKey)) {
+                    byEvent = true
+                    return@indexOfFirst true
+                }
+                // ESPN team ids decide first; names only for teams the directory does not know.
+                val viewA = view(primary)
+                val viewB = view(item)
+                when (idVerdictOfViews(viewA, viewB, directory)) {
+                    IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs, directory)) {
+                        null -> true.also { byIds = true }
+                        // A copy of unknown sport: its teams were read in the other copy's league; names decide.
+                        SPORT_UNKNOWN -> sameGame(primary, item, nowMs)
+                        else -> false
+                    }
+                    IdVerdict.DIFFERENT -> false
+                    IdVerdict.UNKNOWN -> sameGame(primary, item, nowMs)
+                }
+            }
+            if (index < 0) {
+                primaries += item
+            } else {
+                val primary = primaries[index]
+                alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
+                folded += item.streamKey
+                if (byIds && !namesLeague(primary) && namesLeague(item)) presentedBy.putIfAbsent(primary.streamKey, item)
+                // The copy naming the matched game's league ("WSL", not "Premier League") is the one shown.
+                if (byEvent) {
+                    val league = matchedEvents.leagueOf(item.streamKey)
+                    if (league != null && league in EspnLeagueMap.leaguesFor(item) && league !in EspnLeagueMap.leaguesFor(primary)) {
+                        presentedBy[primary.streamKey] = item
+                    }
+                }
+                if (timedStart(primary) == null && timedStart(item) != null) {
+                    adoptedStart[primary.streamKey] = item
+                    primaries[index] = primary.copy(startMs = item.startMs, startHasTimeOfDay = true)
+                }
+            }
+        }
+    }
+
+    /** How long a kept merge's group results are used again ([mergeIncremental]): as long as a shared sorting is. */
+    internal const val MERGE_REUSE_MS = 5 * 60_000L
+
+    /**
+     * [merge] of [items] (each stream key once, as a tab lists them) by way of [previous], the merge of the last load or
+     * clock (live.24): an item equal to the one it had keeps its team-pair keys and id view, and a group of possible copies
+     * ([candidateGroups]) whose members are exactly the ones it had, all unchanged, keeps its rows. Only the groups a
+     * changed, new or removed item touches are merged again. The rows equal [merge]'s for the same [items], [addonOrder],
+     * [nowMs] and team directory: groups are merged independently of each other and of input order, and the rows are
+     * assembled in input order as [merge] does. [previous] is used only for the same [addonOrder] and directory [stamp],
+     * and while its oldest group result is under [maxReuseMs] old (copies fold by the clock too, [sameTime]).
+     * With nothing changed, [previous] itself (the same rows, the same instances).
+     */
+    internal fun mergeIncremental(
+        previous: SportsLiveMergeState?,
+        items: List<SportsLiveItem>,
+        addonOrder: List<String>,
+        nowMs: Long,
+        stamp: Long,
+        directory: TeamDirectory = TeamDirectory.shared,
+        matchedEvents: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared,
+        maxReuseMs: Long = MERGE_REUSE_MS
+    ): SportsLiveMergeState {
+        val prev = previous?.takeIf { it.addonOrder == addonOrder && it.stamp == stamp && nowMs - it.sinceMs in 0 until maxReuseMs }
+        // An item equal to the one the previous merge had is that one: its keys, view and group result carry over.
+        var changed = 0
+        var replaced = 0
+        val input = if (prev == null) {
+            items
+        } else {
+            items.map { item ->
+                val before = prev.byKey[item.streamKey]
+                if (before != null && (before === item || before == item)) {
+                    before
+                } else {
+                    changed++
+                    if (before != null) replaced++
+                    item
+                }
+            }
+        }
+        val removed = if (prev == null) 0 else prev.byKey.size - (input.size - changed) - replaced
+        if (prev != null && changed == 0 && removed == 0) return prev
+        val views = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+        fun view(item: SportsLiveItem): SportsLiveItem = views.getOrPut(item) { prev?.views?.get(item) ?: idView(item, directory) }
+        val candidates = input.filter(::isMergeCandidate)
+        val keys = HashMap<String, List<Pair<String, String>>>(candidates.size * 2)
+        for (item in candidates) {
+            val kept = if (prev != null && prev.byKey[item.streamKey] === item) prev.keys[item.streamKey] else null
+            keys[item.streamKey] = kept ?: (pairKeys(item.teams!!) + idKeys(view(item), directory))
+        }
+        val rank = rankOf(addonOrder)
+        val groupOf = HashMap<String, SportsLiveMergeState.Group>()
+        var remerged = 0
+        var keptAny = false
+        for (group in groupsByKeys(candidates) { keys.getValue(it.streamKey) }) {
+            val kept = if (prev == null) {
+                null
+            } else {
+                prev.groupOf[group[0].streamKey]?.takeIf { before ->
+                    before.members.size == group.size &&
+                        group.all { prev.byKey[it.streamKey] === it && prev.groupOf[it.streamKey] === before }
+                }
+            }
+            val result = if (kept != null) {
+                keptAny = true
+                kept
+            } else {
+                remerged += group.size
+                val merging = Merging()
+                mergeGroup(group, rank, nowMs, directory, matchedEvents, ::view, merging)
+                SportsLiveMergeState.Group(
+                    members = group.mapTo(HashSet()) { it.streamKey },
+                    rows = group.associate { it.streamKey to merging.rowOf(it) }
+                )
+            }
+            group.forEach { groupOf[it.streamKey] = result }
+        }
+        // Views of items still listed are kept for the next merge (a group they are in may change then).
+        if (prev != null) input.forEach { item -> prev.views[item]?.let { views.putIfAbsent(item, it) } }
+        val output = input.mapNotNull { item ->
+            val group = groupOf[item.streamKey]
+            if (group == null) item else group.rows[item.streamKey]
+        }
+        return SportsLiveMergeState(
+            addonOrder = addonOrder,
+            stamp = stamp,
+            sinceMs = if (keptAny && prev != null) prev.sinceMs else nowMs,
+            byKey = input.associateBy { it.streamKey },
+            keys = keys,
+            views = views,
+            groupOf = groupOf,
+            output = output,
+            inputCount = input.size,
+            changedCount = if (prev == null) input.size else changed + removed,
+            remergedCount = remerged,
+            full = prev == null
+        )
     }
 
     /**
@@ -771,6 +925,12 @@ object SportsLiveItemBucketer {
     private fun candidateGroups(
         items: List<SportsLiveItem>,
         idKeysOf: (SportsLiveItem) -> List<Pair<String, String>> = { emptyList() }
+    ): Collection<List<SportsLiveItem>> = groupsByKeys(items) { item -> pairKeys(item.teams!!) + idKeysOf(item) }
+
+    /** [items] joined, transitively, by the keys they share ([keysOf]), in groups of two or more, each in input order. */
+    private fun groupsByKeys(
+        items: List<SportsLiveItem>,
+        keysOf: (SportsLiveItem) -> List<Pair<String, String>>
     ): Collection<List<SportsLiveItem>> {
         val parent = IntArray(items.size) { it }
         fun root(i: Int): Int {
@@ -782,7 +942,7 @@ object SportsLiveItemBucketer {
         }
         val firstWithKey = HashMap<Pair<String, String>, Int>()
         items.forEachIndexed { index, item ->
-            for (key in pairKeys(item.teams!!) + idKeysOf(item)) {
+            for (key in keysOf(item)) {
                 val other = firstWithKey.putIfAbsent(key, index) ?: continue
                 parent[root(index)] = root(other)
             }
