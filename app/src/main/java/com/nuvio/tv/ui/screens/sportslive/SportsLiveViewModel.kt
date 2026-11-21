@@ -21,6 +21,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveImportance
+import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -256,6 +257,8 @@ class SportsLiveViewModel internal constructor(
         val thaw: Int = 0,
         /** Live now's "Other events (N) ›" row is open (H): its listings follow the games. */
         val otherEventsOpen: Boolean = false,
+        /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
+        val holdOver: Boolean = false,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
         val lastRefreshedMs: Long? = null,
@@ -300,6 +303,10 @@ class SportsLiveViewModel internal constructor(
 
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
+
+    // J1: Live now has been shown this visit of the tab (reset when another tab or screen is shown): it stays calm.
+    @Volatile
+    private var liveNowShown = false
 
     // The mini player's game while it plays (TV QA BUG7): it stays listed.
     @Volatile
@@ -651,6 +658,11 @@ class SportsLiveViewModel internal constructor(
 
     init {
         fullLoadJob = launchFullLoad(force = false)
+        // J1: Live now waits behind its loading rows for this visit's load, at most HOLD_MS.
+        viewModelScope.launch {
+            delay(SportsLiveCalmOpen.HOLD_MS)
+            selectionState.update { it.copy(holdOver = true) }
+        }
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
         viewModelScope.launch {
             combine(hoverPreviewEnabled, miniPlayerActive) { enabled, mini -> enabled && !mini }
@@ -717,6 +729,8 @@ class SportsLiveViewModel internal constructor(
         // F23: focus coming back to the tab already selected changes nothing (it used to clear the selection, and the
         // stage jumped to the addon's first item).
         if (!changed) return
+        // J1: back on Live now, it is built afresh once, then calm again.
+        liveNowShown = false
         if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
         selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false, otherEventsOpen = false) }
         previewController.onTab(tab)
@@ -825,7 +839,10 @@ class SportsLiveViewModel internal constructor(
         previewController.onVisible(visible)
         if (!visible) prefetcher?.stop()
         // Leaving the screen ends browsing (TV QA BUG7): Live now is as built when it comes back.
-        if (!visible) setBrowsing(false)
+        if (!visible) {
+            liveNowShown = false
+            setBrowsing(false)
+        }
         if (visible == screenVisible) return
         screenVisible = visible
         if (visible) takeChannelOrder()
@@ -942,11 +959,8 @@ class SportsLiveViewModel internal constructor(
         if (built != null) {
             val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
             // Same rule as the full build below (BUG7 freeze); any difference falls back to the full build.
-            val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW) {
-                sportsLiveFreeze(shownLiveNow, built).items
-            } else {
-                sportsLiveKeepFocused(shownLiveNow, built, focusedId)
-            }.let { listed -> sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow) }
+            val kept = keptLiveNow(selection, built, focusedId, thawed = false).items
+                .let { listed -> sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow) }
             val shown = SportsLiveHiddenTitles.filter(kept, hiddenNow)
             val shownBefore = shownLiveNow
             if (shown.size != shownBefore.size || shown.indices.any { shown[it] !== shownBefore[it] }) return null
@@ -954,6 +968,22 @@ class SportsLiveViewModel internal constructor(
         val visible = last.state.visibleItems
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } } ?: visible.firstOrNull()?.id
         return last.state.copy(selectedItemId = selectedId)
+    }
+
+    /**
+     * Live now as shown after a build of [built] (F6, TV QA BUG7; J1): while it holds focus nothing moves at all
+     * ([sportsLiveFreeze]); once it has been shown this visit, it stays calm ([sportsLiveCalm]: rows keep their order, a
+     * row a load dropped goes, new rows wait for "N new"); otherwise as built. The focused card is never taken away.
+     */
+    private fun keptLiveNow(selection: Selection, built: List<SportsLiveItem>, focusedId: String?, thawed: Boolean): SportsLiveFrozenList {
+        if (selection.tab == SportsLiveTab.LIVE_NOW && !thawed) {
+            if (selection.browsing) return sportsLiveFreeze(shownLiveNow, built)
+            if (liveNowShown) {
+                val calm = sportsLiveCalm(shownLiveNow, built)
+                return calm.copy(items = sportsLiveKeepFocused(shownLiveNow, calm.items, focusedId))
+            }
+        }
+        return SportsLiveFrozenList(sportsLiveKeepFocused(shownLiveNow, built, focusedId), emptyList())
     }
 
     private fun buildState(
@@ -983,8 +1013,13 @@ class SportsLiveViewModel internal constructor(
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         var otherEvents = emptyList<SportsLiveItem>()
+        // J1 (live.23): Live now shows its loading rows, not the saved list of an earlier visit, until this visit's load
+        // (most addons answered) lands or HOLD_MS passed; then the whole list at once.
+        val holdLiveNow = !bucketed.fromLoad && !selection.holdOver
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
-            if (tab == SportsLiveTab.LIVE_NOW) {
+            if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
+                emptyList<SportsLiveItem>()
+            } else if (tab == SportsLiveTab.LIVE_NOW) {
                 // H (live.23): listings that are no game and no event of their own leave the list for its "Other events" row.
                 val (tabItems, others) = SportsLiveOtherEvents.split(allItems)
                 otherEvents = SportsLiveHiddenTitles.filter(others, hiddenNow)
@@ -1048,16 +1083,16 @@ class SportsLiveViewModel internal constructor(
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
                 val thawed = selection.thaw != thawApplied
                 thawApplied = selection.thaw
-                val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW && !thawed) {
-                    sportsLiveFreeze(shownLiveNow, built).also { heldBack = it.heldBack }.items
-                } else {
-                    sportsLiveKeepFocused(shownLiveNow, built, focusedId)
-                }.let { listed ->
+                val kept = keptLiveNow(selection, built, focusedId, thawed).also { heldBack = it.heldBack }.items.let { listed ->
                     // The game playing in the mini player stays listed while it plays (BUG7: its row vanished).
                     sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow)
                 }
                 // A title just hidden (#134) leaves at once, even with focus on it: the keep step must not bring it back.
-                SportsLiveHiddenTitles.filter(kept, hiddenNow).also { shownLiveNow = it }
+                SportsLiveHiddenTitles.filter(kept, hiddenNow).also {
+                    shownLiveNow = it
+                    // J1: shown once this visit, Live now keeps its rows in place from now on; new ones wait for "N new".
+                    if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) liveNowShown = true
+                }
             } else {
                 allItems
             }

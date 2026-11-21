@@ -46,6 +46,21 @@ fun sportsLiveFreeze(previous: List<SportsLiveItem>, current: List<SportsLiveIte
     return SportsLiveFrozenList(shown, current.filter { it.id !in shownIds })
 }
 
+/**
+ * Live now once shown this visit (J1, live.23: "4 games, then 33 arrive and the rows reshuffle"): [previous]'s rows still
+ * in [current], in [previous]'s order and refreshed from [current]; a row a load dropped goes; the rows [current] adds
+ * wait ([SportsLiveFrozenList.heldBack]) for "N new". Nothing shown yet, nothing of it left, or an emptied list:
+ * [current] as it is.
+ */
+fun sportsLiveCalm(previous: List<SportsLiveItem>, current: List<SportsLiveItem>): SportsLiveFrozenList {
+    if (previous.isEmpty() || current.isEmpty()) return SportsLiveFrozenList(current, emptyList())
+    val byId = current.associateBy { it.id }
+    val kept = previous.mapNotNull { byId[it.id] }
+    if (kept.isEmpty()) return SportsLiveFrozenList(current, emptyList())
+    val shownIds = previous.mapTo(HashSet()) { it.id }
+    return SportsLiveFrozenList(kept, current.filter { it.id !in shownIds })
+}
+
 /** Live now frozen while browsed: the [items] shown, and the new rows [heldBack] until the user asks for them. */
 data class SportsLiveFrozenList(val items: List<SportsLiveItem>, val heldBack: List<SportsLiveItem>)
 

@@ -20,7 +20,9 @@ data class SportsLiveLoad(
     /** The sources (addon id → display name) this load asked, not carried over (#170). */
     val fetchedSources: Map<String, String> = emptyMap(),
     /** Every claimed source's addon id (#170). */
-    val claimedSources: Set<String> = emptySet()
+    val claimedSources: Set<String> = emptySet(),
+    /** J1 (live.23): the early list of a first load, published once most catalogs answered; the full load follows. */
+    val partial: Boolean = false
 )
 
 data class SportsLiveFailure(val catalog: ClaimedCatalog, val message: String)
