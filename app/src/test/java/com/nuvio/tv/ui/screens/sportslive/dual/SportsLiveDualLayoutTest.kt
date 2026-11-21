@@ -166,8 +166,7 @@ class SportsLiveDualLayoutTest {
         assertEquals((small.bottom + 56.dp).value, column.top.value, 0.01f)
         assertTrue((column.top + 84.dp + 100.dp).value <= big.bottom.value)
         assertEquals(null, DualGeometry.smallColumn(DualLayout.SPLIT, 960.dp, 540.dp))
-        // Room under the small tile's strip for the game info overlay.
-        assertTrue((big.bottom - small.bottom - 32.dp).value > 150f)
+        // (live.24 design audit A4) the small tile's game info now lives in smallColumn, checked above.
     }
 
     @Test
