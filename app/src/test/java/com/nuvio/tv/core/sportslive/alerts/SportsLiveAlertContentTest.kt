@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.item
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.live
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -30,6 +31,9 @@ class SportsLiveAlertContentTest {
         assertEquals("IND", content.first.short)
         assertEquals("PHI", content.second.short)
         assertEquals("Final/OT", content.note)
+        // The card draws the game grammar's words (live.24), never ESPN's raw "Final/OT".
+        assertEquals(false, content.fullTimeSport)
+        assertEquals("Final · OT", ScoreChips.finalWords(content.note, "Final", fullTimeSport = content.fullTimeSport))
     }
 
     @Test
