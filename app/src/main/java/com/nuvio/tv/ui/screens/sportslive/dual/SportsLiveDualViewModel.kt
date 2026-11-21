@@ -10,6 +10,8 @@ import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -184,6 +186,11 @@ class SportsLiveDualViewModel internal constructor(
     endActions: Flow<SportsLiveGameEndAction> = flowOf(SportsLiveGameEndAction.DEFAULT),
     /** The Scores setting: an ended pane's card says the final score under Show only. */
     scoresModes: Flow<ScoresMode?> = flowOf(null),
+    /**
+     * A pane game's strictly matched score now (delayed and stamped with spoiler protection), or null: the ended
+     * pane's card reads its final from it (live.23 TV test: a pane opened as the second game had none).
+     */
+    private val scoreOf: (SportsLiveItem) -> ScoreSnapshot? = { null },
     /** The profile's saved layout (#123); null: never chosen (split). */
     private val loadLayout: suspend () -> DualLayout? = { null },
     private val saveLayout: suspend (DualLayout) -> Unit = {},
@@ -225,6 +232,7 @@ class SportsLiveDualViewModel internal constructor(
         gameWatch = SportsLiveGameWatch.shared,
         endActions = preferences.gameEndAction,
         scoresModes = preferences.scoreSettings.map { it.mode },
+        scoreOf = { item -> ScoreChips.matchedEvent(item, liveScores.scores.value[item.streamKey]) },
         loadLayout = { preferences.dualLayout()?.let { name -> DualLayout.entries.firstOrNull { it.name == name } } },
         saveLayout = { layout -> preferences.setDualLayout(layout.name) },
         overKeys = { list, scoresOff ->
@@ -503,6 +511,8 @@ class SportsLiveDualViewModel internal constructor(
         val stream = pane.stream ?: return
         // The pane's game is over (#161): its end card, never the recovery ladder; the other pane plays on.
         if (pane.status != PaneStatus.Ended) {
+            // The game's score as the full player notes it, so the end is told from a failure as it is there.
+            scoreOf(item)?.let { gameWatch?.note(item.id, it) }
             gameWatch?.failureIsEnd(item.id, item)?.let { reason ->
                 endPane(side, item, reason)
                 return
@@ -568,7 +578,7 @@ class SportsLiveDualViewModel internal constructor(
             item = item,
             reason = reason,
             eventId = null,
-            snapshot = gameWatch?.snapshot(item.id),
+            snapshot = scoreOf(item) ?: gameWatch?.snapshot(item.id),
             mode = scoresMode,
             next = next,
             upcoming = null,

@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
 import com.nuvio.tv.domain.model.Stream
@@ -256,4 +259,17 @@ sealed interface DualAction {
 
     /** [item]'s ended pane's card changed (its countdown stopped) or closed ([card] null: Stay). */
     data class EndChanged(val item: SportsLiveItem, val card: SportsLiveEndCard?) : DualAction
+}
+
+/**
+ * The pane with its end card (#161) reading the game's latest score ([snapshot], the live scores' delayed and
+ * spoiler-stamped one) and the Scores setting ([mode]): a final that comes in after the pane ended still shows on
+ * its card under Show (live.23 TV test), and Hide until focused, Off or a protected game keep "Game over".
+ */
+internal fun DualPane.withLatestEndScore(snapshot: ScoreSnapshot?, mode: ScoresMode?): DualPane {
+    val card = end ?: return this
+    val latest = ScoreChips.matchedEvent(card.item, snapshot) ?: card.snapshot
+    val latestMode = mode ?: card.mode
+    if (latest == card.snapshot && latestMode == card.mode) return this
+    return copy(end = card.copy(snapshot = latest, mode = latestMode))
 }

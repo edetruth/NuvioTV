@@ -1,9 +1,14 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.view.PixelCopy
+import android.view.SurfaceView
 import android.view.TextureView
+import android.view.View
 import androidx.annotation.OptIn
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,16 +16,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Format
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
+import com.nuvio.tv.ui.screens.sportslive.dual.copySize
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -116,14 +132,59 @@ internal open class SportsLiveHandoverHold<P : Any>(private val releasePlayer: (
     }
 }
 
+/** The held player's last pane frame (live.23 TV test): shown full screen until its picture moves to the new view. */
+internal class SportsLiveHeldStill(val player: ExoPlayer, val image: ImageBitmap)
+
+private val heldStill = MutableStateFlow<SportsLiveHeldStill?>(null)
+
 /**
  * The app's one held pane player (#39): dual screen hands it the pane going full screen ([holdPlayer]), and the
  * full player shows it ([SportsLiveHeldPicture]) until its own first frame.
  */
 @OptIn(UnstableApi::class)
-internal object SportsLiveFullScreenHold : SportsLiveHandoverHold<ExoPlayer>(releasePlayer = { it.release() }) {
+internal object SportsLiveFullScreenHold : SportsLiveHandoverHold<ExoPlayer>(
+    releasePlayer = { player ->
+        // Its still goes with it.
+        if (heldStill.value?.player === player) heldStill.value = null
+        player.release()
+    }
+) {
 
     private val main = Handler(Looper.getMainLooper())
+
+    /** The longest side of the still copied: full screen on a 1080p TV. */
+    private const val STILL_WIDTH_PX = 1920
+
+    /** The held player's pane frame, while that player is held; drawn over its picture until the picture moves. */
+    val still: StateFlow<SportsLiveHeldStill?> = heldStill.asStateFlow()
+
+    /**
+     * Copies [player]'s picture from its pane's video view ([surface]) as it shows now (live.23 TV test): the full
+     * screen shows it at once, before the held player draws into its new view. A secure surface gives no copy.
+     */
+    fun captureStill(player: ExoPlayer, surface: View?) {
+        val view: View = surface?.takeIf { it is SurfaceView || it is TextureView } ?: run {
+            SportsLiveDebugTiming.log { "dualHandOver still=none (no video view)" }
+            return
+        }
+        val (width, height) = copySize(view.width, view.height, STILL_WIDTH_PX) ?: return
+        val bitmap = runCatching { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888) }.getOrNull() ?: return
+        val startMs = System.currentTimeMillis()
+        val done: (Boolean) -> Unit = { ok ->
+            SportsLiveDebugTiming.log { "dualHandOver still=${if (ok) "ok" else "failed"} ${width}x$height copyMs=${System.currentTimeMillis() - startMs}" }
+            // Only while that player is held (it is by the time the copy arrives): never over another game.
+            if (ok && held.value?.player === player) heldStill.value = SportsLiveHeldStill(player, bitmap.asImageBitmap())
+        }
+        when (view) {
+            is SurfaceView -> runCatching {
+                PixelCopy.request(view, bitmap, { result -> done(result == PixelCopy.SUCCESS) }, main)
+            }.onFailure { done(false) }
+            is TextureView -> {
+                val ok = runCatching { view.getBitmap(bitmap) }.getOrNull() != null
+                main.post { done(ok) }
+            }
+        }
+    }
 
     /**
      * Holds [player], playing [contentId] with sound, for the full player about to open. It stops handling audio
@@ -138,6 +199,7 @@ internal object SportsLiveFullScreenHold : SportsLiveHandoverHold<ExoPlayer>(rel
             }
         })
         hold(contentId, player, System.currentTimeMillis())
+        SportsLiveDebugTiming.log { "hold start playing=${player.isPlaying} state=${player.playbackState}" }
         main.postDelayed({ releaseIfHeld(player) }, SportsLiveStreamThresholds.STARTUP_HARD_CAP_MS)
     }
 }
@@ -171,24 +233,94 @@ fun SportsLiveHeldPicture(
     modifier: Modifier = Modifier
 ) {
     val held by SportsLiveFullScreenHold.held.collectAsStateWithLifecycle()
+    val still by SportsLiveFullScreenHold.still.collectAsStateWithLifecycle()
     val mine = held ?: return
     val currentFirstFrame by rememberUpdatedState(firstFrame)
     LaunchedEffect(mine, contentId, failed, nextLink) {
-        while (
-            SportsLiveFullScreenHold.step(contentId, currentFirstFrame(), failed, nextLink, System.currentTimeMillis()) ==
-            SportsLiveHoldStep.HOLD
-        ) {
+        while (true) {
+            val step = SportsLiveFullScreenHold.step(contentId, currentFirstFrame(), failed, nextLink, System.currentTimeMillis())
+            if (step != SportsLiveHoldStep.HOLD) {
+                SportsLiveDebugTiming.log { "hold release step=$step t=${System.currentTimeMillis() - mine.atMs} failed=$failed nextLink=$nextLink" }
+                break
+            }
             delay(HOLD_CHECK_MS)
         }
     }
     DisposableEffect(mine) { onDispose { SportsLiveFullScreenHold.releaseIfHeld(mine.player) } }
+    // The held picture has drawn in its new view (live.23 TV test): until then the pane's still covers it.
+    var pictureMoved by remember(mine) { mutableStateOf(false) }
+    DisposableEffect(mine) {
+        val sinceMs = { System.currentTimeMillis() - mine.atMs }
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                if (!pictureMoved) SportsLiveDebugTiming.log { "hold pictureFirstFrame t=${sinceMs()}" }
+                pictureMoved = true
+            }
+        }
+        // Debug lines: whether moving the picture restarts the held player's decoder (a stutter on some TVs).
+        val analytics = object : AnalyticsListener {
+            override fun onVideoDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long
+            ) {
+                SportsLiveDebugTiming.log { "hold decoderInit t=${sinceMs()} initMs=$initializationDurationMs" }
+            }
+
+            override fun onVideoInputFormatChanged(
+                eventTime: AnalyticsListener.EventTime,
+                format: Format,
+                decoderReuseEvaluation: DecoderReuseEvaluation?
+            ) {
+                SportsLiveDebugTiming.log { "hold videoFormat t=${sinceMs()} ${format.width}x${format.height} reuse=${decoderReuseEvaluation?.result}" }
+            }
+
+            override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+                SportsLiveDebugTiming.log { "hold dropped=$droppedFrames t=${sinceMs()}" }
+            }
+        }
+        runCatching {
+            mine.player.addListener(listener)
+            mine.player.addAnalyticsListener(analytics)
+        }
+        onDispose {
+            runCatching {
+                mine.player.removeListener(listener)
+                mine.player.removeAnalyticsListener(analytics)
+            }
+        }
+    }
     if (mine.contentId != contentId) return
     // A TextureView draws in the window, so the picture sits above the full player's video surface and cards.
     Box(modifier.background(Color.Black)) {
         AndroidView(
-            factory = { context -> TextureView(context).also(mine.player::setVideoTextureView) },
+            factory = { context ->
+                TextureView(context).also { view ->
+                    mine.player.setVideoTextureView(view)
+                    SportsLiveDebugTiming.log { "hold textureAttached t=${System.currentTimeMillis() - mine.atMs}" }
+                }
+            },
             onRelease = { view -> runCatching { mine.player.clearVideoTextureView(view) } },
             modifier = Modifier.fillMaxSize()
         )
+        // The pane's last frame, full screen at once, while the held player's picture moves to its new view.
+        still?.takeIf { it.player === mine.player && !pictureMoved }?.let { frame ->
+            Image(bitmap = frame.image, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+        }
+    }
+}
+
+/**
+ * Dual screen from handing a pane over until the full player shows (live.23 TV test): black over the whole screen,
+ * with the kept pane's frame full screen once copied, so no pane, caption or card moves or shows on the way out.
+ */
+@Composable
+internal fun SportsLiveHandOffCover(modifier: Modifier = Modifier) {
+    val still by SportsLiveFullScreenHold.still.collectAsStateWithLifecycle()
+    Box(modifier.background(Color.Black)) {
+        still?.let { frame ->
+            Image(bitmap = frame.image, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+        }
     }
 }

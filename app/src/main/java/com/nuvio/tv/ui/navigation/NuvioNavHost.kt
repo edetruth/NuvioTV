@@ -168,6 +168,8 @@ private fun PlaybackNavHost(
                 ?.toBooleanStrictOrNull() == true
             if (isStreamToPlayer(from, to) && isAutoPlayNav) {
                 EnterTransition.None
+            } else if (com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualLeavesAtOnce(from, Screen.SportsLiveDual.route)) {
+                EnterTransition.None
             } else {
                 fadeIn(animationSpec = tween(NuvioMotion.tokens.durations.medium))
             }
@@ -179,6 +181,8 @@ private fun PlaybackNavHost(
                 ?.getString("autoPlayNav")
                 ?.toBooleanStrictOrNull() == true
             if (isStreamToPlayer(from, to) && isAutoPlayNav) {
+                ExitTransition.None
+            } else if (com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualLeavesAtOnce(from, Screen.SportsLiveDual.route)) {
                 ExitTransition.None
             } else if (isLeavingFramedHeroTrailer()) {
                 fadeOut(animationSpec = tween(NuvioMotion.tokens.durations.medium), targetAlpha = 1f)

@@ -36,4 +36,12 @@ class SportsLiveDualNavTest {
         // A pane needing the Stream screen: that screen replaces dual the same way.
         assertEquals(listOf("home", "stream"), sportsLiveStackAfterDualHandOff(listOf("home", "dual"), "dual", "stream"))
     }
+
+    @Test
+    fun `leaving dual screen for full screen is never faded, other screens fade as before`() {
+        val dual = com.nuvio.tv.ui.navigation.Screen.SportsLiveDual.route
+        assertEquals(true, sportsLiveDualLeavesAtOnce(dual, dual))
+        assertEquals(false, sportsLiveDualLeavesAtOnce("player", dual))
+        assertEquals(false, sportsLiveDualLeavesAtOnce(null, dual))
+    }
 }

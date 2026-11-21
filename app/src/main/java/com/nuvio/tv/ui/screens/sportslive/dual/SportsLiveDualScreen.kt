@@ -86,6 +86,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
 import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreDetailsStrings
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
@@ -101,6 +102,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurface
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurfaces
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePeekHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveFullScreenHold
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveHandOffCover
+import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
@@ -165,6 +168,8 @@ fun SportsLiveDualScreen(
     // The pane views by side; a swap moves the players between them.
     val views = remember { mutableMapOf<Side, PlayerView>() }
     var players by remember { mutableStateOf<DualPlayers?>(null) }
+    // A pane went to the full player (live.23 TV test): the screen is covered until it leaves.
+    var handedOff by remember { mutableStateOf(false) }
 
     fun releasePlayers() {
         val current = players ?: return
@@ -178,14 +183,16 @@ fun SportsLiveDualScreen(
     fun handOverPlayers(item: SportsLiveItem) {
         val current = players ?: return
         val state = viewModel.state.value
+        val side = state?.sideOf(item)
+        val audible = state != null && side != null && side == state.audibleSide && state.pane(side).status == PaneStatus.Playing
+        // The kept pane's frame is copied before its view lets the player go (live.23 TV test): it shows full screen
+        // at once, never the panes; it is kept only once that player is held.
+        if (audible && side != null) current.player(side)?.let { SportsLiveFullScreenHold.captureStill(it, views[side]?.videoSurfaceView) }
+        handedOff = true
         views.values.forEach { it.player = null }
         players = null
-        val side = state?.sideOf(item)
-        val kept = if (state != null && side != null) {
-            current.handOver(side, audible = side == state.audibleSide && state.pane(side).status == PaneStatus.Playing)
-        } else {
-            null
-        }
+        val kept = if (side != null) current.handOver(side, audible = audible) else null
+        SportsLiveDebugTiming.log { "dualHandOver kept=${kept != null} side=$side audible=$audible" }
         if (kept == null) current.release() else SportsLiveFullScreenHold.holdPlayer(item.id, kept)
     }
 
@@ -195,6 +202,7 @@ fun SportsLiveDualScreen(
                 // Resumed, not started: a screen being navigated to resumes once its transition has
                 // ended, by when the full player it may come from has let its decoder go.
                 Lifecycle.Event.ON_RESUME -> if (players == null) {
+                    handedOff = false
                     players = DualPlayers(
                         context = context,
                         onFirstFrame = viewModel::onFirstFrame,
@@ -229,10 +237,12 @@ fun SportsLiveDualScreen(
     val scores by scoresViewModel.scores.collectAsStateWithLifecycle()
     val scoresMode by scoresViewModel.mode.collectAsStateWithLifecycle()
     val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
-    val paneItems = remember(dual.left.item, dual.right.item) { listOf(dual.left.item, dual.right.item) }
+    // The open picker's games are scored too (live.23 TV test): its rows show their logos and scores.
+    val paneItems = remember(dual.left.item, dual.right.item, pairPicker) { listOf(dual.left.item, dual.right.item) + pairPicker.orEmpty() }
     TrackLiveScores(SCREEN_DUAL, paneItems, enabled = scoresMode != null && scoresMode != ScoresMode.OFF, tracking = scoresViewModel.tracking)
     val highlightedKey = dual.pane(dual.highlighted).item.streamKey
-    LaunchedEffect(highlightedKey) { scoresViewModel.onCardFocus(highlightedKey) }
+    // The picker's focused row counts as focused while it is open; the highlighted pane again once it closes.
+    LaunchedEffect(highlightedKey, pairPicker == null) { if (pairPicker == null) scoresViewModel.onCardFocus(highlightedKey) }
 
     // The game info overlay (#139) is about the game with sound, and follows it while open.
     val info by gameInfo.info.collectAsStateWithLifecycle()
@@ -284,6 +294,10 @@ fun SportsLiveDualScreen(
             return@handleBack
         }
         val back = viewModel.keepOnBack()?.takeUnless { backPlayed }
+        SportsLiveDebugTiming.log {
+            val kept = dual.pane(dual.audibleSide)
+            "dualBack keep=${back != null} status=${kept.status} stream=${back?.second != null} backPlayed=$backPlayed"
+        }
         if (back == null) {
             currentOnBack()
         } else {
@@ -466,7 +480,8 @@ fun SportsLiveDualScreen(
             // Not before the layout is known: a pane view is first laid out at its real tile (see layoutReady).
             if (layoutReady) Side.entries.forEach { side ->
                 val tile = DualGeometry.tile(side, dual.layout, maxWidth, maxHeight)
-                val pane = dual.pane(side)
+                // An ended pane's card reads the game's latest final (live.23 TV test: it said Game over only).
+                val pane = dual.pane(side).withLatestEndScore(scores[dual.pane(side).item.streamKey], scoresMode)
                 DualPaneView(
                     pane = pane,
                     handoff = handoffFrame?.takeIf { dualShowsHandoffFrame(it.atMs, handoffKey, pane, System.currentTimeMillis()) }?.image,
@@ -533,6 +548,8 @@ fun SportsLiveDualScreen(
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             )
         }
+        // Handed to the full player (live.23 TV test): over everything until the screen leaves.
+        if (handedOff) SportsLiveHandOffCover(Modifier.fillMaxSize())
     }
 
     if (menuOpen) {
@@ -552,11 +569,13 @@ fun SportsLiveDualScreen(
     }
 
     pairPicker?.let { candidates ->
+        val nowMs = rememberSportsLiveClockMs().value
         SportsLiveDualPickerDialog(
             candidates = candidates,
-            rows = emptyMap(),
+            rows = remember(candidates, scores, scoresMode, revealed, nowMs) { dualPickerRows(candidates, scores, scoresMode, revealed, nowMs) },
             onPick = viewModel::pickPair,
-            onDismiss = viewModel::closePairPicker
+            onDismiss = viewModel::closePairPicker,
+            onFocus = scoresViewModel::onCardFocus
         )
     }
 }
