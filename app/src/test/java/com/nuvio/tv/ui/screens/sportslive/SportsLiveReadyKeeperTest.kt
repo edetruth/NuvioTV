@@ -12,15 +12,23 @@ import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.coroutines.ContinuationInterceptor
 
 /** live.20 1b: the keeper checks my games only, on their schedule, and keeps a held link fresh. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveReadyKeeperTest {
 
     private var now = START - 10 * MINUTE
@@ -157,5 +165,33 @@ class SportsLiveReadyKeeperTest {
         cards = listOf(random, reminded)
         keeper.tick()
         assertNull(readiness.rowOf(followed))
+    }
+
+    @Test
+    fun `the keeper's passes run on the compute dispatcher, never on the thread that started it (#207)`() = runTest {
+        val compute = StandardTestDispatcher(testScheduler, name = "compute")
+        val ranOn = ArrayList<ContinuationInterceptor?>()
+        val offMain = SportsLiveReadyKeeper(
+            cards = {
+                ranOn += currentCoroutineContext()[ContinuationInterceptor]
+                cards
+            },
+            reminders = { reminders },
+            scores = { scores },
+            savedForLater = { { false } },
+            check = { },
+            refresh = { },
+            skips = { true },
+            readiness = readiness,
+            nowMs = { now },
+            compute = compute
+        )
+        // Started from the test's own dispatcher, as the host starts it from the main thread.
+        backgroundScope.launch { offMain.runInForeground() }
+        runCurrent()
+        advanceTimeBy(SportsLiveReadyKeeper.TICK_MS)
+        runCurrent()
+        assertEquals(2, ranOn.size)
+        assertTrue(ranOn.all { it === compute })
     }
 }
