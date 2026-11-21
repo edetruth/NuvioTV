@@ -1156,6 +1156,31 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `over the budget an undated card already matched keeps its score when its other day does not fit`() = runTest {
+        // live.24 RC review H1: an undated live card matched on today's feed lost its score every round once the budget was
+        // full, because yesterday's feed (fetched, without its game) no longer fitted and the card counted as partial.
+        val today = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
+        val live = game(ScoreState.IN, 50, 48, "Q2 5:00").copy(startMs = ms("2026-11-16T16:00:00Z"))
+        provider.respond = { feed -> if (feed == today) ScoreboardResult(listOf(live)) else ScoreboardResult(emptyList()) }
+        val repo = repository("2026-11-16T17:00:00Z")
+        collect(repo)
+        val undated = item("Indiana Pacers at Philadelphia 76ers", "NBA", null)
+        repo.track(SECTION, listOf(undated))
+        runCurrent()
+        assertEquals(50, repo.scores.value[undated.streamKey]?.homeScore)
+        assertTrue(nba15 in provider.calls)
+        // A busy day: other games fill every other slot of the budget.
+        val fillers = (1 until LiveScoresRepository.MAX_FEEDS).map { day ->
+            item("Team$day A vs Team$day B", "NBA", "${LocalDate.of(2026, 11, 17).plusDays(day.toLong())}T18:00:00Z")
+        }
+        repo.track(SECTION, listOf(undated) + fillers)
+        runCurrent()
+        advanceTimeBy(30_001L); runCurrent()
+        assertEquals(50, repo.scores.value[undated.streamKey]?.homeScore)
+        assertTrue(undated.streamKey !in repo.unmatched.value)
+    }
+
+    @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")

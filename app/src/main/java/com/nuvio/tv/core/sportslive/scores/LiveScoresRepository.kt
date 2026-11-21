@@ -973,7 +973,11 @@ class LiveScoresRepository internal constructor(
             // Over the budget: the feeds already budgeted for it (its own, above), else no score (never a stale one).
             if (!fits(cardFeeds)) {
                 cardFeeds.retainAll { it in needed }
-                if (feedsOf(leagues, dates).any { it !in cardFeeds }) {
+                // A card whose shown game sits in the feeds it kept is fully answered (live.24 RC review H1): an unrelated
+                // day or fallback feed that did not fit never takes away a score it already has.
+                val shown = raw[card.key]
+                val holds = shown != null && cardFeeds.any { feed -> feeds[feed]?.events?.any { it.eventId == shown.eventId } == true }
+                if (!holds && feedsOf(leagues, dates).any { it !in cardFeeds }) {
                     partial += card.key
                     // A card with no start is matched across a league's days only with every day in (live.23 review M4:
                     // yesterday's feed alone would put last night's final of the pair on today's card): no score this round.
