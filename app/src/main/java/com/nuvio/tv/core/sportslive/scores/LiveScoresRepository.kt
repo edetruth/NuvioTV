@@ -205,8 +205,8 @@ class LiveScoresRepository internal constructor(
     private val unmatchedOutput = MutableStateFlow<Set<String>>(emptySet())
 
     /**
-     * Card keys confirmed to get no score (#60): every feed they route to has answered (or is paused)
-     * without their game (its college feed too, for a bare "Basketball" / "Football" card). Remembered
+     * Card keys confirmed to get no score (#60): every feed they route to has answered afresh (never a stale or
+     * paused feed, live.23 review H1, nor a card asked on part of its feeds, M4) without their game (its college feed too, for a bare "Basketball" / "Football" card). Remembered
      * while the card is not tracked; a card that later matches leaves it. Only these cards (and cards
      * no feed covers, or every card while Scores is Off) may be estimated as ended.
      */
@@ -399,6 +399,9 @@ class LiveScoresRepository internal constructor(
                         return@collect
                     }
                     lock.withLock {
+                        // A write still waiting was made under the old protection (live.23 review L4): it may hold a game
+                        // protected now. It goes; the next publish writes what is keepable under the new one.
+                        if (latest != protectionState.value) keptPending = null
                         protectionState.value = latest
                         if (!protectionLoaded) {
                             protectionLoaded = true
@@ -842,6 +845,8 @@ class LiveScoresRepository internal constructor(
         val learnedBefore = logos.revision.value
         val nowMs = now()
         val deferred = ArrayList<Deferral>()
+        // Cards asked on only some of their feeds this round, over the budget (live.23 review M4): never confirmed unmatched.
+        val partial = HashSet<String>()
 
         // live.20 (a wrong LIVE is worse than none): a game its addon lists live that ESPN schedules more than half an
         // hour from now leaves Live now for Upcoming at ESPN's start. Its own match says so; with none on its own days,
@@ -883,8 +888,15 @@ class LiveScoresRepository internal constructor(
             noteStart(entry, cardFeeds, match)
             if (match == null) {
                 needed += cardFeeds
-                // Unmatched only once every feed it routes to has answered (or is paused).
-                if (cardFeeds.all { feed -> feeds[feed]?.let { it.fetched || it.paused } == true }) markUnmatched(card.key)
+                // Unmatched only once every feed it routes to has answered afresh without it (live.23 review H1): a feed
+                // fetched before but stale (a re-track after minutes away) or paused (failing) says nothing about the game,
+                // so the card keeps its last state, and no "no score" mark or ended estimate follows from it. Nor a card
+                // asked on only some of its feeds over the budget (M4).
+                if (card.key !in partial &&
+                    cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused && it.isFresh(nowMs) } == true }
+                ) {
+                    markUnmatched(card.key)
+                }
                 return
             }
             unmatchedKeys -= card.key
@@ -942,7 +954,15 @@ class LiveScoresRepository internal constructor(
                 cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
             }
             // Over the budget: the feeds already budgeted for it (its own, above), else no score (never a stale one).
-            if (!fits(cardFeeds)) cardFeeds.retainAll { it in needed }
+            if (!fits(cardFeeds)) {
+                cardFeeds.retainAll { it in needed }
+                if (feedsOf(leagues, dates).any { it !in cardFeeds }) {
+                    partial += card.key
+                    // A card with no start is matched across a league's days only with every day in (live.23 review M4:
+                    // yesterday's feed alone would put last night's final of the pair on today's card): no score this round.
+                    if (card.startMs == null) continue
+                }
+            }
             if (cardFeeds.isEmpty()) {
                 // Debug builds name the skipped league so a TV run shows a full feed budget (live.23 RC6 missing scores).
                 if (com.nuvio.tv.BuildConfig.IS_DEBUG_BUILD) {
@@ -1228,7 +1248,10 @@ class LiveScoresRepository internal constructor(
         holdOutput.value = delay.takeIf { playing.isNotEmpty() && it > 0L }
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
         val delayed = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
-        saveKept(keepable(delayed))
+        val keepable = keepable(delayed)
+        // Scores, none keepable now (all protected or watched): an earlier write still waiting never goes to disk (L4).
+        if (delayed.isNotEmpty() && keepable.isEmpty()) keptPending = null
+        saveKept(keepable)
         lastDelayed = delayed
         val keptNow = keptServedLocked()
         val shown = if (keptNow.isEmpty()) delayed else keptNow + delayed

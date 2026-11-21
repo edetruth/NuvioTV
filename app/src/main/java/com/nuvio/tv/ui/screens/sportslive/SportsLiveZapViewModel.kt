@@ -328,6 +328,9 @@ class SportsLiveZapViewModel internal constructor(
 
     init {
         if (prefetcher != null) viewModelScope.launch { dataSaver.collect { dataSaverOn = it } }
+        // The TV's decoder list is read once, off the main thread, as the player starts (live.23 review L4): a peek weighed
+        // later reads the kept count instead of building MediaCodecList on the main thread (100 ms or more on the box).
+        if (hasSession) viewModelScope.launch(computeDispatcher) { com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveSecondDecoders.warm() }
     }
 
     /** The prefetcher, unless Data saver is on (B2). */

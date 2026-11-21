@@ -18,6 +18,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -143,4 +144,26 @@ internal fun rememberSportsLiveClockMs(stepMs: Long = 30_000L): State<Long> =
             delay(stepMs)
             value = System.currentTimeMillis()
         }
+    }
+
+/**
+ * The section's cards to track for scores: Live now's whole tab (every filter) and the strip's later-today games
+ * ([laterToday], J4); while More live's view is open, its games too (live.23 review M2: they are outside Live now's My
+ * sports list, so they never got a score, and a final never moved them out of LIVE). They are live games outside My
+ * sports, so they take the feed budget after My sports' own. Upcoming tracks what it shows; other tabs nothing.
+ */
+internal fun sectionTrackedCards(state: SportsLiveUiState, laterToday: List<SportsLiveItem>): List<SportsLiveItem> =
+    when (state.selectedTab) {
+        SportsLiveTab.LIVE_NOW -> {
+            val listed = state.tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+            val moreLive = if (state.moreLiveOpen) {
+                val keys = listed.mapTo(HashSet()) { it.streamKey }
+                state.visibleItems.filter { it.streamKey !in keys }
+            } else {
+                emptyList()
+            }
+            listed + moreLive + laterToday
+        }
+        SportsLiveTab.UPCOMING -> state.visibleItems
+        else -> emptyList()
     }

@@ -84,11 +84,16 @@ class SportsLiveSharedBuckets(
             }
         }
         val raw = load.items.filter { it.catalogKey in claimedKeys }
-        // A new load: the matches and marks of sources it no longer lists go (live.23 review B3/B4).
-        if (entry?.load !== load && (matchedEvents != null || womenGames != null)) {
+        // A new load: the matches and marks of sources it no longer lists go (live.23 review B3/B4). Not on the early list
+        // of a first load (L3: the slow addons' games are not in it yet), and an addon with a catalog that failed this time
+        // keeps its sources' records (its games are not gone, only unread).
+        if (entry?.load !== load && !load.partial && (matchedEvents != null || womenGames != null)) {
             val listed = load.items.mapTo(HashSet()) { it.streamKey }
-            matchedEvents?.retain(listed)
-            womenGames?.retain(listed)
+            // A source's key is "addon id|item id": the addons with a catalog that failed keep their sources' records.
+            val failedAddons = load.failures.mapTo(HashSet()) { it.catalog.addon.id + "|" }
+            val unread: (String) -> Boolean = { key -> failedAddons.any(key::startsWith) }
+            matchedEvents?.retain(listed, unread)
+            womenGames?.retain(listed, unread)
         }
         return Entry(load, claimedKeys, addonOrder, stamp, nowMs, raw, SportsLiveItemBucketer.reclock(raw, nowMs)).also { entry = it }
     }

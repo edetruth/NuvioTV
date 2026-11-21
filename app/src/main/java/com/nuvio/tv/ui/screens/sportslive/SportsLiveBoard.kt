@@ -309,23 +309,39 @@ internal fun SportsLiveBoard.reusingRows(previous: SportsLiveBoard?): SportsLive
  * from. A tab opened again shows its last board at once ([shownFor]) while the fresh one is built, and builds nothing
  * when its inputs did not change ([reusable]). Bounded to the [maxViews] views used last; thread-safe.
  */
-internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
-    private val entries = object : LinkedHashMap<String, Pair<SportsLiveBoardInputs, SportsLiveBoard>>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<SportsLiveBoardInputs, SportsLiveBoard>>?): Boolean =
-            size > maxViews
+internal class SportsLiveBoardCache(
+    private val maxViews: Int = MAX_VIEWS,
+    private val now: () -> Long = System::currentTimeMillis
+) {
+    private class Entry(val inputs: SportsLiveBoardInputs, val board: SportsLiveBoard, val builtAtMs: Long)
+
+    private val entries = object : LinkedHashMap<String, Entry>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?): Boolean = size > maxViews
     }
 
-    /** The board last built for [inputs]' view, whatever it was built from; null when none. */
+    /** The board last built for [inputs]' view, whatever it was built from; null when none (its rows are reused). */
     @Synchronized
-    fun shownFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.second
+    fun shownFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.board
+
+    /**
+     * The board to show at once for [inputs]' view while the fresh one is built ([shownFor]), unless it is Live now's
+     * and older than [LIVE_MAX_AGE_MS] (live.23 review H2: a board kept from 20 minutes before showed its scores, clocks
+     * and LIVE marks as they were): then none, and the tab waits for its fresh board. Other tabs show no live score.
+     */
+    @Synchronized
+    fun instantFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? {
+        val entry = entries[viewOf(inputs)] ?: return null
+        if (inputs.tab == SportsLiveTab.LIVE_NOW && now() - entry.builtAtMs > LIVE_MAX_AGE_MS) return null
+        return entry.board
+    }
 
     /** The board last built for [inputs]' view when it was built from these very inputs; null otherwise. */
     @Synchronized
-    fun reusable(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.takeIf { it.first == inputs }?.second
+    fun reusable(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.takeIf { it.inputs == inputs }?.board
 
     @Synchronized
     fun put(inputs: SportsLiveBoardInputs, board: SportsLiveBoard) {
-        entries[viewOf(inputs)] = inputs to board
+        entries[viewOf(inputs)] = Entry(inputs, board, now())
     }
 
     private var scope: Any? = null
@@ -376,6 +392,9 @@ internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
 
     companion object {
         const val MAX_VIEWS = 8
+
+        /** Live now's kept board shows at once only this long after it was built ([instantFor]): one poll and a bit. */
+        const val LIVE_MAX_AGE_MS = 90_000L
 
         // Live now's More live view is a view of its own: its board never shows (or lends rows) for the main list.
         fun viewOf(inputs: SportsLiveBoardInputs): String = viewOf(

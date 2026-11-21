@@ -436,7 +436,9 @@ class SportsLiveViewModel internal constructor(
                     "sportsOpen stage=bucket ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} items=${items.size} " +
                         tabs.entries.joinToString(" ") { (tab, list) -> "${tab.name}=${list.size}" }
                 }
-                listCache.save(
+                // The early list of a first load is never the device's list (live.23 review L3): closed before the full
+                // load lands, the next cold start would lack the slow addons' games.
+                if (!latest.partial) listCache.save(
                     SportsLiveListSnapshot(
                         savedAtMs = latest.loadedAtMs, tabs = tabs, load = latest, claimedKeys = claimedKeys,
                         addonOrder = addonOrder, directoryStamp = stamp, builtAtMs = now
@@ -727,7 +729,7 @@ class SportsLiveViewModel internal constructor(
             // #143: a tab or filter opened again shows its last board at once ([SportsLiveBoardCache.shownFor]).
             .mapFinishing(
                 supersedes = { running, next -> running.tab != next.tab || running.filter != next.filter },
-                instant = { inputs -> boardCache.shownFor(inputs) }
+                instant = { inputs -> boardCache.instantFor(inputs) }
             ) { inputs ->
                 val generation = boardCache.generation
                 withContext(computeDispatcher) {

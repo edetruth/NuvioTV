@@ -238,6 +238,26 @@ class SportsLiveYourTeamsTest {
     }
 
     @Test
+    fun `More live's games are tracked for scores while its view is open, and only then`() {
+        // live.23 review M2: More live's games are outside Live now's My sports list, so none ever got a score or a final.
+        val mine = item("mine", isLive = true)
+        val other = item("other", isLive = true)
+        val tonight = item("tonight", followed = true, startMs = ms("2026-11-19T23:30:00Z"))
+        val closed = SportsLiveUiState(
+            selectedTab = com.nuvio.tv.domain.model.SportsLiveTab.LIVE_NOW,
+            tabs = mapOf(com.nuvio.tv.domain.model.SportsLiveTab.LIVE_NOW to listOf(mine)),
+            visibleItems = listOf(mine)
+        )
+        assertEquals(listOf(mine, tonight), sectionTrackedCards(closed, listOf(tonight)))
+        val open = closed.copy(moreLiveOpen = true, visibleItems = listOf(other))
+        assertEquals(listOf(mine, other, tonight), sectionTrackedCards(open, listOf(tonight)))
+        // Upcoming tracks what it shows; Channels nothing.
+        val upcoming = closed.copy(selectedTab = com.nuvio.tv.domain.model.SportsLiveTab.UPCOMING, visibleItems = listOf(tonight))
+        assertEquals(listOf(tonight), sectionTrackedCards(upcoming, emptyList()))
+        assertEquals(emptyList<SportsLiveItem>(), sectionTrackedCards(closed.copy(selectedTab = com.nuvio.tv.domain.model.SportsLiveTab.CHANNELS), listOf(tonight)))
+    }
+
+    @Test
     fun `Live now tracks only the followed games the strip may list later today, never a week of them`() {
         // live.23 RC, TV: every followed Upcoming game was tracked, each day its own feed, and they took the live games'.
         val upcoming = listOf(

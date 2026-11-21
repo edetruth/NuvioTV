@@ -339,6 +339,32 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `Live now's kept board shows at once only while it is fresh, other tabs' boards always`() {
+        // live.23 review H2: back on Live now after 20 minutes, its old board showed scores, clocks and LIVE as they were.
+        var clock = NOW
+        val cache = SportsLiveBoardCache(now = { clock })
+        fun inputs(tab: SportsLiveTab) = SportsLiveBoardInputs(
+            tab = tab, filter = null, items = listOf(item("a", isLive = tab == SportsLiveTab.LIVE_NOW, startMs = NOW)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = NOW, logoRevision = 0
+        )
+        val live = SportsLiveBoard(SportsLiveTab.LIVE_NOW, null, emptyList(), emptyList(), emptyMap())
+        val upcoming = SportsLiveBoard(SportsLiveTab.UPCOMING, null, emptyList(), emptyList(), emptyMap())
+        cache.put(inputs(SportsLiveTab.LIVE_NOW), live)
+        cache.put(inputs(SportsLiveTab.UPCOMING), upcoming)
+        clock += SportsLiveBoardCache.LIVE_MAX_AGE_MS
+        assertSame(live, cache.instantFor(inputs(SportsLiveTab.LIVE_NOW)))
+        clock += 20 * MINUTE
+        // Too old to show its scores: the tab waits for its fresh board (its rows are still reused by it).
+        assertNull(cache.instantFor(inputs(SportsLiveTab.LIVE_NOW)))
+        assertSame(live, cache.shownFor(inputs(SportsLiveTab.LIVE_NOW)))
+        assertSame(upcoming, cache.instantFor(inputs(SportsLiveTab.UPCOMING)))
+        // Built again: shown at once again.
+        cache.put(inputs(SportsLiveTab.LIVE_NOW), live)
+        assertSame(live, cache.instantFor(inputs(SportsLiveTab.LIVE_NOW)))
+    }
+
+    @Test
     fun `another profile or setting drops every kept board, and one built before never comes back`() {
         val cache = SportsLiveBoardCache()
         val inputs = SportsLiveBoardInputs(
