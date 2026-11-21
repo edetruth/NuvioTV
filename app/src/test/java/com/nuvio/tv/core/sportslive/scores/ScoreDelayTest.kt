@@ -90,4 +90,19 @@ class ScoreDelayTest {
         val shown = ScoreDelay().apply(mapOf(key to pre), delayMs, start - 60_000L, setOf(base.eventId)).getValue(key)
         assertEquals("7:00 PM", shown.clockText)
     }
+
+    @Test
+    fun `a game zapped off within the delay stays withheld until a delay-old version exists`() {
+        val delay = ScoreDelay()
+        val t0 = start + 3_600_000L
+        val watched = setOf(base.eventId)
+        // Played from the first sight, zapped off 20 s later: the picture seen ran a delay behind.
+        assertNull(delay.apply(mapOf(key to live(50, 48)), delayMs, t0, watched).getValue(key).homeScore)
+        val off = delay.apply(mapOf(key to live(50, 48)), delayMs, t0 + 20_000).getValue(key)
+        assertNull(off.homeScore)
+        assertNull(off.clockText)
+        assertNull(delay.apply(mapOf(key to live(50, 48)), delayMs, t0 + delayMs - 1).getValue(key).homeScore)
+        // A delay-old version now exists: it shows.
+        assertEquals(50, delay.apply(mapOf(key to live(50, 48)), delayMs, t0 + delayMs).getValue(key).homeScore)
+    }
 }
