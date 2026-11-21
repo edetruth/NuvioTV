@@ -43,7 +43,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
-import java.net.URI
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -275,9 +274,7 @@ class SportsLiveReporter @Inject constructor(
     private fun accountSecrets(): List<String> =
         (authManager.authState.value as? AuthState.FullAccount)?.let { listOf(it.email, it.userId) }.orEmpty()
 
-    private fun addonSecretsOf(addons: List<com.nuvio.tv.domain.model.Addon>): List<String> = addons.flatMap { addon ->
-        listOfNotNull(addon.name, addon.displayName, addon.id, addon.baseUrl, runCatching { URI(addon.baseUrl).host }.getOrNull())
-    }
+    private fun addonSecretsOf(addons: List<com.nuvio.tv.domain.model.Addon>): List<String> = SportsLiveReport.addonSecrets(addons)
 
     private companion object {
         const val LOOKUP_MS = 2_000L

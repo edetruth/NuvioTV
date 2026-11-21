@@ -1,5 +1,8 @@
 package com.nuvio.tv.core.sportslive.report
 
+import com.nuvio.tv.domain.model.Addon
+import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.ContentType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -57,6 +60,26 @@ class SportsLiveReportTest {
         unplaced = listOf("3x | $addonName Replay Channel 7", "1x | Some Show"),
         nearMisses = nearMisses
     )
+
+    @Test
+    fun `a catalog name never appears in a report`() {
+        val catalogName = "Hidden Catalog Shelf"
+        val catalog = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "shelf", name = catalogName)
+        val addon = Addon(
+            id = addonId, name = addonName, version = "1.0.0", description = null, logo = null,
+            baseUrl = "https://$host/$token/manifest.json", catalogs = listOf(catalog), types = listOf(catalog.type), resources = emptyList()
+        )
+        val channel = SportsLiveReportInput.Game(
+            title = "AXS TV", teams = null, sport = null, league = "$catalogName (tv)", live = true, sources = 1, espn = null
+        )
+        val text = SportsLiveReport.text(
+            input(game = channel).copy(focused = "AXS TV · $catalogName", unplaced = listOf("1x | $catalogName AXS TV")),
+            SportsLiveReport.addonSecrets(listOf(addon)) + listOf(email, userId)
+        )
+        assertFalse(text, text.contains(catalogName, ignoreCase = true))
+        assertNoSecret(text)
+        assertTrue(text, text.lines().first { it.startsWith("Game: ") }.startsWith("Game: AXS TV · "))
+    }
 
     private fun assertNoSecret(text: String) {
         for (secret in listOf(host, token, "example.invalid", addonName, "secretaddon", "viewer@", "5b0c7e2a")) {

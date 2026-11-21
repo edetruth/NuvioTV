@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive.report
 
 import com.nuvio.tv.core.LogRedact
+import com.nuvio.tv.domain.model.Addon
+import java.net.URI
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -71,6 +73,15 @@ data class SportsLiveReportInput(
 
 /** The report's text (#172) and its QR summary. Every value passes [LogRedact.report] with the secrets given. */
 object SportsLiveReport {
+    /**
+     * What [text] removes for [addons]: each one's names, id, address and host, and its catalogs' names (#220: a
+     * channel's genre can be its catalog's name, which names the addon as surely as the addon's own name).
+     */
+    fun addonSecrets(addons: List<Addon>): List<String> = addons.flatMap { addon ->
+        listOfNotNull(addon.name, addon.displayName, addon.id, addon.baseUrl, runCatching { URI(addon.baseUrl).host }.getOrNull()) +
+            addon.catalogs.map { it.name }
+    }
+
     /** The line between the summary (which the QR code carries) and the details. */
     const val DETAILS = "---- details ----"
 
