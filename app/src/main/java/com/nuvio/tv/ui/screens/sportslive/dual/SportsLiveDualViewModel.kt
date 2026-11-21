@@ -552,8 +552,10 @@ class SportsLiveDualViewModel internal constructor(
      */
     fun closeFailedSide(): Pair<SportsLiveItem, Stream>? {
         val state = _state.value ?: return null
-        if (state.pane(state.highlighted).status != PaneStatus.Error) return null
-        val other = state.pane(state.highlighted.other)
+        // The failed pane's card owns Back wherever it sits (audit G1): the small pane of big + small too.
+        val failed = dualKeySide(state)
+        if (state.pane(failed).status != PaneStatus.Error) return null
+        val other = state.pane(failed.other)
         return other.okStream?.let { other.item to it }
     }
 
@@ -689,11 +691,12 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /** Stay on the highlighted ended pane's card: the card goes, "Game over" stays. False when none shows. */
-    fun endStay(): Boolean {
+    fun endStay(side: Side? = null): Boolean {
         val state = _state.value ?: return false
-        val pane = state.pane(state.highlighted)
+        val at = side ?: state.highlighted
+        val pane = state.pane(at)
         if (pane.status != PaneStatus.Ended || pane.end == null) return false
-        jobs.remove(state.highlighted)?.cancel()
+        jobs.remove(at)?.cancel()
         dispatch(DualAction.EndChanged(pane.item, null))
         return true
     }

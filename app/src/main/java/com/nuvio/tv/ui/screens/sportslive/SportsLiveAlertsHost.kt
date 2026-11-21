@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -464,7 +465,11 @@ fun SportsLiveAlertsHost(
             // One corner for everything (live.20): above the player's card, the toast above this card.
             val density = LocalDensity.current
             val baseTopPx by SportsLiveBottomLeft.baseTopPx.collectAsState()
-            val place = if (alert is SportsLiveAlert.Kickoff) {
+            // Outside dual screen (design audit A3): one fixed home, the top right inside the TV safe area, clear of
+            // the rows, the guide table (cards wait while it is open) and Home's posters. Dual screen keeps its pane
+            // placement (a card never over the game it is about).
+            val home = alertCardHome(maxWidth, maxHeight)
+            val place = if (alert is SportsLiveAlert.Kickoff || panes == null) {
                 null
             } else {
                 alertCardPlace(
@@ -477,7 +482,11 @@ fun SportsLiveAlertsHost(
                 )
             }
             val placed = if (place == null) {
-                Modifier.align(Alignment.BottomStart).then(promptPlace)
+                if (panes == null) {
+                    Modifier.align(Alignment.TopEnd).padding(top = home.top, end = home.end)
+                } else {
+                    Modifier.align(Alignment.BottomStart).then(promptPlace)
+                }
             } else {
                 Modifier
                     .align(Alignment.BottomStart)
@@ -579,6 +588,14 @@ private fun TakeBack(active: Boolean, onBack: () -> Unit) {
     }
 }
 
+/** A card's home outside dual screen (design audit A3): its top and end insets, the TV safe area (5 %: 96 / 54 px at 1080p). */
+internal data class AlertCardHome(val top: Dp, val end: Dp)
+
+internal fun alertCardHome(width: Dp, height: Dp): AlertCardHome = AlertCardHome(top = height * SAFE_AREA, end = width * SAFE_AREA)
+
+/** The TV safe area on each side, as a share of the screen (Android TV layout guide: 5 %). */
+private const val SAFE_AREA = 0.05f
+
 /**
  * Where a score or full-time card sits (live.20: one corner for everything): its bottom left corner as [start] and
  * [bottom] insets of the screen. [holdsCorner]: it is in the toasts' corner, so the toast stacks above it.
@@ -627,11 +644,11 @@ private fun KickoffToast(
     val logoSize = if (compact) 36.dp else 44.dp
     Column(
         modifier = modifier
-            .claimsBottomLeft()
             .widthIn(max = if (compact) 440.dp else 520.dp)
+            .shadow(8.dp, shape)
             .clip(shape)
-            // V2 (#134): the toast card's raised surface, in the toasts' corner (live.19 QA F11).
-            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = 0.96f))
+            // V2 (#134): the raised surface, opaque (design audit A3: no text shows through).
+            .background(SportsLiveTokens.Colors.SurfaceRaised)
             .border(1.dp, SportsLiveTokens.Colors.Outline, shape)
             .padding(if (compact) 14.dp else 18.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
@@ -728,8 +745,9 @@ private fun AlertCountdownCard(
     Column(
         modifier = modifier
             .width(SportsLiveTokens.Alert.Width + 60.dp)
+            .shadow(8.dp, shape)
             .clip(shape)
-            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = 0.96f))
+            .background(SportsLiveTokens.Colors.SurfaceRaised)
             .border(1.dp, SportsLiveTokens.Colors.Outline, shape)
             .padding(SportsLiveTokens.Alert.Padding + 2.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -802,8 +820,10 @@ private fun AlertCardView(
         Column(
             modifier = Modifier
                 .width(SportsLiveTokens.Alert.Width)
+                .shadow(8.dp, shape)
                 .clip(shape)
-                .background(ArtColors.Panel.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+                // Opaque (design audit A3): two texts never overlap.
+                .background(ArtColors.Panel)
                 .border(1.dp, SportsLiveTokens.Alert.Border, shape)
                 .padding(SportsLiveTokens.Alert.Padding),
             verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Alert.Gap)

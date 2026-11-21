@@ -92,8 +92,26 @@ internal enum class DualOk {
     FULL_SCREEN
 }
 
-/** What a short OK does in [state] (see the key model above). */
-internal fun dualOkRoute(state: DualState): DualOk {
+/**
+ * The pane a short OK and Back act on (live.24, audit G1: a card owns its keys wherever it sits): the ringed pane; or,
+ * when it has no card of its own, the other pane while that one shows the error card ("OK Try another link · BACK
+ * Close this side") or an end card. In big + small the ring never sits on the small pane, which is where an alert's
+ * game lands, so its cards must be reachable without it.
+ */
+internal fun dualKeySide(state: DualState): Side {
+    val ringed = state.highlighted
+    if (dualPaneOwnsKeys(state.pane(ringed)) || dualCardButtons(state.pane(ringed)) > 0) return ringed
+    return if (dualPaneOwnsKeys(state.pane(ringed.other))) ringed.other else ringed
+}
+
+/** A pane card that takes OK and Back: the error card after every link failed, or an end card still up. */
+internal fun dualPaneOwnsKeys(pane: DualPane): Boolean =
+    pane.status == PaneStatus.Error || (pane.status == PaneStatus.Ended && pane.end != null)
+
+/** What a short OK does in [state] (see the key model above), on the pane [dualKeySide] picks. */
+internal fun dualOkRoute(state: DualState): DualOk = dualRingedOkRoute(state.copy(highlighted = dualKeySide(state)))
+
+private fun dualRingedOkRoute(state: DualState): DualOk {
     val pane = state.pane(state.highlighted)
     return when {
         dualCardButtons(pane) > 0 || (pane.status == PaneStatus.Ended && pane.end != null) -> DualOk.CARD_BUTTON

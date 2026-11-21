@@ -177,6 +177,25 @@ class DualKeyModelTest {
     }
 
     @Test
+    fun `a pane's error or end card owns OK and Back wherever it sits, the small pane of big and small too (audit G1)`() {
+        val error = DualPane(b, dualStream("b"), PaneStatus.Error)
+        // The ring stays on the big game; the small pane's game failed.
+        val state = bigSmall.copy(right = error)
+        assertEquals(Side.RIGHT, dualKeySide(state))
+        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(state))
+        // An end card on the small pane: OK presses its button.
+        val ended = bigSmall.copy(right = ended(next = true).copy(item = b))
+        assertEquals(Side.RIGHT, dualKeySide(ended))
+        assertEquals(DualOk.CARD_BUTTON, dualOkRoute(ended))
+        // Split too: the card names OK, so OK is the card's.
+        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(split.copy(right = error)))
+        // The ringed pane's own card goes first; with no card anywhere, OK is full screen as before.
+        assertEquals(Side.LEFT, dualKeySide(bigSmall.copy(left = starting, right = error)))
+        assertEquals(Side.LEFT, dualKeySide(bigSmall))
+        assertEquals(DualOk.FULL_SCREEN, dualOkRoute(bigSmall))
+    }
+
+    @Test
     fun `OK on a pane card presses its button, on the error card it offers the streams`() {
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = starting)))
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = ended(next = true))))

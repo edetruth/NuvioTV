@@ -39,7 +39,11 @@ internal enum class SportsLivePlayerOk {
  *   system's long-press time, as Hold OK everywhere on the TV) is [SportsLivePlayerOk.HOLD] and its release
  *   [SportsLivePlayerOk.MENU]; a release before that is the short action ([SportsLivePlayerOk.OPEN_GUIDE] when [guide], else [SportsLivePlayerOk.SHORT]).
  * - Only [guide]: the guide opens on the press, as before (live.21 B2).
- * - Neither: [SportsLivePlayerOk.NONE].
+ * - Neither, but [lateMenu] (live.24, audit G9: a replay, "OK on live" = Pause, the end card up, the controls showing):
+ *   the press goes to the player as always ([SportsLivePlayerOk.NONE]: its pause, its card's button), but held it is
+ *   still [SportsLivePlayerOk.HOLD] then [SportsLivePlayerOk.MENU], and the release is taken so no button clicks.
+ *   Report a problem is reachable in every player state, on remotes with no Play key too.
+ * - None of them: [SportsLivePlayerOk.NONE].
  * The rest of a press taken (repeats, the release), matched by its downTime, is [SportsLivePlayerOk.CONSUMED], so it
  * never reaches the guide or the menu that opened. A repeat or release without its press is NONE.
  */
@@ -49,13 +53,25 @@ internal class SportsLivePlayerOkKey {
     private var held = false
     private var guideAtPress = false
 
-    fun onKey(keyCode: Int, action: Int, repeatCount: Int, downTime: Long, guide: Boolean, menu: Boolean): SportsLivePlayerOk {
+    /** The press went to the player as usual; only a hold of it is ours ([lateMenu]). */
+    private var passedThrough = false
+
+    fun onKey(
+        keyCode: Int,
+        action: Int,
+        repeatCount: Int,
+        downTime: Long,
+        guide: Boolean,
+        menu: Boolean,
+        lateMenu: Boolean = false
+    ): SportsLivePlayerOk {
         if (keyCode != KeyEvent.KEYCODE_DPAD_CENTER && keyCode != KeyEvent.KEYCODE_ENTER && keyCode != KeyEvent.KEYCODE_NUMPAD_ENTER) {
             return SportsLivePlayerOk.NONE
         }
         if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
             held = false
             guideAtPress = guide
+            passedThrough = false
             return when {
                 menu -> {
                     takenDownTime = downTime
@@ -67,6 +83,12 @@ internal class SportsLivePlayerOkKey {
                     waiting = false
                     SportsLivePlayerOk.OPEN_GUIDE
                 }
+                lateMenu -> {
+                    takenDownTime = downTime
+                    waiting = false
+                    passedThrough = true
+                    SportsLivePlayerOk.NONE
+                }
                 else -> {
                     takenDownTime = NOT_TAKEN
                     waiting = false
@@ -75,6 +97,19 @@ internal class SportsLivePlayerOkKey {
             }
         }
         if (takenDownTime == NOT_TAKEN || downTime != takenDownTime) return SportsLivePlayerOk.NONE
+        if (passedThrough) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                if (held) return SportsLivePlayerOk.CONSUMED
+                held = true
+                return SportsLivePlayerOk.HOLD
+            }
+            if (action != KeyEvent.ACTION_UP) return SportsLivePlayerOk.NONE
+            val wasHeld = held
+            takenDownTime = NOT_TAKEN
+            passedThrough = false
+            held = false
+            return if (wasHeld) SportsLivePlayerOk.MENU else SportsLivePlayerOk.NONE
+        }
         if (action == KeyEvent.ACTION_DOWN) {
             if (!waiting || held) return SportsLivePlayerOk.CONSUMED
             held = true

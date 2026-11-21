@@ -158,6 +158,22 @@ class SportsLiveDualPickerLive24Test {
     }
 
     @Test
+    fun `Back on the small pane's error card closes that side and keeps the big game (audit G1)`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = SportsLiveDualViewModel(
+            resolve = { item -> if (item == b) null else dualStream(item.id) },
+            endedKeys = { emptySet() },
+            session = SportsLiveDualSession(a, b, listOf(a, b, c), null, SportsLiveTab.LIVE_NOW),
+            loadLayout = { DualLayout.BIG_SMALL }
+        )
+        runCurrent()
+        viewModel.onFirstFrame(a)
+        val state = viewModel.state.value!!
+        assertEquals(PaneStatus.Error, state.right.status)
+        assertEquals(Side.LEFT, state.highlighted)
+        assertEquals(a, viewModel.closeFailedSide()?.first)
+    }
+
+    @Test
     fun `a pane's error card has one action - OK tries another link, Back closes the side, no arrows named`() {
         val error = DualState(DualPane(a, dualStream("a"), PaneStatus.Error), DualPane(b, dualStream("b"), PaneStatus.Playing))
         assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(error))

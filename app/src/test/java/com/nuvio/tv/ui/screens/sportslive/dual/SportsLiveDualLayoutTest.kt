@@ -130,14 +130,16 @@ class SportsLiveDualLayoutTest {
     // Geometry (the 1080p TV: 960 x 540 dp)
 
     @Test
-    fun `split tiles are 912 px wide, 32 px apart, and centred with their strips`() {
+    fun `split tiles are 848 px wide, 32 px apart, inside the safe area and centred with their strips`() {
         val left = DualGeometry.tile(Side.LEFT, DualLayout.SPLIT, 960.dp, 540.dp)
         val right = DualGeometry.tile(Side.RIGHT, DualLayout.SPLIT, 960.dp, 540.dp)
-        assertEquals(456f, left.width.value, 0.01f)
-        assertEquals(456f, right.width.value, 0.01f)
+        assertEquals(424f, left.width.value, 0.01f)
+        assertEquals(424f, right.width.value, 0.01f)
         assertEquals(16f, (right.start - left.end).value, 0.01f)
-        assertEquals(16f, left.start.value, 0.01f)
-        assertEquals(960f, (right.end + 16.dp).value, 0.01f)
+        // Design audit A4: 96 px from each side at 1080p (the TV safe area).
+        assertEquals(48f, left.start.value, 0.01f)
+        assertEquals(960f, (right.end + 48.dp).value, 0.01f)
+        assertTrue(left.top.value >= 27f)
         assertEquals(left.top, right.top)
         // F13: the tile and its strip sit in the middle, with no empty band below.
         assertEquals(540f - (left.bottom + 32.dp).value, left.top.value, 0.01f)
@@ -149,12 +151,21 @@ class SportsLiveDualLayoutTest {
     fun `big and small tiles are three quarters and one quarter, tops aligned, never overlapping`() {
         val big = DualGeometry.tile(Side.LEFT, DualLayout.BIG_SMALL, 960.dp, 540.dp)
         val small = DualGeometry.tile(Side.RIGHT, DualLayout.BIG_SMALL, 960.dp, 540.dp)
-        assertEquals(672f, big.width.value, 0.01f)
-        assertEquals(224f, small.width.value, 0.01f)
+        assertEquals(636f, big.width.value, 0.01f)
+        assertEquals(212f, small.width.value, 0.01f)
         assertEquals(big.top, small.top)
         assertEquals(16f, (small.start - big.end).value, 0.01f)
-        assertEquals(936f, small.end.value, 0.01f)
-        assertTrue((big.bottom + 32.dp).value <= 540f)
+        // Design audit A4: inside the safe area, 96 / 54 px at 1080p.
+        assertEquals(48f, big.start.value, 0.01f)
+        assertEquals(912f, small.end.value, 0.01f)
+        assertTrue(big.top.value >= 27f)
+        assertTrue((big.bottom + 32.dp).value <= 540f - 27f)
+        // The free column under the small tile: its two-line caption first, then the hints and the game info.
+        val column = DualGeometry.smallColumn(DualLayout.BIG_SMALL, 960.dp, 540.dp)!!
+        assertEquals(small.start, column.start)
+        assertEquals((small.bottom + 56.dp).value, column.top.value, 0.01f)
+        assertTrue((column.top + 84.dp + 100.dp).value <= big.bottom.value)
+        assertEquals(null, DualGeometry.smallColumn(DualLayout.SPLIT, 960.dp, 540.dp))
         // Room under the small tile's strip for the game info overlay.
         assertTrue((big.bottom - small.bottom - 32.dp).value > 150f)
     }

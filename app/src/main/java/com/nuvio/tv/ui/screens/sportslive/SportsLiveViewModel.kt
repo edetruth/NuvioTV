@@ -1019,11 +1019,16 @@ class SportsLiveViewModel internal constructor(
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
         }
+        val (items, tab) = if (moreLive.any { it.streamKey == item.streamKey }) {
+            moreLive to state.selectedTab
+        } else {
+            sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
+        }
         val session = SportsLiveZapSession.of(
-            items = if (moreLive.any { it.streamKey == item.streamKey }) moreLive else state.zapItems,
+            items = items,
             itemKey = item.streamKey,
-            tab = state.selectedTab,
-            filter = state.selectedFilter,
+            tab = tab,
+            filter = state.selectedFilter.takeIf { tab == state.selectedTab },
             returnToHomeOnBack = false
         )
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()

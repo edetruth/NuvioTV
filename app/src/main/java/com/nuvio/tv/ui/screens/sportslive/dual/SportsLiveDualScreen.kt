@@ -421,7 +421,9 @@ fun SportsLiveDualScreen(
                             menuOpen = true
                         }
                         DualPress.SHORT -> {
-                            val pane = dual.pane(dual.highlighted)
+                            // The pane whose card owns OK (audit G1): the ringed one, or the other's error or end card.
+                            val keySide = dualKeySide(dual)
+                            val pane = dual.pane(keySide)
                             when (dualOkRoute(dual)) {
                                 DualOk.CARD_BUTTON -> if (pane.isStarting) {
                                     when (startingSelection) {
@@ -430,7 +432,7 @@ fun SportsLiveDualScreen(
                                     }
                                 } else {
                                     // Watch next, its one button; with nothing next, OK closes the card as Back does.
-                                    if (!viewModel.endWatchNext()) viewModel.endStay()
+                                    if (!viewModel.endWatchNext(keySide)) viewModel.endStay(keySide)
                                 }
                                 // A pane whose recovery gave up offers its streams to choose from (#138).
                                 DualOk.CHOOSE_STREAM -> playViewModel.chooseStream(pane.item)
@@ -532,17 +534,33 @@ fun SportsLiveDualScreen(
             val infoTile = DualGeometry.tile(
                 if (dual.layout == DualLayout.BIG_SMALL) Side.RIGHT else dual.infoSide, dual.layout, maxWidth, maxHeight
             )
+            val captionHeight = if (dual.layout == DualLayout.BIG_SMALL) SportsLiveTokens.Size.DualCaptionStacked else SportsLiveTokens.Size.DualCaption
             SportsLiveGameInfoOverlay(
                 info = info,
                 compact = true,
                 modifier = Modifier
-                    .offset(x = infoTile.start, y = infoTile.bottom + SportsLiveTokens.Size.DualCaption + 4.dp)
+                    .offset(x = infoTile.start, y = infoTile.bottom + captionHeight + 4.dp)
                     .width(infoTile.width)
             )
+            // Big + small (design audit A4): the keys hint in the free column under the small game's caption and the
+            // game info's room, never over the big game.
+            DualGeometry.smallColumn(dual.layout, maxWidth, maxHeight)?.let { column ->
+                AnimatedVisibility(
+                    visible = keysHint,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .offset(x = column.start, y = column.top + SportsLiveTokens.Size.DualInfoRoom)
+                        .width(column.width)
+                ) {
+                    DualKeysHint(dualKeyHints(dual), vertical = true)
+                }
+            }
         }
         // Not focusable: keys stay with the screen.
+        // Split: under the tiles, inside the safe area.
         AnimatedVisibility(
-            visible = keysHint,
+            visible = keysHint && dual.layout != DualLayout.BIG_SMALL,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -684,14 +702,19 @@ private fun DualPaneView(
                     text = dualPaneCaption(pane.item),
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor,
-                    maxLines = 1,
+                    maxLines = if (small) 2 else 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = 8.dp)
                 )
             } else {
-                PaneScoreStrip(strip, small, textColor, chipStrings, Modifier.weight(1f).padding(start = 8.dp))
+                // Big + small (design audit A4): the small game's whole caption on two lines in the free column.
+                if (small) {
+                    PaneScoreStripStacked(strip, textColor, chipStrings, Modifier.weight(1f).padding(start = 8.dp))
+                } else {
+                    PaneScoreStrip(strip, small, textColor, chipStrings, Modifier.weight(1f).padding(start = 8.dp))
+                }
             }
         }
     }
@@ -748,6 +771,61 @@ private fun PaneScoreStrip(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
+        }
+    }
+}
+
+/**
+ * The small pane's caption in big + small (live.24, design audit A4): the same identity as [PaneScoreStrip] at the big
+ * pane's size, on two lines in the free column under the tile: "[logo] BOS 91–88 NYK [logo]", then "● 4:12 Q4 · NBA".
+ * Spoiler rules are the strip's own (no score unless the chip shows one).
+ */
+@Composable
+private fun PaneScoreStripStacked(
+    strip: DualScoreStrip,
+    textColor: Color,
+    chipStrings: ScoreChipStrings,
+    modifier: Modifier = Modifier
+) {
+    val logos = rememberTeamLogoPair(strip.first.logo, strip.second.logo)?.takeUnless { it.failed }
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.DualStrip)
+    val rankSize = SportsLiveTokens.Type.Tag.fontSize
+    val score = strip.score
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            logos?.let { TeamLogoSlot(it.first, it.shown, 16.dp) }
+            Text(text = rankedName(strip.first.code, strip.first.rank, rankSize), style = style.sportsLiveBold(), color = textColor, maxLines = 1, softWrap = false)
+            Text(
+                text = if (score != null) String.format(chipStrings.score, score.first, score.second) else DUAL_SIDES_GAP,
+                style = style.sportsLiveBold(),
+                color = textColor,
+                maxLines = 1,
+                softWrap = false
+            )
+            Text(text = rankedName(strip.second.code, strip.second.rank, rankSize), style = style.sportsLiveBold(), color = textColor, maxLines = 1, softWrap = false)
+            logos?.let { TeamLogoSlot(it.second, it.shown, 16.dp) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            strip.status(chipStrings)?.let { status ->
+                if (strip.live) Box(Modifier.size(6.dp).background(SportsLiveTokens.Colors.LiveRed, CircleShape))
+                Text(
+                    text = status,
+                    style = style,
+                    color = if (strip.live) SportsLiveTokens.Colors.LiveText else SportsLiveTokens.Colors.TextMuted,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+            if (strip.tag.isNotEmpty()) {
+                Text(
+                    text = strip.tag,
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                    color = SportsLiveTokens.Colors.TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
         }
     }
 }
@@ -905,17 +983,15 @@ private const val PANE_SCRIM_ALPHA = 0.6f
  * OK  Full screen · Hold OK  More"), on the alert card surface, never focusable. Words for what each key does; the key itself in a cap.
  */
 @Composable
-private fun DualKeysHint(hints: List<DualHint>) {
+private fun DualKeysHint(hints: List<DualHint>, vertical: Boolean = false) {
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(shape)
-            .background(SportsLiveTokens.Colors.Surface.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
-            .border(1.dp, SportsLiveTokens.Alert.Border, shape)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-    ) {
+    val surface = Modifier
+        .clip(shape)
+        .background(SportsLiveTokens.Colors.Surface)
+        .border(1.dp, SportsLiveTokens.Alert.Border, shape)
+        .padding(horizontal = 16.dp, vertical = 10.dp)
+    // In the small game's column (big + small) one key per line; under split's tiles one row.
+    val pairs: @Composable () -> Unit = {
         hints.forEach { hint ->
             val (key, label) = when (hint) {
                 DualHint.MOVE -> R.string.sports_live_dual_hint_key_move to R.string.sports_live_dual_hint_move
@@ -944,6 +1020,11 @@ private fun DualKeysHint(hints: List<DualHint>) {
                 )
             }
         }
+    }
+    if (vertical) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = surface) { pairs() }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically, modifier = surface) { pairs() }
     }
 }
 
