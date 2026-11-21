@@ -180,13 +180,17 @@ fun SportsLiveScreen(
     val scoredTab = uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.UPCOMING
     // Your teams (#155): followed teams' games on Upcoming, for the strip's "later today" (a few rows at most).
     val upcomingFollowed = remember(uiState.tabs) { uiState.tabs[SportsLiveTab.UPCOMING].orEmpty().filter { it.followed } }
+    // Only those the strip may list later today are tracked (live.23 RC): a week of them took every live game's feed.
+    val laterTodayTracked = remember(upcomingFollowed, uiState.nowMs) {
+        YourTeams.laterTodayTracked(upcomingFollowed, uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis())
+    }
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_SECTION,
         // Live now tracks the whole tab (every filter), so each game's feed answers before it may be
         // estimated as ended (#60) and the tab count does not change with the filter. J4: and the strip's later-today
         // games, so their cards get ESPN's logos and names (Mavericks vs Clippers drew "Da… Lo…" untracked).
         cards = when (uiState.selectedTab) {
-            SportsLiveTab.LIVE_NOW -> uiState.tabs[SportsLiveTab.LIVE_NOW].orEmpty() + upcomingFollowed
+            SportsLiveTab.LIVE_NOW -> uiState.tabs[SportsLiveTab.LIVE_NOW].orEmpty() + laterTodayTracked
             SportsLiveTab.UPCOMING -> uiState.visibleItems
             else -> emptyList()
         },

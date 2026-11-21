@@ -154,6 +154,26 @@ internal object YourTeams {
     }
 
     /**
+     * The followed teams' Upcoming games [strip] may list as later today, the only ones Live now tracks scores for
+     * besides its own games (J4: for their logos and names). live.23 RC, TV: Live now tracked every followed game on
+     * Upcoming, a week of them, each on its own scoreboard (league and day), and they took the whole feed budget from
+     * the games in play (Serie A, Bundesliga, La Liga, college football showed no score). A timed game counts while its
+     * start is on [nowMs]'s day in [zone] and not over [STARTED_KEEP_MS] ago (the strip's window); a game with a date
+     * alone counts on that date (UTC, as ESPN's feeds are asked for it).
+     */
+    fun laterTodayTracked(upcoming: List<SportsLiveItem>, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): List<SportsLiveItem> {
+        val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+        return upcoming.filter { item ->
+            val start = item.startMs
+            when {
+                !item.followed || item.isChannel || start == null -> false
+                item.startHasTimeOfDay -> start > nowMs - STARTED_KEEP_MS && Instant.ofEpochMilli(start).atZone(zone).toLocalDate() == today
+                else -> Instant.ofEpochMilli(start).atZone(java.time.ZoneOffset.UTC).toLocalDate() == today
+            }
+        }
+    }
+
+    /**
      * The strip's replays (research 7), newest first, at most [MAX_REPLAYS]: one per followed team (Google's one item
      * per series in Continue Watching; a newer game of the team supersedes the older one), except those the user kept
      * ([kept] event ids, "Watch later (no spoilers)"), which always stay (chosen before the others) and leave their team's

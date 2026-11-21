@@ -237,6 +237,26 @@ class SportsLiveYourTeamsTest {
         )
     }
 
+    @Test
+    fun `Live now tracks only the followed games the strip may list later today, never a week of them`() {
+        // live.23 RC, TV: every followed Upcoming game was tracked, each day its own feed, and they took the live games'.
+        val upcoming = listOf(
+            item("evening", followed = true, startMs = ms("2026-11-19T19:00:00Z")),
+            item("started", followed = true, startMs = now - hour),
+            item("long-started", followed = true, startMs = now - 4 * hour),
+            item("tomorrow", followed = true, startMs = ms("2026-11-20T01:00:00Z")),
+            item("next-week", followed = true, startMs = ms("2026-11-26T19:00:00Z")),
+            item("other", followed = false, startMs = ms("2026-11-19T20:00:00Z")),
+            item("date-today", followed = true, startMs = ms("2026-11-19T00:00:00Z")).copy(startHasTimeOfDay = false),
+            item("date-tomorrow", followed = true, startMs = ms("2026-11-20T00:00:00Z")).copy(startHasTimeOfDay = false),
+            item("no-start", followed = true)
+        )
+        assertEquals(
+            listOf("evening", "started", "date-today"),
+            YourTeams.laterTodayTracked(upcoming, now, zone).map { it.meta.id }
+        )
+    }
+
     private fun item(
         id: String,
         followed: Boolean = false,
