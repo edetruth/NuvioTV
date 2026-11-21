@@ -989,6 +989,7 @@
     <string name="sports_live_results_other_all">All other sports</string>
     <string name="sports_live_results_other_loading">Looking for games in other sports…</string>
     <string name="sports_live_results_other_none">No games in other sports this day</string>
+    <string name="sports_live_results_other_failed">Couldn\'t load other sports</string>
     <plurals name="sports_live_results_see_other">
         <item quantity="one">See %d game in other sports</item>
         <item quantity="other">See %d games in other sports</item>
