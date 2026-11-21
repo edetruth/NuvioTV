@@ -90,7 +90,8 @@ interface SportsLiveRepository {
 
     /**
      * Live items from [latest] that are not ended, followed teams' games first, capped at [limit];
-     * empty when the home row or the section is off.
+     * empty when the section is off, or [forHomeRow] and the home row is off (dual screen's picker asks for them
+     * whatever the home row, live.24).
      */
-    fun liveNow(limit: Int = 20): Flow<List<SportsLiveItem>>
+    fun liveNow(limit: Int = 20, forHomeRow: Boolean = true): Flow<List<SportsLiveItem>>
 }

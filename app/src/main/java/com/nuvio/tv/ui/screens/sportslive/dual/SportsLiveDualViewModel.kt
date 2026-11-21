@@ -69,7 +69,7 @@ data class SportsLiveDualSession(
     val zapItems: List<SportsLiveItem> = items,
     /** The game whose full player opened dual screen; null from the section. Back keeps the game with sound ([SportsLiveDualViewModel.keepOnBack]). */
     val backTo: SportsLiveItem? = null,
-    /** "Watch with another game" (#57) paired [right] by itself: "Paired with ‹game› · ← to change" shows. */
+    /** "Watch with another game" (#57) paired [right] by itself: "Paired with ‹game› · Hold OK to change" shows. */
     val pairedHint: Boolean = false,
     /** Card keys of games known to be over when dual opened (Just ended, ESPN finals): never offered. */
     val finishedKeys: Set<String> = emptySet()
@@ -117,6 +117,26 @@ data class SportsLiveDualPick(
 
     private fun isCandidate(item: SportsLiveItem): Boolean =
         !item.sharesSourceWith(chosenKeys) && !item.hasEnded(endedKeys)
+}
+
+/**
+ * "Pick another to watch" (live.24): [pool]'s games in its order (the ranked live games first), each once, none sharing
+ * a source with the games on screen ([onScreen]), known to be over ([over]: any source) or with no stream left
+ * ([ended], the probe's verdicts: every source, [SportsLiveItem.hasEnded]).
+ */
+internal fun dualPickerCandidates(
+    pool: List<SportsLiveItem>,
+    onScreen: Set<String>,
+    over: Set<String>,
+    ended: Set<String> = emptySet()
+): List<SportsLiveItem> {
+    val taken = HashSet(onScreen)
+    return pool.filter { item ->
+        val keys = item.sourceKeys()
+        val keep = keys.none { it in taken || it in over } && !item.hasEnded(ended)
+        if (keep) taken += keys
+        keep
+    }
 }
 
 /** Dual screen is offered on Live now and Channels only. */
@@ -208,7 +228,17 @@ class SportsLiveDualViewModel internal constructor(
     /** Which games are mine (#161, research 6): an ended pane moves by itself only into one of them showing "▶ Ready". */
     reminders: Flow<RemindersState> = flowOf(RemindersState()),
     /** "Are you still watching?" after a few automatic moves or hours with no key press (#161). */
-    private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared
+    private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared,
+    /**
+     * Every live game of My sports and followed teams, in importance order (J2, [com.nuvio.tv.core.sportslive.SportsLiveImportance]):
+     * what "Pick another to watch" offers (live.24), not only the list dual screen was opened from.
+     */
+    liveGames: Flow<List<SportsLiveItem>> = flowOf(emptyList()),
+    /**
+     * Called once per entry: true when the keys hint shows this time (the profile's first [DUAL_KEYS_HINT_OPENS]
+     * entries, [shouldShowDualKeysHint]), which is then counted.
+     */
+    private val claimKeysHint: suspend () -> Boolean = { true }
 ) : ViewModel() {
 
     @Inject
@@ -242,7 +272,9 @@ class SportsLiveDualViewModel internal constructor(
             ) + SportsLiveLinkVerdicts.shared.deadKeys
         },
         savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) },
-        reminders = preferences.reminders
+        reminders = preferences.reminders,
+        liveGames = repo.liveNow(limit = PICKER_LIMIT, forHomeRow = false),
+        claimKeysHint = { preferences.claimDualKeysHint(::shouldShowDualKeysHint) }
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -258,7 +290,10 @@ class SportsLiveDualViewModel internal constructor(
 
     private val _keysHint = MutableStateFlow(false)
 
-    /** The keys hint shows for [KEYS_HINT_MS] after the screen opens, every time, until ◀ ▶ or OK ([hideKeysHint]). */
+    /**
+     * The keys hint shows for [KEYS_HINT_MS] after the screen opens, on the profile's first [DUAL_KEYS_HINT_OPENS]
+     * entries only (user, live.24), until ◀ ▶ or OK ([hideKeysHint]).
+     */
     val keysHint: StateFlow<Boolean> = _keysHint.asStateFlow()
 
     private val _pairHint = MutableStateFlow<String?>(null)
@@ -330,6 +365,9 @@ class SportsLiveDualViewModel internal constructor(
     @Volatile
     private var remindersNow = RemindersState()
 
+    @Volatile
+    private var liveGamesNow: List<SportsLiveItem> = emptyList()
+
     init {
         // Q18 (#85): both panes' games are being watched: no score or clock from us, the others' scores wait.
         viewModelScope.launch {
@@ -344,6 +382,7 @@ class SportsLiveDualViewModel internal constructor(
         viewModelScope.launch { endActions.collect { endAction = it } }
         viewModelScope.launch { reminders.collect { remindersNow = it } }
         viewModelScope.launch { scoresModes.collect { scoresMode = it } }
+        viewModelScope.launch { liveGames.collect { liveGamesNow = it } }
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
         session?.let {
             viewModelScope.launch {
@@ -361,9 +400,10 @@ class SportsLiveDualViewModel internal constructor(
                     _pairHint.value = null
                 }
             }
-            // Every entry (coordinator decision 3): the model is shown where it is used, briefly.
-            _keysHint.value = true
+            // The profile's first few entries (user, live.24): the model is shown where it is used, briefly.
             viewModelScope.launch {
+                if (!runCatching { claimKeysHint() }.getOrDefault(false)) return@launch
+                _keysHint.value = true
                 delay(KEYS_HINT_MS)
                 _keysHint.value = false
             }
@@ -377,31 +417,24 @@ class SportsLiveDualViewModel internal constructor(
 
     fun highlight(side: Side) = dispatch(DualAction.Highlight(side))
 
-    /**
-     * Left (#57): on the left pane, already highlighted, it opens the right pane's picker ("← to change"
-     * in the pair hint); otherwise it highlights the left pane as before.
-     */
-    fun onLeft() {
-        val state = _state.value ?: return
-        if (state.highlighted == Side.LEFT) openPairPicker() else highlight(Side.LEFT)
-    }
-
-    // The pane the open picker changes (#57): the right one from ◀ on the left pane, the left one from ▶ on the right.
+    // The pane the open picker changes (#57): the one without the ring (Hold OK › Change the other game).
     private var pickerSide = Side.RIGHT
 
     /**
-     * Opens [side]'s picker: the list's games not known to be over, not already on screen and
-     * sharing no source with either pane. Nothing is looked up until one is picked.
+     * Opens [side]'s picker ("Pick another to watch", live.24): every live game of My sports and followed teams in
+     * importance order, not known to be over, not already on screen and sharing no source with either pane
+     * ([dualPickerCandidates]). A Channels session lists its channels after them (no channel is a ranked game), and
+     * before the ranked list has loaded the session's list stands in. Nothing is looked up until one is picked.
      */
     fun openPairPicker(side: Side = Side.RIGHT) {
         val state = _state.value ?: return
         pickerSide = side
-        val ended = endedKeys()
-        val onScreen = state.left.item.sourceKeys() + state.right.item.sourceKeys()
+        val ranked = liveGamesNow
+        val listed = if (tab == SportsLiveTab.CHANNELS || ranked.isEmpty()) items else emptyList()
+        val pool = ranked + listed
+        val over = finishedKeys + overKeys(pool, scoresMode == ScoresMode.OFF)
         _pairHint.value = null
-        _pairPicker.value = items.filter { item ->
-            !item.sharesSourceWith(onScreen) && !item.hasEnded(ended) && item.sourceKeys().none { it in finishedKeys }
-        }
+        _pairPicker.value = dualPickerCandidates(pool, state.left.item.sourceKeys() + state.right.item.sourceKeys(), over, endedKeys())
     }
 
     fun closePairPicker() {
@@ -428,7 +461,8 @@ class SportsLiveDualViewModel internal constructor(
         val side = state.highlighted
         if (item.sharesSourceWith(state.pane(side).item)) return true
         if (item.sharesSourceWith(state.pane(side.other).item)) {
-            highlight(side.other)
+            // Big + small (live.24): the sound follows the big game, so that game is made big.
+            if (state.layout == DualLayout.BIG_SMALL) swap() else highlight(side.other)
             return true
         }
         settle(state.pane(side).item)
@@ -978,7 +1012,10 @@ class SportsLiveDualViewModel internal constructor(
         /** How long the keys hint shows after the screen opens. */
         const val KEYS_HINT_MS = 4_000L
 
-        /** How long "Paired with ‹game› · ← to change" shows after "Watch with another game" (#57). */
+        /** How long "Paired with ‹game› · Hold OK to change" shows after "Watch with another game" (#57). */
         const val PAIR_HINT_MS = 3_000L
+
+        /** The most live games "Pick another to watch" lists (live.24). */
+        const val PICKER_LIMIT = 60
     }
 }

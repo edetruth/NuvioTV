@@ -750,7 +750,7 @@
     <string name="sports_live_now_playing">Now playing</string>
     <string name="sports_live_expand">Expand</string>
     <string name="sports_live_stop">Stop</string>
-    <string name="sports_live_dual_paired_hint">Paired with %1$s · ◀ to change</string>
+    <string name="sports_live_dual_paired_hint">Paired with %1$s · Hold OK to change</string>
     <string name="sports_live_dual_no_pair">No other live game to watch with</string>
     <string name="sports_live_full_time">Full time</string>
     <string name="sports_live_full_time_score">Full time · %1$s</string>
@@ -812,9 +812,8 @@
     <string name="sports_live_dual_sound_on">Sound on</string>
     <string name="sports_live_dual_sound_off">Muted</string>
     <string name="sports_live_dual_hint_key_move">◀ ▶</string>
-    <string name="sports_live_dual_hint_move">Pick a game, sound follows · past the edge: other game</string>
-    <string name="sports_live_dual_hint_key_zap">▲ ▼</string>
-    <string name="sports_live_dual_hint_zap">Change game</string>
+    <string name="sports_live_dual_hint_move">Sound</string>
+    <string name="sports_live_dual_hint_swap_big">Swap big</string>
     <string name="sports_live_dual_hint_key_ok">OK</string>
     <string name="sports_live_dual_hint_full_screen">Full screen</string>
     <string name="sports_live_dual_hint_make_big">Make big</string>

@@ -188,7 +188,7 @@ class SportsLiveSecondGameTest {
     }
 
     @Test
-    fun `Left on the left pane opens the right pane's picker, without finished games, and a pick resolves one game`() =
+    fun `the other pane's picker leaves out finished games, and a pick resolves one game`() =
         runTest(mainDispatcherRule.dispatcher) {
             val resolved = mutableListOf<String>()
             val ended = game("Ended", NOW - HOUR)
@@ -204,7 +204,7 @@ class SportsLiveSecondGameTest {
             )
             runCurrent()
             assertEquals(Side.LEFT, viewModel.state.value!!.highlighted)
-            viewModel.onLeft()
+            viewModel.openPairPicker(Side.RIGHT)
             // Neither pane's game, nor a finished one.
             assertEquals(listOf(earlier), viewModel.pairPicker.value)
             resolved.clear()
@@ -213,13 +213,6 @@ class SportsLiveSecondGameTest {
             assertNull(viewModel.pairPicker.value)
             assertEquals(earlier, viewModel.state.value!!.right.item)
             assertEquals(first, viewModel.state.value!!.left.item)
-            assertEquals(listOf(earlier.id), resolved)
-
-            // On the right pane Left only moves the highlight back.
-            viewModel.highlight(Side.RIGHT)
-            viewModel.onLeft()
-            assertNull(viewModel.pairPicker.value)
-            assertEquals(Side.LEFT, viewModel.state.value!!.highlighted)
             assertEquals(listOf(earlier.id), resolved)
         }
 

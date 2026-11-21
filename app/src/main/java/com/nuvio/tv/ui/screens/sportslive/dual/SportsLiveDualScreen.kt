@@ -96,6 +96,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuButton
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveReporterEntryPoint
 import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.ui.screens.sportslive.RegisterSportsLiveAlertSurface
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurface
@@ -129,11 +130,12 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /**
  * Two Sports & Live games side by side; only the highlighted pane has sound. The keys follow the D-pad model in
- * DualKeyModel.kt (research 8: no Menu or channel keys needed): Left/Right highlight a pane (the sound follows),
- * Up/Down change its game (through a pane card's buttons first), OK plays the highlighted game in the full player
- * (its playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged game's best
- * stream; Back there comes back here) or, on the small pane of big + small, makes it the big one; Hold OK opens the
- * menu (Layout, Swap panes, Change the other game, Full screen). MENU (swap; held: layout, #123), CH+/CH- and INFO
+ * DualKeyModel.kt (research 8: no Menu or channel keys needed): Left/Right highlight a pane side by side (the sound
+ * follows), or in big + small swap which game is big (live.24), Up/Down change its game (through a pane card's
+ * buttons first), OK plays the highlighted game in the full player (its playing stream as is; a pane not playing
+ * takes the section's path: Stream screen, or a merged game's best stream; Back there comes back here) or, on the
+ * small pane of big + small, makes it the big one; Hold OK opens the menu (Report a problem, Layout, Swap panes,
+ * Change the other game, Full screen). MENU (swap; held: layout, #123), CH+/CH- and INFO
  * (the game info for the game with sound, #139) are shortcuts. Back closes a pane's end card, else plays the game
  * with sound full screen and stops the other.
  * Each pane has a score strip under it (#124). Both layouts use the same two players: no third decoder.
@@ -252,6 +254,20 @@ fun SportsLiveDualScreen(
     // Hold OK opens the menu on its release, so the menu never takes that release as a click.
     val okKey = remember { DualHoldKey(ViewConfiguration.getLongPressTimeout().toLong(), heldOnRelease = true) }
     var menuOpen by remember { mutableStateOf(false) }
+    // Report a problem in the Hold OK menu (#172): the same report path as the player's Hold OK, "From: Hold OK (dual)".
+    val reporter = remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, SportsLiveReporterEntryPoint::class.java)
+            .sportsLiveReporter()
+    }
+    // A snapshot that fails to build never breaks the keys (live.23 review L6): the report is then built when picked.
+    val captureReport: () -> (() -> Unit) = {
+        try {
+            reporter.capture(DUAL_HOLD_TRIGGER)
+        } catch (_: Exception) {
+            { reporter.report(DUAL_HOLD_TRIGGER) }
+        }
+    }
+    var heldReport by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     LaunchedEffect(players, dual) {
         val current = players ?: return@LaunchedEffect
@@ -399,7 +415,11 @@ fun SportsLiveDualScreen(
                     }
                     if (press != null) viewModel.hideKeysHint()
                     when (press) {
-                        DualPress.HELD -> menuOpen = true
+                        DualPress.HELD -> {
+                            // #172 as in the player (#218): the report's snapshot now, before the menu draws.
+                            heldReport = captureReport()
+                            menuOpen = true
+                        }
                         DualPress.SHORT -> {
                             val pane = dual.pane(dual.highlighted)
                             when (dualOkRoute(dual)) {
@@ -452,10 +472,10 @@ fun SportsLiveDualScreen(
                         viewModel.hideKeysHint()
                         viewModel.highlight(route.side)
                     }
-                    // Past the edge (Left on the left pane, Right on the right one): the other pane's picker (#57).
-                    DualKeyRoute.PickOtherGame -> if (native.repeatCount == 0) {
+                    // Big + small (live.24): the other game becomes the big one, with the sound. Never the picker.
+                    DualKeyRoute.SwapBig -> if (native.repeatCount == 0) {
                         viewModel.hideKeysHint()
-                        viewModel.openPairPicker(dual.highlighted.other)
+                        viewModel.swap()
                     }
                     is DualKeyRoute.CardButton -> if (highlightedPane.isStarting) {
                         startingSelection = SportsLiveStartingAction.entries[route.index]
@@ -563,14 +583,21 @@ fun SportsLiveDualScreen(
             entries = dualMenuEntries(dual),
             onPick = { entry ->
                 menuOpen = false
+                val report = heldReport
+                heldReport = null
                 when (entry) {
+                    // The snapshot taken as OK was held: the report says what was on screen then.
+                    DualMenuEntry.REPORT_PROBLEM -> (report ?: captureReport()).invoke()
                     DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.LAYOUT_SIDE_BY_SIDE -> viewModel.toggleLayout()
                     DualMenuEntry.SWAP -> viewModel.swap()
                     DualMenuEntry.CHANGE_OTHER_GAME -> viewModel.openPairPicker(dual.highlighted.other)
                     DualMenuEntry.FULL_SCREEN -> playFullScreen()
                 }
             },
-            onDismiss = { menuOpen = false }
+            onDismiss = {
+                menuOpen = false
+                heldReport = null
+            }
         )
     }
 
@@ -874,8 +901,8 @@ private fun BoxScope.PaneMessage(text: String, hint: String?, small: Boolean) {
 private const val PANE_SCRIM_ALPHA = 0.6f
 
 /**
- * The keys hint (research 8), shown briefly on entry: the D-pad model in V2 key-cap pairs ("◀ ▶  Pick a game, sound
- * follows"), on the alert card surface, never focusable. Words for what each key does; the key itself in a cap.
+ * The keys hint (research 8), shown briefly on the profile's first entries: three V2 key-cap pairs ("◀ ▶  Swap big ·
+ * OK  Full screen · Hold OK  More"), on the alert card surface, never focusable. Words for what each key does; the key itself in a cap.
  */
 @Composable
 private fun DualKeysHint(hints: List<DualHint>) {
@@ -892,7 +919,7 @@ private fun DualKeysHint(hints: List<DualHint>) {
         hints.forEach { hint ->
             val (key, label) = when (hint) {
                 DualHint.MOVE -> R.string.sports_live_dual_hint_key_move to R.string.sports_live_dual_hint_move
-                DualHint.ZAP -> R.string.sports_live_dual_hint_key_zap to R.string.sports_live_dual_hint_zap
+                DualHint.SWAP_BIG -> R.string.sports_live_dual_hint_key_move to R.string.sports_live_dual_hint_swap_big
                 DualHint.OK_FULL_SCREEN -> R.string.sports_live_dual_hint_key_ok to R.string.sports_live_dual_hint_full_screen
                 DualHint.OK_MAKE_BIG -> R.string.sports_live_dual_hint_key_ok to R.string.sports_live_dual_hint_make_big
                 DualHint.HOLD_OK_MORE -> R.string.sports_live_dual_hint_key_hold_ok to R.string.sports_live_dual_hint_more
@@ -933,6 +960,7 @@ private fun DualMenu(entries: List<DualMenuEntry>, onPick: (DualMenuEntry) -> Un
             SportsLiveMenuButton(
                 text = stringResource(
                     when (entry) {
+                        DualMenuEntry.REPORT_PROBLEM -> R.string.sports_live_setting_report_problem
                         DualMenuEntry.LAYOUT_BIG_SMALL -> R.string.sports_live_dual_menu_layout_big_small
                         DualMenuEntry.LAYOUT_SIDE_BY_SIDE -> R.string.sports_live_dual_menu_layout_side_by_side
                         DualMenuEntry.SWAP -> R.string.sports_live_dual_menu_swap
@@ -946,3 +974,6 @@ private fun DualMenu(entries: List<DualMenuEntry>, onPick: (DualMenuEntry) -> Un
         }
     }
 }
+
+/** The report's "From:" for Report a problem in dual screen's Hold OK menu. */
+private const val DUAL_HOLD_TRIGGER = "Hold OK (dual)"

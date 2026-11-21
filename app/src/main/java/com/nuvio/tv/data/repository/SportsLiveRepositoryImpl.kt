@@ -311,10 +311,10 @@ class SportsLiveRepositoryImpl @Inject constructor(
             .onStart { emit(Unit) }
 
     /** Only items of catalogs claimed right now, so a profile switch or an exclusion hides stale items at once. */
-    override fun liveNow(limit: Int): Flow<List<SportsLiveItem>> =
+    override fun liveNow(limit: Int, forHomeRow: Boolean): Flow<List<SportsLiveItem>> =
         combine(
             latest,
-            combine(prefs.showHomeRow, enabled) { showHomeRow, enabled -> showHomeRow && enabled },
+            combine(prefs.showHomeRow, enabled) { showHomeRow, enabled -> (showHomeRow || !forHomeRow) && enabled },
             claimedCatalogs,
             endedKeys,
             // A team list landing merges copies of one game by their teams (live.18): the row is built again.
