@@ -167,7 +167,7 @@ class ResultsRepository internal constructor(
      * Jump to › Other sports (results redesign): [daysAgo]'s finals in the feeds My sports does not fetch
      * ([SportsResults.otherFeeds]), through the same caches and score delay as [load]. Asked only when the viewer
      * wants them (the menu's Other sports, or a day with nothing from My sports). Null under Scores Off (no request)
-     * or when every feed failed; empty when there is no other feed.
+     * or when no game came back and a feed failed (M3: "Couldn't load"); empty when there is no other feed.
      */
     suspend fun loadOther(daysAgo: Int): List<ResultRow>? {
         val settings = settings.first()
@@ -175,7 +175,12 @@ class ResultsRepository internal constructor(
         val followed = followedTeams.first()
         val feeds = SportsResults.otherFeeds(SportsResults.relevantLeagues(mySports.first(), followed).leagues)
         if (feeds.isEmpty()) return emptyList()
-        val events = dayEvents(feeds, dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))) ?: return null
+        val date = dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))
+        val answers = coroutineScope { feeds.map { league -> async { fetch(ScoreFeed(league, date)) } }.awaitAll() }
+        val events = answers.filterNotNull().flatten()
+        // M3: nothing came back and a feed failed (or every one did) is "Couldn't load", never "No games": a few quiet
+        // feeds that answered must not hide that the rest of ESPN was down.
+        if (events.isEmpty() && answers.any { it == null }) return null
         val held = held(events, settings.effectiveDelayMs)
         return SportsResults.rows(if (held.isEmpty()) events else events.filter { it.eventId !in held }, followed)
     }
