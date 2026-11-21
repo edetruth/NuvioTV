@@ -293,7 +293,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 onChip = viewModel::onPanelChip,
                 onRowFocus = viewModel::onPanelRowFocus,
                 onKey = viewModel::onPanelKey,
-                onClose = { viewModel.closePanel() }
+                onClose = { viewModel.closePanel() },
+                registerKeys = { handler -> viewModel.guideKeyHandler = handler }
             )
         }
     } else {

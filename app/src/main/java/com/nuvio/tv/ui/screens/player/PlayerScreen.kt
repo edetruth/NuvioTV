@@ -725,6 +725,8 @@ fun PlayerScreen(
 
                 // The Back press that already closed the live games panel (through the back callback) ends here.
                 if (sportsLiveZap.isBackKeyOfPanelClose(keyEvent.nativeKeyEvent)) return@onPreviewKeyEvent true
+                // Sports & Live B2: OK opens the in-player guide table, and the open table gets its keys first.
+                if (sportsLiveZap.onGuidePreviewKey(keyEvent.nativeKeyEvent, playerIdle = !sportsLivePlayerOverlayUp(uiState) && !sportsStartingVisible && !sportsLiveGameInfo.shown && !postPlayRecommendationState.isVisible && !shouldConfirmNextEpisodeOnEnd, partyActive = partyActive)) return@onPreviewKeyEvent true
 
                 val postPlayHandlesBack = postPlayRecommendationState.isVisible ||
                     postPlayRecommendationState.isLoadingRecommendation ||

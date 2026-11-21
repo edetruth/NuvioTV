@@ -355,29 +355,30 @@ internal const val GUIDE_LONG_PRESS_MS = 500L
 internal const val GUIDE_REPEAT_GATE_MS = 112L
 
 /**
- * OK with the guide closed (B2: OK opens it; a short ◂ still does): its press and repeats are taken while [active]
- * (the new guide on, a live game playing, nothing else wanting OK), and its release opens the guide
- * ([SportsLiveShortPress.OPEN_PANEL]), so that release can never reach a row and play it.
+ * OK with the guide closed (B2: OK opens it; a short ◂ still does), seen by the player's key preview before anything
+ * focused can take it (TV test, live.21: OK never reached the player's own handler there). Its press opens the guide at
+ * once while [active] (the new guide on, a live game playing, nothing else wanting OK:
+ * [SportsLiveShortPress.OPEN_PANEL]); the rest of that press, its repeats and its release, matched by [downTime], is
+ * taken ([SportsLiveShortPress.CONSUMED]) so it never reaches a row of the guide and plays it. Any other press: NONE.
  */
 internal class SportsLiveGuideOkKey {
-    private var armed = false
+    private var takenDownTime = NOT_TAKEN
 
-    fun onKey(keyCode: Int, action: Int, repeatCount: Int, active: Boolean): SportsLiveShortPress {
+    fun onKey(keyCode: Int, action: Int, repeatCount: Int, downTime: Long, active: Boolean): SportsLiveShortPress {
         if (keyCode != KeyEvent.KEYCODE_DPAD_CENTER && keyCode != KeyEvent.KEYCODE_ENTER && keyCode != KeyEvent.KEYCODE_NUMPAD_ENTER) {
             return SportsLiveShortPress.NONE
         }
-        return when (action) {
-            KeyEvent.ACTION_DOWN -> {
-                if (repeatCount == 0) armed = active
-                if (armed) SportsLiveShortPress.CONSUMED else SportsLiveShortPress.NONE
-            }
-            KeyEvent.ACTION_UP -> {
-                val open = armed
-                armed = false
-                if (open) SportsLiveShortPress.OPEN_PANEL else SportsLiveShortPress.NONE
-            }
-            else -> SportsLiveShortPress.NONE
+        if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
+            takenDownTime = if (active) downTime else NOT_TAKEN
+            return if (active) SportsLiveShortPress.OPEN_PANEL else SportsLiveShortPress.NONE
         }
+        if (takenDownTime == NOT_TAKEN || downTime != takenDownTime) return SportsLiveShortPress.NONE
+        if (action == KeyEvent.ACTION_UP) takenDownTime = NOT_TAKEN
+        return SportsLiveShortPress.CONSUMED
+    }
+
+    private companion object {
+        const val NOT_TAKEN = Long.MIN_VALUE
     }
 }
 

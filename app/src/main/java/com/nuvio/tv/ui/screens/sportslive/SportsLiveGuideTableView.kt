@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -107,6 +108,11 @@ internal fun SportsLiveGuideTable(
     onKey: (Int) -> Unit,
     /** OK on Now playing: the guide closes, the game plays on. */
     onClose: () -> Unit,
+    /**
+     * Hands the table's key handler to the player while it is open (null once closed): the player's key preview routes
+     * every key to it first, so the table never depends on holding focus (TV test, live.21).
+     */
+    registerKeys: (((android.view.KeyEvent) -> Boolean)?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val guide = state?.guide
@@ -167,6 +173,38 @@ internal fun SportsLiveGuideTable(
     val suffixes = remember(state?.rows, nowRow, feedFormat) {
         panelTitleSuffixes((listOfNotNull(nowRow) + state?.rows.orEmpty()).map { it.item }, { n -> String.format(feedFormat, n) })
     }
+    // The table's keys ([SportsLiveGuideKeys]): from the player's preview ([registerKeys]), else from focus.
+    val handleKey: (android.view.KeyEvent) -> Boolean = { native ->
+        if (native.action == android.view.KeyEvent.ACTION_DOWN) onKey(native.keyCode)
+        when (guideKeys.onKey(native.keyCode, native.action, native.repeatCount, native.eventTime)) {
+            SportsLiveGuideKey.PASS -> false
+            SportsLiveGuideKey.CONSUMED -> true
+            SportsLiveGuideKey.UP -> true.also { select(guideMove(index, -1, keys.size)) }
+            SportsLiveGuideKey.DOWN -> true.also { select(guideMove(index, 1, keys.size)) }
+            SportsLiveGuideKey.PAGE_UP -> true.also { select(guideMove(index, -GUIDE_VISIBLE_ROWS, keys.size)) }
+            SportsLiveGuideKey.PAGE_DOWN -> true.also { select(guideMove(index, GUIDE_VISIBLE_ROWS, keys.size)) }
+            SportsLiveGuideKey.PREVIOUS_SPORT -> true.also { stepChip(-1) }
+            SportsLiveGuideKey.NEXT_SPORT -> true.also { stepChip(1) }
+            SportsLiveGuideKey.WATCH -> true.also {
+                when (guideOkAction(selectedKey, selectedLine)) {
+                    GuideOkAction.CLOSE -> onClose()
+                    GuideOkAction.PLAY -> (selectedLine as? PanelGuideEntry.Game)?.let { onPick(it.row.item) }
+                    GuideOkAction.SHOW_ALL_SPORTS -> stepToAllSports(state, onChip)
+                    GuideOkAction.NONE -> Unit
+                }
+            }
+            SportsLiveGuideKey.MORE -> true.also {
+                val item = if (nowSelected) nowRow?.item else (selectedLine as? PanelGuideEntry.Game)?.row?.item
+                item?.let(onLongPick)
+            }
+        }
+    }
+    val currentHandleKey by rememberUpdatedState(handleKey)
+    val currentRegisterKeys by rememberUpdatedState(registerKeys)
+    DisposableEffect(open) {
+        if (open) currentRegisterKeys { event -> currentHandleKey(event) }
+        onDispose { currentRegisterKeys(null) }
+    }
     val density = LocalDensity.current
     BoxWithConstraints(
         modifier = modifier
@@ -184,32 +222,8 @@ internal fun SportsLiveGuideTable(
                     style = Stroke(width = 2f)
                 )
             }
-            .onKeyEvent { event ->
-                val native = event.nativeKeyEvent
-                if (native.action == android.view.KeyEvent.ACTION_DOWN) onKey(native.keyCode)
-                when (guideKeys.onKey(native.keyCode, native.action, native.repeatCount, native.eventTime)) {
-                    SportsLiveGuideKey.PASS -> false
-                    SportsLiveGuideKey.CONSUMED -> true
-                    SportsLiveGuideKey.UP -> true.also { select(guideMove(index, -1, keys.size)) }
-                    SportsLiveGuideKey.DOWN -> true.also { select(guideMove(index, 1, keys.size)) }
-                    SportsLiveGuideKey.PAGE_UP -> true.also { select(guideMove(index, -GUIDE_VISIBLE_ROWS, keys.size)) }
-                    SportsLiveGuideKey.PAGE_DOWN -> true.also { select(guideMove(index, GUIDE_VISIBLE_ROWS, keys.size)) }
-                    SportsLiveGuideKey.PREVIOUS_SPORT -> true.also { stepChip(-1) }
-                    SportsLiveGuideKey.NEXT_SPORT -> true.also { stepChip(1) }
-                    SportsLiveGuideKey.WATCH -> true.also {
-                        when (guideOkAction(selectedKey, selectedLine)) {
-                            GuideOkAction.CLOSE -> onClose()
-                            GuideOkAction.PLAY -> (selectedLine as? PanelGuideEntry.Game)?.let { onPick(it.row.item) }
-                            GuideOkAction.SHOW_ALL_SPORTS -> stepToAllSports(state, onChip)
-                            GuideOkAction.NONE -> Unit
-                        }
-                    }
-                    SportsLiveGuideKey.MORE -> true.also {
-                        val item = if (nowSelected) nowRow?.item else (selectedLine as? PanelGuideEntry.Game)?.row?.item
-                        item?.let(onLongPick)
-                    }
-                }
-            }
+            // A focus fallback: the player's preview already gave the table every key it takes.
+            .onKeyEvent { event -> currentHandleKey(event.nativeKeyEvent) }
             .focusRequester(focusRequester)
             .onFocusChanged { hasFocus = it.isFocused }
             .focusable()

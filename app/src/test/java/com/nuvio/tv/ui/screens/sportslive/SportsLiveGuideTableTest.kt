@@ -280,17 +280,23 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
-    fun `with the guide closed OK opens it on its release, only while active, and other keys are left alone`() {
+    fun `with the guide closed OK opens it on its press, the rest of that press is taken, and other keys are left alone`() {
         val ok = SportsLiveGuideOkKey()
-        assertEquals(SportsLiveShortPress.CONSUMED, ok.onKey(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.ACTION_DOWN, 0, active = true))
-        assertEquals(SportsLiveShortPress.CONSUMED, ok.onKey(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.ACTION_DOWN, 1, active = true))
-        assertEquals(SportsLiveShortPress.OPEN_PANEL, ok.onKey(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.ACTION_UP, 0, active = true))
-        // Inactive (the old panel, a replay, OK on live: Pause): the player keeps OK.
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.ACTION_DOWN, 0, active = false))
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.ACTION_UP, 0, active = true))
+        val center = KeyEvent.KEYCODE_DPAD_CENTER
+        // adb's OK: down and up within milliseconds, one down time.
+        assertEquals(SportsLiveShortPress.OPEN_PANEL, ok.onKey(center, KeyEvent.ACTION_DOWN, 0, downTime = 100L, active = true))
+        assertEquals(SportsLiveShortPress.CONSUMED, ok.onKey(center, KeyEvent.ACTION_DOWN, 1, downTime = 100L, active = false))
+        assertEquals(SportsLiveShortPress.CONSUMED, ok.onKey(center, KeyEvent.ACTION_UP, 0, downTime = 100L, active = false))
+        // Its release was the last of it: a later release is not taken.
+        assertEquals(SportsLiveShortPress.NONE, ok.onKey(center, KeyEvent.ACTION_UP, 0, downTime = 100L, active = false))
+        // A new press in the open guide is the guide's (not active): never taken here, its release neither.
+        assertEquals(SportsLiveShortPress.NONE, ok.onKey(center, KeyEvent.ACTION_DOWN, 0, downTime = 500L, active = false))
+        assertEquals(SportsLiveShortPress.NONE, ok.onKey(center, KeyEvent.ACTION_UP, 0, downTime = 500L, active = false))
+        // Enter opens it too.
+        assertEquals(SportsLiveShortPress.OPEN_PANEL, ok.onKey(KeyEvent.KEYCODE_ENTER, KeyEvent.ACTION_DOWN, 0, downTime = 900L, active = true))
         // Zapping keys are never OK's.
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 0, active = true))
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.ACTION_DOWN, 0, active = true))
+        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 0, downTime = 1_000L, active = true))
+        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.ACTION_DOWN, 0, downTime = 1_000L, active = true))
     }
 
     // ---- Idle close ----

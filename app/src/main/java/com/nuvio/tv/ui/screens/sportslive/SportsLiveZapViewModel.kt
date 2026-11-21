@@ -939,15 +939,6 @@ class SportsLiveZapViewModel internal constructor(
      */
     fun onShortPressKey(event: KeyEvent, partyActive: Boolean): SportsLiveShortPress {
         val active = !partyActive && controller.session(contentId) != null
-        // B2: with the new guide, OK on a live game opens it (on release); ◀ still does, below.
-        when (guideOk.onKey(event.keyCode, event.action, event.repeatCount, active && guideOkOpens())) {
-            SportsLiveShortPress.OPEN_PANEL -> {
-                openPanel()
-                return SportsLiveShortPress.OPEN_PANEL
-            }
-            SportsLiveShortPress.CONSUMED -> return SportsLiveShortPress.CONSUMED
-            else -> Unit
-        }
         val result = shortPressKeys.onKey(event, active)
         if (result == SportsLiveShortPress.OPEN_PANEL) openPanel()
         // The full-time toast's "Next live game →" (#60): a short Right moves on instead of showing the controls.
@@ -962,7 +953,42 @@ class SportsLiveZapViewModel internal constructor(
      */
     private fun guideOkOpens(): Boolean =
         guideTable.value && nowPlaying != null && nowPlaying.kind != com.nuvio.tv.domain.model.SportsLiveKind.REPLAY &&
-            !okPausesLive.value && banner.value?.looking != true
+            !okPausesLive.value && banner.value?.looking != true &&
+            // The end card and the "no next game" card hold OK for their own buttons.
+            _endCard.value?.toastOnly != false && !_nextExhausted.value
+
+    /**
+     * The open table's key handler, set by the table while it shows ([SportsLiveGuideTable]): the player's key preview
+     * routes the keys to it ([onGuidePreviewKey]), so the table works whatever holds focus (TV test, live.21: OK on a
+     * row did not switch).
+     */
+    @Volatile
+    internal var guideKeyHandler: ((KeyEvent) -> Boolean)? = null
+
+    /**
+     * Every key the full player sees, first (its key preview, B2): with the table open, the rest of the OK press that
+     * opened it is taken and every other key goes to the table ([guideKeyHandler]; false lets the player have it, Back
+     * included). With it closed, OK on a live game opens it at once, on its press, while the player is [playerIdle]
+     * (no controls, panel, dialog, card or error) and no watch party runs ([partyActive]). True when the key was taken.
+     */
+    fun onGuidePreviewKey(event: KeyEvent, playerIdle: Boolean, partyActive: Boolean): Boolean {
+        if (_panelOpen.value) {
+            if (!guideTable.value) return false
+            if (guideOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, active = false) == SportsLiveShortPress.CONSUMED) {
+                return true
+            }
+            return guideKeyHandler?.invoke(event) ?: false
+        }
+        val active = playerIdle && !partyActive && controller.session(contentId) != null && guideOkOpens()
+        return when (guideOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, active)) {
+            SportsLiveShortPress.OPEN_PANEL -> {
+                openPanel()
+                true
+            }
+            SportsLiveShortPress.CONSUMED -> true
+            else -> false
+        }
+    }
 
     /** The guide's Hold OK menu is up ([held]): it stays open meanwhile, and the idle wait starts again after. */
     fun onGuideMenu(held: Boolean) {
