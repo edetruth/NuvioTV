@@ -700,6 +700,11 @@ private fun SportsLiveContent(
     // More live's view (user 2026-11-21) is its own list: it opens at its top, and Back returns to Live now's.
     val moreLiveShown = shownBoard?.moreLive == true
     val boardPending = shownBoard == null
+    // A tab switch whose list is still being built keeps the mini player docked (no corner flash over the tabs).
+    // Results draws no board of its own here, so it never waits for one.
+    val awaitingStage = boardPending && uiState.selectedTab != SportsLiveTab.RESULTS
+    SideEffect { SportsLiveMiniPlacement.setAwaitingStage(awaitingStage) }
+    DisposableEffect(Unit) { onDispose { SportsLiveMiniPlacement.setAwaitingStage(false) } }
     // V2 (#132): Live now and Upcoming are the Scoreboard + stage; Channels and Replays list cards.
     val scoreboard = shownBoard?.rows != null
     // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.

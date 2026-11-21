@@ -51,6 +51,20 @@ object SportsLiveMiniPlacement {
     var slotLostAtMs: Long? = null
         private set
 
+    private val _awaitingStage = MutableStateFlow(false)
+
+    /**
+     * The tab shown is still building its list (a tab switch on a slow box can take longer than
+     * [SportsLiveMiniDocking.HOLD_MS]): its stage is coming, so the mini player keeps the last slot meanwhile
+     * ([SportsLiveMiniDocking.AWAIT_MAX_MS] at most) instead of falling back to the corner for a moment.
+     */
+    val awaitingStage: StateFlow<Boolean> = _awaitingStage.asStateFlow()
+
+    /** Set by Sports Live while the tab shown has no list built yet; cleared when it leaves. */
+    fun setAwaitingStage(awaiting: Boolean) {
+        _awaitingStage.value = awaiting
+    }
+
     fun claim(token: Any, spot: SportsLiveMiniSpot, slot: SportsLiveMiniSlot? = null, nowMs: Long = monotonicMs()) {
         owner = token
         _spot.value = spot
@@ -84,6 +98,7 @@ object SportsLiveMiniPlacement {
         if (section !== token) return
         section = null
         _inside.value = false
+        _awaitingStage.value = false
     }
 
     private fun setSlot(slot: SportsLiveMiniSlot?, nowMs: Long) {
@@ -114,22 +129,41 @@ object SportsLiveMiniDocking {
     const val HOLD_MS = 500L
 
     /**
-     * Outside Sports Live ([inside] false) the corner. Inside it, the stage's [slot]; while none is laid out,
-     * [lastSlot] for [HOLD_MS] after it went ([lostAtMs]), so a tab switch never flashes the corner. Only a
-     * screen of Sports Live with no stage at all (nothing listed) falls back to the corner after the hold.
+     * How long it keeps it while the tab shown is still building its list ([SportsLiveMiniPlacement.awaitingStage]):
+     * a slow board never sends it to the corner and back, and a list that never comes still lets it go.
      */
-    fun decide(inside: Boolean, slot: SportsLiveMiniSlot?, lastSlot: SportsLiveMiniSlot?, lostAtMs: Long?, nowMs: Long): SportsLiveMiniDock {
+    const val AWAIT_MAX_MS = 5_000L
+
+    /**
+     * Outside Sports Live ([inside] false) the corner. Inside it, the stage's [slot]; while none is laid out,
+     * [lastSlot] for [HOLD_MS] after it went ([lostAtMs]), or up to [AWAIT_MAX_MS] while the new tab's list is still
+     * being built ([awaiting]), so a tab switch never flashes the corner (TV 2026-11-21: Results → Replays / Live Now
+     * with a slow board put the mini player in the corner and the "Now playing" card over the tabs for a moment). Only
+     * a screen of Sports Live with no stage at all (nothing listed) falls back to the corner after the hold.
+     */
+    fun decide(
+        inside: Boolean,
+        slot: SportsLiveMiniSlot?,
+        lastSlot: SportsLiveMiniSlot?,
+        lostAtMs: Long?,
+        nowMs: Long,
+        awaiting: Boolean = false
+    ): SportsLiveMiniDock {
         if (!inside) return SportsLiveMiniDock.Corner
         if (slot != null) return SportsLiveMiniDock.Docked(slot)
-        if (lastSlot != null && holding(lostAtMs, nowMs)) return SportsLiveMiniDock.Docked(lastSlot, held = true)
+        if (lastSlot != null && holding(lostAtMs, nowMs, awaiting)) return SportsLiveMiniDock.Docked(lastSlot, held = true)
         return SportsLiveMiniDock.Corner
     }
 
     /** True while a slot lost at [lostAtMs] is still held at [nowMs]; a slot never laid out is not. */
-    fun holding(lostAtMs: Long?, nowMs: Long): Boolean = lostAtMs != null && nowMs - lostAtMs < HOLD_MS
+    fun holding(lostAtMs: Long?, nowMs: Long, awaiting: Boolean = false): Boolean =
+        lostAtMs != null && nowMs - lostAtMs < holdMs(awaiting)
 
     /** How long until the hold of a slot lost at [lostAtMs] ends, from [nowMs]; 0 when it has. */
-    fun holdLeftMs(lostAtMs: Long?, nowMs: Long): Long = if (lostAtMs == null) 0L else (HOLD_MS - (nowMs - lostAtMs)).coerceAtLeast(0L)
+    fun holdLeftMs(lostAtMs: Long?, nowMs: Long, awaiting: Boolean = false): Long =
+        if (lostAtMs == null) 0L else (holdMs(awaiting) - (nowMs - lostAtMs)).coerceAtLeast(0L)
+
+    private fun holdMs(awaiting: Boolean): Long = if (awaiting) AWAIT_MAX_MS else HOLD_MS
 }
 
 /**
@@ -142,10 +176,11 @@ fun rememberSportsLiveMiniDock(): SportsLiveMiniDock {
     val spot by SportsLiveMiniPlacement.spot.collectAsState()
     val slot by SportsLiveMiniPlacement.slot.collectAsState()
     val stageSlot = slot?.takeIf { spot == SportsLiveMiniSpot.STAGE }
+    val awaiting by SportsLiveMiniPlacement.awaitingStage.collectAsState()
     val lostAt = SportsLiveMiniPlacement.slotLostAtMs.takeIf { stageSlot == null }
     var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(lostAt) {
-        val left = SportsLiveMiniDocking.holdLeftMs(lostAt, SportsLiveMiniPlacement.monotonicMs())
+    LaunchedEffect(lostAt, awaiting) {
+        val left = SportsLiveMiniDocking.holdLeftMs(lostAt, SportsLiveMiniPlacement.monotonicMs(), awaiting)
         if (left > 0) {
             delay(left)
             tick++
@@ -153,7 +188,7 @@ fun rememberSportsLiveMiniDock(): SportsLiveMiniDock {
     }
     // Reading the tick recomposes this when a hold runs out.
     val nowMs = tick.let { SportsLiveMiniPlacement.monotonicMs() }
-    return SportsLiveMiniDocking.decide(inside, stageSlot, SportsLiveMiniPlacement.lastSlot, lostAt, nowMs)
+    return SportsLiveMiniDocking.decide(inside, stageSlot, SportsLiveMiniPlacement.lastSlot, lostAt, nowMs, awaiting)
 }
 
 /** Where the mini player's caption ("‹game› · Play/Pause to expand") goes: under the video, or a chip at its top-left. */

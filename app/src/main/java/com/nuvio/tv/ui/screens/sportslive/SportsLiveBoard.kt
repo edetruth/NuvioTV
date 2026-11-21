@@ -53,6 +53,8 @@ data class SportsLiveBoardInputs(
     val ended: Map<String, EndedGame>,
     /** Live now's "no streams yet" cards by card key (#145): drawn dimmed; empty on other tabs. */
     val noStreams: Set<String> = emptySet(),
+    /** Live now's cards the score feeds confirmed they do not have (#215, [listedLiveOnly]); empty on other tabs. */
+    val unmatched: Set<String> = emptySet(),
     /** Live now's excitement badges by card key (#43, Scores shown); empty otherwise. */
     val excitement: Map<String, WhyTag>,
     val followed: List<FollowedTeam>,
@@ -150,7 +152,10 @@ data class SportsLiveBoard(
             // Live now (J2): its games come in importance order, kept inside each status group.
             val liveNow = tab == SportsLiveTab.LIVE_NOW
             val rows = if (liveNow && inputs.moreLive.isNotEmpty()) {
+                // #215: More live's games ESPN confirmed it does not have read "Listed live" too; its listings that are
+                // no game already show no LIVE unless ESPN has them in play (H), so this never touches them.
                 moreLiveRows(inputs.items, inputs.moreLive, inputs.otherEvents, scores, inputs.clockMs)
+                    .let { built -> withListedLive(built, scoresOn = scores.mode != null && scores.mode != ScoresMode.OFF, unmatched = inputs.unmatched) }
             } else if (isScoreboard(tab)) {
                 scoreboardRows(
                     items = inputs.items,
@@ -168,6 +173,7 @@ data class SportsLiveBoard(
                     excitement = inputs.excitement,
                     keepOrder = liveNow
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
+                    .let { built -> withListedLive(built, scoresOn = scores.mode != null && scores.mode != ScoresMode.OFF, unmatched = inputs.unmatched) }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
             } else {
                 when (tab) {

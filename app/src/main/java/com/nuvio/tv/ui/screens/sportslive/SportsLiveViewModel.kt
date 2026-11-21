@@ -182,7 +182,9 @@ class SportsLiveViewModel internal constructor(
     /** #143: a burst of score updates rebuilds the board once, this long after its first (0: each, as in tests). */
     scoresSettleMs: Long = 0L,
     /** #143: Upcoming's ESPN scoreboards asked for ahead ([LiveScoresRepository.prefetchUpcoming]); the requests made. */
-    private val prefetchUpcomingScores: suspend () -> Int = { 0 }
+    private val prefetchUpcomingScores: suspend () -> Int = { 0 },
+    /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
+    unmatchedScores: Flow<Set<String>> = flowOf(emptySet())
 ) : ViewModel() {
 
     @Inject
@@ -259,7 +261,8 @@ class SportsLiveViewModel internal constructor(
         saveAddSportMemory = prefs::updateAddSportMemory,
         addMySport = { sport -> prefs.updateMySports { if (it.isDefault || sport in it.effectiveSports) it else it.toggleSport(sport) } },
         scoresSettleMs = SCORES_SETTLE_MS,
-        prefetchUpcomingScores = liveScores::prefetchUpcoming
+        prefetchUpcomingScores = liveScores::prefetchUpcoming,
+        unmatchedScores = liveScores.unmatched
     )
 
     private data class Selection(
@@ -653,8 +656,9 @@ class SportsLiveViewModel internal constructor(
             boardScores.firstThenCoalesce(scoresSettleMs),
             repo.followedTeams,
             logoRevision,
-            combine(standings, channelLists, combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), ::Triple)
-        ) { state, scores, followed, revision, (books, lists, profile) ->
+            combine(standings, combine(channelLists, unmatchedScores, ::Pair), combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), ::Triple)
+        ) { state, scores, followed, revision, (books, listsAndUnmatched, profile) ->
+            val (lists, unmatched) = listsAndUnmatched
             // #143: another profile or setting drops every tab's kept board before any is shown again.
             val (claimed, sports, hidden) = profile
             boardCache.scopeTo(SportsLiveBoardScope(claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode))
@@ -667,6 +671,7 @@ class SportsLiveViewModel internal constructor(
                 scores = scores,
                 ended = if (live) state.justEnded else emptyMap(),
                 noStreams = if (live) state.noStreams else emptySet(),
+                unmatched = if (live) unmatched else emptySet(),
                 excitement = if (live) state.whyTags else emptyMap(),
                 otherEvents = if (live && state.moreLiveOpen) state.moreLiveOther else emptySet(),
                 moreLive = if (live && state.moreLiveOpen) state.moreLiveGroupOf else emptyMap(),

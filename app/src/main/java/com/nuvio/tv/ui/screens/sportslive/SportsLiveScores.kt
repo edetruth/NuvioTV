@@ -40,6 +40,9 @@ class SportsLiveScoresViewModel @Inject constructor(
     /** Delayed scores by card key (a merged card's primary streamKey); empty while Scores is Off. */
     val scores: StateFlow<Map<String, ScoreSnapshot>> = repo.scores
 
+    /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
+    val unmatched: StateFlow<Set<String>> = repo.unmatched
+
     /** The Scores setting; null until read, so nothing is tracked or shown before it is known. */
     val mode: StateFlow<ScoresMode?> = repo.mode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

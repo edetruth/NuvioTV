@@ -193,7 +193,8 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
     )
     SportsLiveHomeScores(viewModel, uiState.liveNowItems, liveScores, liveScoresMode)
     // V2 phase 10: Live now games are drawn as the section's game card; See all counts every live game.
-    val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode)
+    val unmatchedScores = liveScoresViewModel.unmatched.collectAsStateWithLifecycle()
+    val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores)
     val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
     val liveNowEnded = uiState.liveNowEnded
     val liveGameCount = remember(uiState.liveNowItems, liveNowEnded) {

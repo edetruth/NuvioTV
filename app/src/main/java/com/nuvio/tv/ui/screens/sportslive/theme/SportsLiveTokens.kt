@@ -319,6 +319,8 @@ object SportsLiveTokens {
     /** More… as a sheet over the stage (#134): 720 px wide, 72 px entries, its title and one status line. */
     object Sheet {
         val Width = 360.dp
+        /** The stream picker's sheet (stream picker cleanup): a link's name whole beside its source's name. */
+        val PickerWidth = 560.dp
         val Top = Size.HeaderTop + Size.HeaderHeight + Size.HeaderBottomGap
         val End = Size.SafeEnd
         val Bottom = Size.SafeBottom

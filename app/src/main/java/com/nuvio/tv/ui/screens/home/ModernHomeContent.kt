@@ -472,7 +472,7 @@ fun ModernHomeContent(
                 else -> null
             }
 
-            val resolvedRow = savedRowKey?.let { rowByKey.map[it] } ?: carouselRows.list.firstOrNull()
+            val resolvedRow = savedRowKey?.let { rowByKey.map[it] } ?: homeFirstFocusRow(carouselRows.list)
             if (resolvedRow != null) {
                 val savedItemKey = focusState.focusedItemKeyByRow[resolvedRow.key]
                 val resolvedIndex = if (savedItemKey != null) {
@@ -500,7 +500,7 @@ fun ModernHomeContent(
 
         val hadActiveRow = focusHolder.activeRowKey != null
         val existingActive = focusHolder.activeRowKey?.let { rowByKey[it] }
-        val firstRow = carouselRows.list.firstOrNull()
+        val firstRow = homeFirstFocusRow(carouselRows.list) // #214: never the Catch up held place
 
         // #211: a Sports & Live row landing above the row Home picked by itself takes the focus.
         val sportsLiveRow = sportsLiveRowTakingAutoFocus(carouselRows.list, focusHolder.activeRowKey, initialAutoSelectedKey, focusHolder.activeItemIndex)

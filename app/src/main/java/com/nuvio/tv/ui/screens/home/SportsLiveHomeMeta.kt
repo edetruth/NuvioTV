@@ -42,7 +42,7 @@ internal object SportsLiveHomeMeta {
      * A drawn game card's bottom line for its [chip] (the spoiler setting already applied). Home has no focus
      * reveal: under Hide until focused every game reads "Score hidden", whatever the feed has.
      */
-    fun cardFooter(chip: ScoreChip?, mode: ScoresMode?, strings: ScoreChipStrings, liveWord: String): DrawnCardFooter = when (chip) {
+    fun cardFooter(chip: ScoreChip?, mode: ScoresMode?, strings: ScoreChipStrings, liveWord: String, listedLive: String? = null): DrawnCardFooter = when (chip) {
         is ScoreChip.Live -> {
             val (clock, period) = chip.clock?.let(::clockParts) ?: (liveWord to null)
             DrawnCardFooter(
@@ -58,7 +58,8 @@ internal object SportsLiveHomeMeta {
             trailing = DrawnCardTrailing.Score(String.format(strings.score, chip.score.first, chip.score.second))
         )
         is ScoreChip.Status -> DrawnCardFooter(lead = chip.text ?: strings.postponed)
-        null -> DrawnCardFooter(
+        // #215: a game ESPN confirmed it does not have reads "Listed live": no red dot, and no "Score hidden" to wait for.
+        null -> if (listedLive != null) DrawnCardFooter(lead = listedLive) else DrawnCardFooter(
             lead = liveWord,
             live = true,
             trailing = if (mode == ScoresMode.HIDE_UNTIL_FOCUSED) DrawnCardTrailing.Note(strings.hidden) else null
@@ -83,6 +84,13 @@ internal object SportsLiveHomeMeta {
         }
         else -> ScoreChips.text(chip, strings)
     }
+
+    /**
+     * #215, as the section's rule ([com.nuvio.tv.ui.screens.sportslive.listedLiveOnly]): a Live now card reads "Listed
+     * live" when Scores is on, the score feeds confirmed they do not have its game, and it has no strict ESPN match.
+     */
+    fun listedLiveOnly(mode: ScoresMode?, confirmedUnmatched: Boolean, matched: Boolean): Boolean =
+        mode != null && mode != ScoresMode.OFF && confirmedUnmatched && !matched
 
     /** The hero's top line: "NBA · Live now", or [what] alone with no league. */
     fun eyebrow(league: String?, what: String): String = listOfNotNull(league?.trim()?.takeIf { it.isNotEmpty() }, what).joinToString(SEPARATOR)

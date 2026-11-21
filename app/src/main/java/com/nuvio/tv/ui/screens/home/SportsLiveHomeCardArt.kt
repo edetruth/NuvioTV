@@ -34,14 +34,16 @@ import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 internal fun rememberLiveNowCardArt(
     items: List<SportsLiveItem>,
     scores: State<Map<String, ScoreSnapshot>>,
-    mode: ScoresMode?
+    mode: ScoresMode?,
+    unmatched: State<Set<String>>
 ): (String) -> (@Composable () -> Unit)? {
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
+    val listedWord = stringResource(R.string.sports_live_listed_live)
     // #207: the lookup changes with the cards only, never with a score. Every card on Home reads it, so a new one on
     // each score update redrew them all; each drawn card reads its own game's score instead, and only a card whose game
     // changed is drawn again.
-    return remember(items, scores, mode, strings, liveWord) {
+    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
@@ -49,9 +51,12 @@ internal fun rememberLiveNowCardArt(
             val league = item.sport?.takeUnless(SportsLiveTeams::isNonSportTag)
             val card: @Composable () -> Unit = {
                 val snapshot by remember { derivedStateOf { scores.value[item.streamKey] } }
+                val confirmedUnmatched by remember { derivedStateOf { item.streamKey in unmatched.value } }
                 // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
-                val footer = remember(snapshot) {
-                    SportsLiveHomeMeta.cardFooter(ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord)
+                val footer = remember(snapshot, confirmedUnmatched) {
+                    // #215: listed live by its addon, not found by ESPN ([listedLiveOnly]).
+                    val listed = item.isLive && !item.isChannel && SportsLiveHomeMeta.listedLiveOnly(mode, confirmedUnmatched, ScoreChips.matchedEvent(item, snapshot) != null)
+                    SportsLiveHomeMeta.cardFooter(ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed })
                 }
                 val art = remember(snapshot) { GameArt.of(item, snapshot) }
                 val ready = rememberSportsLiveReadyMark(item) == SportsLiveReadyMark.READY

@@ -88,7 +88,9 @@ data class ScoreboardRow(
     /** The tag in place of the league's name (#160): a tennis match's tour, "ATP", never a tournament's initials. */
     val leagueTag: String? = null,
     /** A channel in the profile's favorites now (Channels phase 1): the gold ★, and Remove from favorites in its menu. */
-    val favorite: Boolean = false
+    val favorite: Boolean = false,
+    /** Listed live only (#215, [listedLiveOnly]): its addon says live, ESPN could not place it: "Listed live", no red dot. */
+    val listedOnly: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -374,8 +376,27 @@ internal data class ScoreboardStatusLines(
     val primary: String?,
     val secondary: String? = null,
     val live: Boolean = false,
-    val urgent: Boolean = false
+    val urgent: Boolean = false,
+    /** "Listed live" (#215): drawn muted, with no dot. */
+    val listed: Boolean = false
 )
+
+/**
+ * #215 (conservative version): a game reads "Listed live" instead of LIVE when its addon lists it live ([status] is
+ * [GameStatus.Live] with no ESPN game) while Scores is on ([scoresOn]) and the score feeds have confirmed they do not
+ * have it ([confirmedUnmatched], [com.nuvio.tv.core.sportslive.scores.LiveScoresRepository.unmatched]). A game still
+ * being looked up, one no feed covers, and every game under Scores Off keep LIVE: nothing was checked, so nothing is
+ * doubted, and a row never flips from LIVE to Listed live and back while the first scores load.
+ */
+internal fun listedLiveOnly(status: GameStatus, scoresOn: Boolean, confirmedUnmatched: Boolean): Boolean =
+    scoresOn && confirmedUnmatched && status is GameStatus.Live && status.event == null
+
+/** [rows] with [ScoreboardRow.listedOnly] set from the feeds' confirmed-unmatched card keys ([listedLiveOnly]). */
+internal fun withListedLive(rows: List<ScoreboardRow>, scoresOn: Boolean, unmatched: Set<String>): List<ScoreboardRow> =
+    if (!scoresOn || unmatched.isEmpty()) rows else rows.map { row ->
+        val listed = listedLiveOnly(row.status, scoresOn = true, confirmedUnmatched = row.item.streamKey in unmatched)
+        if (listed == row.listedOnly) row else row.copy(listedOnly = listed)
+    }
 
 /**
  * [row]'s status column in the one status format (#102). [kickoff] words its start ("8:30 PM",
@@ -395,7 +416,8 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         chip is ScoreChip.Final -> ScoreboardStatusLines(chip.note ?: GameStatusText.finalWord(sport, strings))
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
-        row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live -> ScoreboardStatusLines(strings.live, live = true)
+        row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
+            if (row.listedOnly) ScoreboardStatusLines(strings.listedLive, listed = true) else ScoreboardStatusLines(strings.live, live = true)
         row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.CHANNELS -> ScoreboardStatusLines(null)
         else -> {

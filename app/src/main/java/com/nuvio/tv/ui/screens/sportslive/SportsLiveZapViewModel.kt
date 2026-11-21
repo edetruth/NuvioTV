@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
@@ -191,7 +193,11 @@ class SportsLiveZapViewModel internal constructor(
     guideStyleSetting: Flow<SportsLiveGuideStyle> = flowOf(SportsLiveGuideStyle.DEFAULT),
     // #218: Hold OK in the player takes the report's snapshot at once ([SportsLiveReporter.capture]); the function it
     // returns saves it when the menu's Report a problem is picked.
-    private val captureReport: (String) -> (() -> Unit) = { trigger -> { report(trigger) } }
+    private val captureReport: (String) -> (() -> Unit) = { trigger -> { report(trigger) } },
+    // Channels phase 1: the profile's favorite channels, first and starred in the panel and the guide.
+    channelPicks: Flow<SportsLiveChannelPicks> = flowOf(SportsLiveChannelPicks.NONE),
+    // Saves a change of the profile's channel picks (Hold OK on a channel row: Add to / Remove from favorites).
+    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {}
 ) : ViewModel() {
 
     @Inject constructor(
@@ -223,7 +229,9 @@ class SportsLiveZapViewModel internal constructor(
         identify = { items -> identifier?.offer(items) },
         report = { trigger -> reporter?.report(trigger) },
         guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.DEFAULT),
-        captureReport = { trigger -> reporter?.capture(trigger) ?: {} }
+        captureReport = { trigger -> reporter?.capture(trigger) ?: {} },
+        channelPicks = prefs?.channelPicks ?: flowOf(SportsLiveChannelPicks.NONE),
+        updateChannelPicks = { change -> prefs?.updateChannelPicks(change) }
     )
 
     /**
@@ -445,9 +453,18 @@ class SportsLiveZapViewModel internal constructor(
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
         val ticks = _panelOpen.flatMapLatest { open -> if (open) panelTicks() else flowOf(Unit) }
-        val ticking = combine(items, ticks, logos.revision, liveScores.logosLoaded) { panelList, _, _, loaded -> panelList to loaded }
-        combine(ticking, liveScores.scores, liveScores.mode, reveal.revealed, liveScores.unmatched) { (panelList, loaded), scores, scoresMode, revealed, unmatched ->
+        val storedPicks = channelPicks.catch { emit(SportsLiveChannelPicks.NONE) }
+        val ticking = combine(items, ticks, logos.revision, liveScores.logosLoaded, storedPicks) { panelList, _, _, loaded, picks ->
+            Triple(panelList, loaded, picks)
+        }
+        combine(ticking, liveScores.scores, liveScores.mode, reveal.revealed, liveScores.unmatched) { (panelList, loaded, picks), scores, scoresMode, revealed, unmatched ->
             val list = panelList.shown
+            // Channels phase 1: the favorites among the panel's channels, by stream key.
+            val favorites = if (picks.favorites.isEmpty()) {
+                emptySet()
+            } else {
+                SportsLiveChannelFavorites.resolve(picks.favorites, panelList.all.filter { it.isChannel }).mapTo(HashSet()) { it.streamKey }
+            }
             val nowMs = System.currentTimeMillis()
             // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
             val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
@@ -470,7 +487,7 @@ class SportsLiveZapViewModel internal constructor(
             val keep = frozenOrder?.takeIf {
                 open && frozenChip == panelList.chip && nowMs - lastPanelKeyAtMs < PANEL_IDLE_REORDER_MS
             }
-            val (rows, frozen) = freezePanelLineup(panelLineup(grouped), keep)
+            val (rows, frozen) = freezePanelLineup(panelLineup(grouped, favorites), keep)
             if (open) {
                 frozenOrder = frozen
                 frozenChip = panelList.chip
@@ -481,7 +498,7 @@ class SportsLiveZapViewModel internal constructor(
             }
             // The rows CH± passes over count as finished too, so the chip's count is the banner's "of N".
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
-            PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished)
+            PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished, favorites)
         }.flowOn(computeDispatcher)
             // A player whose sources cannot be read keeps the session's own order.
             .catch { }
@@ -531,7 +548,7 @@ class SportsLiveZapViewModel internal constructor(
                     current.list.scoped.filterNot { it.streamKey in current.finished }
                 ),
                 // #83: each row drawn as the Scoreboard draws it.
-                boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
+                boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed, liveScores.unmatched.value, current.favorites)
                     .associateBy { it.board.item.streamKey },
                 boxScores = current.rows
                     .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }
@@ -1273,7 +1290,16 @@ class SportsLiveZapViewModel internal constructor(
             sides = sides.size
         )
         val postgame = row != null && panelRowOk(row, game) == PanelRowOk.BOX_SCORE
-        return SportsLivePanelMenu(item, entries, sides, game, postgame, targets)
+        val favorite = if (item.isChannel) item.streamKey in current?.favorites.orEmpty() else null
+        return SportsLivePanelMenu(item, entries, sides, game, postgame, targets, favorite)
+    }
+
+    /**
+     * Hold OK on a channel row → Add to / Remove from favorites (Channels phase 1, the in-player guide): [favorite] is
+     * whether it is one now. The panel's order stays as it is while open; the ★ shows at once.
+     */
+    fun onPanelToggleFavorite(item: SportsLiveItem, favorite: Boolean) {
+        viewModelScope.launch { updateChannelPicks { picks -> SportsLiveChannelFavorites.toggle(picks, item, favorite) } }
     }
 
     /**
@@ -1437,7 +1463,9 @@ private data class PanelLineup(
     val nowMs: Long,
     val logosLoaded: Boolean,
     /** Finals and just ended games among every game listed (stream keys): not counted on the chips (#145). */
-    val finished: Set<String> = emptySet()
+    val finished: Set<String> = emptySet(),
+    /** The profile's favorite channels among the listed ones, by stream key (Channels phase 1). */
+    val favorites: Set<String> = emptySet()
 )
 
 /** The open panel's [state], built from [lineup] for [session]. */

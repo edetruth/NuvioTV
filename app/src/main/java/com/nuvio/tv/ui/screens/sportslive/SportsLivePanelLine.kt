@@ -472,7 +472,7 @@ internal fun SportsLivePanelLine(
                             when (line.kind) {
                                 PanelLineKind.GAME -> GameLine(row, line, individual = individual)
                                 // A channel keeps the empty tag column too (live.20 F5): its name starts where games' names do.
-                                PanelLineKind.EVENT, PanelLineKind.CHANNEL -> EventLine(line)
+                                PanelLineKind.EVENT, PanelLineKind.CHANNEL -> EventLine(line, favorite = row.favorite)
                             }
                         }
                     },
@@ -931,9 +931,11 @@ private fun LineTag(tag: String, live: Boolean) {
  * the same title ("· Onboard"): the title gives way first.
  */
 @Composable
-private fun RowScope.EventLine(line: PanelLine) {
+private fun RowScope.EventLine(line: PanelLine, favorite: Boolean = false) {
     LineTag(line.tag, line.live)
     LineText(line.title.orEmpty(), Modifier.weight(1f, fill = false))
+    // A favorite channel (Channels phase 1): the gold ★ after its name, as a followed team's game.
+    if (favorite) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(10.dp))
     line.suffix?.let { suffix ->
         Text(
             text = PANEL_SUFFIX_SEPARATOR.trimStart() + suffix,

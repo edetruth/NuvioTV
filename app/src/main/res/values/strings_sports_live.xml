@@ -294,7 +294,9 @@
     <string name="sports_live_state_no_finals_line">Games show here as they finish</string>
     <string name="sports_live_state_empty_day_line">No finals were played that day</string>
     <!-- More… as a sheet over the stage (#134). -->
-    <string name="sports_live_team_pages">Team pages…</string>
+    <!-- Hold OK menu trim: one entry for Follow, team reminders and team pages; %1$s the followed teams ("Lakers"). -->
+    <string name="sports_live_teams_menu">Teams…</string>
+    <string name="sports_live_teams_menu_followed">Teams… · %1$s</string>
     <string name="sports_live_hide_from_live_now">Hide this</string>
     <string name="sports_live_hidden_toast">Hidden: %1$s</string>
     <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden titles</string>
@@ -425,6 +427,8 @@
     <!-- live.20 B1: the saved list shown while the refresh runs; %1$s is a time ("7:42 PM"). -->
     <string name="sports_live_updated_at">Updated %1$s</string>
     <string name="sports_live_live_pill">LIVE</string>
+    <!-- #215: a game its addon lists live that ESPN could not place (no LIVE, no red dot). -->
+    <string name="sports_live_listed_live">Listed live</string>
     <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
     <string name="sports_live_probably_ended">Probably ended</string>
     <!-- Live Now, Scoreboard + Stage (V2, #132): group headings, channel rows and the stage. -->
@@ -706,6 +710,12 @@
     <string name="sports_live_zap_panel_title">Live now</string>
     <string name="sports_live_zap_panel_empty">Nothing live right now</string>
     <string name="sports_live_zap_panel_loading">Loading games…</string>
+    <!-- The stream picker's count line (stream picker cleanup): "6 links · 3 sources". -->
+    <string name="sports_live_picker_count">%1$s · %2$s</string>
+    <plurals name="sports_live_picker_links">
+        <item quantity="one">%1$d link</item>
+        <item quantity="other">%1$d links</item>
+    </plurals>
     <plurals name="sports_live_sources_count">
         <item quantity="one">%1$d source</item>
         <item quantity="other">%1$d sources</item>

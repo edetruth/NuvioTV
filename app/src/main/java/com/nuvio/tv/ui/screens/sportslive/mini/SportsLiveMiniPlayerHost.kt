@@ -120,6 +120,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
@@ -483,6 +484,16 @@ fun SportsLiveMiniPlayerHost(
     val currentOnExpand by rememberUpdatedState(onExpand)
     val focusManager = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
+    // The "OK full screen · Back stop" hint shows only once focus has rested on the mini player (TV 2026-11-21): focus
+    // that only passes through it (a tab switch, a screen settling) never flashes it.
+    var hintShown by remember { mutableStateOf(false) }
+    LaunchedEffect(focused) {
+        hintShown = false
+        if (focused) {
+            delay(MINI_HINT_REST_MS)
+            hintShown = true
+        }
+    }
     // Focus that reached the mini player from nowhere (BUG13: a screen opened with nothing focused yet) goes back.
     var giveFocusBack by remember { mutableStateOf(false) }
     LaunchedEffect(giveFocusBack) {
@@ -685,7 +696,7 @@ fun SportsLiveMiniPlayerHost(
                 ) {
                     WatchingStrip(
                         name = playing.item.displayName,
-                        hint = stringResource(if (focused) R.string.sports_live_mini_watching_ok_hint else R.string.sports_live_mini_watching_hint),
+                        hint = stringResource(if (focused && hintShown) R.string.sports_live_mini_watching_ok_hint else R.string.sports_live_mini_watching_hint),
                         modifier = Modifier.align(Alignment.TopStart).fillMaxWidth()
                     )
                 }
@@ -693,13 +704,13 @@ fun SportsLiveMiniPlayerHost(
             if (asChip) {
                 PlayingChip(
                     name = playing.item.displayName,
-                    hint = stringResource(R.string.sports_live_mini_watching_ok_hint).takeIf { focused },
+                    hint = stringResource(R.string.sports_live_mini_watching_ok_hint).takeIf { focused && hintShown },
                     focused = focused
                 )
             } else if (!inPip && stageSlot == null) {
                 MiniCaption(
                     text = stringResource(
-                        if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
+                        if (focused && hintShown) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
                         playing.item.displayName
                     ),
                     modifier = Modifier.padding(top = 6.dp)
@@ -710,6 +721,9 @@ fun SportsLiveMiniPlayerHost(
 }
 
 private const val DOCK_MOVE_MS = 220
+
+/** How long focus rests on the mini player before its OK / Back hint shows. */
+private const val MINI_HINT_REST_MS = 300L
 
 /** [slot] relative to the host at [hostX], [hostY], animated as it changes; it starts where it is first asked. */
 @Composable

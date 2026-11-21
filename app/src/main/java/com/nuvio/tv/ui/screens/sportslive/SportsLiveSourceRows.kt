@@ -138,7 +138,8 @@ internal fun SportsLiveSourceRow(
     linkMarkNowMs: Long,
     onClick: () -> Unit,
     onFocusChanged: ((Boolean) -> Unit)?,
-    onUpKey: (() -> Unit)?
+    onUpKey: (() -> Unit)?,
+    modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val dimmed = linkMark is SportsLiveLinkMark.Failed && !isFocused
@@ -155,7 +156,7 @@ internal fun SportsLiveSourceRow(
     val shape = SportsLiveTokens.Radius.RowShape
     Card(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .then(if (focusRequester != null && requestInitialFocus) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged {

@@ -36,6 +36,32 @@ class SportsLiveMiniPlacementTest {
     }
 
     @Test
+    fun `a tab whose list is still being built keeps the mini player docked past the hold`() {
+        // TV 2026-11-21: Results to Replays with a slow board, 900 ms into the switch: docked, not the corner.
+        val hold = SportsLiveMiniDocking.HOLD_MS
+        assertEquals(
+            SportsLiveMiniDock.Docked(resultsSlot, held = true),
+            SportsLiveMiniDocking.decide(true, null, resultsSlot, lostAtMs = 1_000, nowMs = 1_000 + hold + 400, awaiting = true)
+        )
+        // Not waiting for a list (a tab with nothing to stage): the corner after the usual hold.
+        assertEquals(SportsLiveMiniDock.Corner, SportsLiveMiniDocking.decide(true, null, resultsSlot, 1_000, 1_000 + hold + 400))
+        // A list that never comes still lets it go.
+        val max = SportsLiveMiniDocking.AWAIT_MAX_MS
+        assertEquals(SportsLiveMiniDock.Corner, SportsLiveMiniDocking.decide(true, null, resultsSlot, 1_000, 1_000 + max, awaiting = true))
+        assertEquals(max - 100, SportsLiveMiniDocking.holdLeftMs(1_000, 1_100, awaiting = true))
+    }
+
+    @Test
+    fun `leaving Sports Live ends the wait for a list`() {
+        val section = Any()
+        SportsLiveMiniPlacement.enterSection(section)
+        SportsLiveMiniPlacement.setAwaitingStage(true)
+        assertTrue(SportsLiveMiniPlacement.awaitingStage.value)
+        SportsLiveMiniPlacement.leaveSection(section)
+        assertEquals(false, SportsLiveMiniPlacement.awaitingStage.value)
+    }
+
+    @Test
     fun `outside Sports Live the mini player is in the corner at once`() {
         assertEquals(
             SportsLiveMiniDock.Corner,
