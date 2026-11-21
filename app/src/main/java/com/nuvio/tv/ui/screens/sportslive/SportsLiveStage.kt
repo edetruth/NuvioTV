@@ -22,6 +22,10 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.ui.res.pluralStringResource
+import com.nuvio.tv.core.sportslive.SportsLiveChannelCountries
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -588,13 +592,20 @@ internal fun stageRanksLine(row: ScoreboardRow): String? {
 }
 
 /**
- * A channel's block: its clean name and quality, then "Now: …" and "Next: …" when known ([channelStageLines]).
+ * A channel's block: its clean name and quality (the gold ★ for a favorite), its country line ("United States ·
+ * 3 sources", [channelCountryLine]), then "Now: …" and "Next: …" when known ([channelStageLines]).
  * It takes only the height its lines need, so the buttons follow right under it.
  */
 @Composable
 private fun ChannelBlock(row: ScoreboardRow, noStream: Boolean) {
     val title = SportsLiveDisplayText.of(row.item.meta.name)
     val lines = channelStageLines(now = channelNowText(row.item), next = null)
+    val otherRegion = stringResource(R.string.sports_live_region_other)
+    val sources = row.item.sourceCount
+    val sourcesText = pluralStringResource(R.plurals.sports_live_sources_count, sources, sources)
+    val countryLine = remember(row.item, otherRegion, sourcesText) {
+        channelCountryLine(SportsLiveChannelCountries.countryOf(row.item), sources, { channelRegionLabel(it, otherRegion) }, { sourcesText })
+    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText(
@@ -606,6 +617,10 @@ private fun ChannelBlock(row: ScoreboardRow, noStream: Boolean) {
                 autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = SportsLiveTokens.Type.StageScore.fontSize, stepSize = 1.sp)
             )
             title.quality?.let { SportsLiveBadge(it) }
+            if (row.favorite) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(18.dp))
+        }
+        countryLine?.let {
+            Text(text = it, style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta), color = Colors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         lines.forEach { line ->
             Text(
@@ -635,6 +650,17 @@ internal sealed interface ChannelStageLine {
     data class Now(val text: String) : ChannelStageLine
     data class Next(val text: String) : ChannelStageLine
 }
+
+/**
+ * The stage's country line for a channel (channels-redesign.md, the stage): its country in words ([countryLabel] of
+ * [country], none for no country listed) and, when it is listed by more than one addon, how many ([sourcesText] of
+ * [sources]): "United States · 3 sources", "Canada", "2 sources"; null when neither is known (no empty line).
+ */
+internal fun channelCountryLine(country: String, sources: Int, countryLabel: (String) -> String, sourcesText: (Int) -> String): String? =
+    listOfNotNull(
+        country.takeIf { it != SportsLiveChannelRegions.OTHER }?.let(countryLabel)?.takeIf { it.isNotBlank() },
+        sources.takeIf { it > 1 }?.let(sourcesText)
+    ).joinToString(" · ").ifEmpty { null }
 
 /** The lines under a channel's name (V2 P3): "Now: …" and "Next: …", each only when known; none leaves no gap. */
 internal fun channelStageLines(now: String?, next: String?): List<ChannelStageLine> = listOfNotNull(
