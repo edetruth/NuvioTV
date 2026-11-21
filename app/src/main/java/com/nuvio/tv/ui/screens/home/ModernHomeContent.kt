@@ -502,7 +502,10 @@ fun ModernHomeContent(
         val existingActive = focusHolder.activeRowKey?.let { rowByKey[it] }
         val firstRow = carouselRows.list.firstOrNull()
 
+        // #211: a Sports & Live row landing above the row Home picked by itself takes the focus.
+        val sportsLiveRow = sportsLiveRowTakingAutoFocus(carouselRows.list, focusHolder.activeRowKey, initialAutoSelectedKey, focusHolder.activeItemIndex)
         val resolvedActive = when {
+            sportsLiveRow != null -> sportsLiveRow
             existingActive != null -> existingActive
             hadActiveRow -> null // Wait for data to reappear
             else -> firstRow     // Initial state
@@ -520,7 +523,7 @@ fun ModernHomeContent(
             heroItem.value = resolvedActive.items.getOrNull(resolvedIndex)?.heroPreview
                 ?: resolvedActive.items.firstOrNull()?.heroPreview
 
-            if (!focusState.hasSavedFocus && !hadActiveRow) {
+            if ((!focusState.hasSavedFocus && !hadActiveRow) || sportsLiveRow != null) {
                 initialAutoSelectedKey = resolvedActive.key
                 pendingRowFocusKey.value = resolvedActive.key
                 pendingRowFocusIndex.value = resolvedIndex
@@ -1152,6 +1155,8 @@ fun ModernHomeContent(
             val latestOnFocusedRowKeyChanged by rememberUpdatedState(onFocusedRowKeyChanged)
             val onActiveRowKeyChangeLambda = remember {
                 { key: String? ->
+                    // #211: once the user moves to another row, Home no longer moves the focus for them.
+                    if (key != initialAutoSelectedKey) initialAutoSelectedKey = null
                     focusHolder.activeRowKey = key
                     activeRowKey.value = key
                     // saveFocusState only runs on dispose, which a system Home press never
