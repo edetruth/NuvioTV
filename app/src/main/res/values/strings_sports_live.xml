@@ -656,6 +656,8 @@
     <string name="sports_live_alert_hint_ok_remind">OK Remind me in 10 min · Back Close</string>
     <string name="sports_live_alert_switching_to">Switching to %1$s in %2$d…</string>
     <string name="sports_live_alert_switch_to">Switch to %1$s?</string>
+    <string name="sports_live_alert_switching_into_small">Switching %1$s into the small side · %2$d</string>
+    <string name="sports_live_alert_switching_into_other">Switching %1$s into the other side · %2$d</string>
     <string name="sports_live_alert_choice_watch_now">Watch now</string>
     <string name="sports_live_alert_choice_watch_both">Watch both</string>
     <string name="sports_live_alert_hint_stay">Back Stay here</string>
@@ -795,7 +797,7 @@
     <string name="sports_live_no_other_live_game">No other live game is playing right now</string>
     <string name="sports_live_back_to_live_now">Back to Live Now</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
-    <string name="sports_live_dual_recovery_choices">▲▼  Next game · OK  Choose stream · BACK  Close this side</string>
+    <string name="sports_live_dual_recovery_choices">OK  Try another link · BACK  Close this side</string>
     <string name="sports_live_reconnecting">Reconnecting…</string>
     <string name="sports_live_next_live_game">Next live game</string>
     <string name="sports_live_starting_game">Starting %1$s</string>

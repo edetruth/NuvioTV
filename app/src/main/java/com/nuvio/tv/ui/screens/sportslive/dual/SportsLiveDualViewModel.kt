@@ -479,22 +479,20 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /**
-     * OK on an alert card (#136): a game a pane shows gets the highlight (and the sound); any other game
-     * replaces the highlighted pane's, as the pane's own zap does. False when it cannot (it shares a
-     * source with the other pane, or there is no session).
+     * Watch on an alert card (#136; user, live.24): the alert's game goes into the pane WITHOUT sound (in big + small,
+     * the small one), as that pane's zap does; the game with sound plays on untouched. A game a pane already shows
+     * changes nothing. False with no session.
      */
     fun watchFromAlert(item: SportsLiveItem): Boolean {
         val state = _state.value ?: return false
-        val side = state.highlighted
-        if (item.sharesSourceWith(state.pane(side).item)) return true
-        if (item.sharesSourceWith(state.pane(side.other).item)) {
-            // Big + small (live.24): the sound follows the big game, so that game is made big.
-            if (state.layout == DualLayout.BIG_SMALL) swap() else highlight(side.other)
-            return true
-        }
-        settle(state.pane(side).item)
+        if (item.sharesSourceWith(state.left.item) || item.sharesSourceWith(state.right.item)) return true
+        // The ring stays on the game heard (a failed highlighted pane hands it the ring first), so the sound never moves.
+        val audible = state.audibleSide
+        if (state.highlighted != audible) highlight(audible)
+        val quiet = audible.other
+        settle(state.pane(quiet).item)
         forgetRecovery(item)
-        load(side, item)
+        load(quiet, item)
         return true
     }
 

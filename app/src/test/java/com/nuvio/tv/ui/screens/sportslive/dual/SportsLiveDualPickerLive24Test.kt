@@ -115,18 +115,60 @@ class SportsLiveDualPickerLive24Test {
     }
 
     @Test
-    fun `an alert for the small pane's game makes it big in big and small, so the sound follows it`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Watch on an alert puts its game into the pane without sound, the game heard plays on untouched`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            for (layout in DualLayout.entries) {
+                val viewModel = SportsLiveDualViewModel(
+                    resolve = { item -> dualStream(item.id) },
+                    endedKeys = { emptySet() },
+                    session = SportsLiveDualSession(a, b, listOf(a, b, c), null, SportsLiveTab.LIVE_NOW),
+                    loadLayout = { layout }
+                )
+                runCurrent()
+                val before = viewModel.state.value!!
+                assertEquals(Side.LEFT, before.audibleSide)
+                assertTrue(viewModel.watchFromAlert(c))
+                runCurrent()
+                val after = viewModel.state.value!!
+                // In big + small the right pane is the small one: the alert's game goes there.
+                assertEquals("$layout", c, after.right.item)
+                assertEquals("$layout", before.left, after.left)
+                assertEquals("$layout", Side.LEFT, after.audibleSide)
+                // A game already on screen changes nothing.
+                assertTrue(viewModel.watchFromAlert(a))
+                assertEquals(after, viewModel.state.value)
+            }
+        }
+
+    @Test
+    fun `the heard pane is the right one - the alert's game goes into the left`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = SportsLiveDualViewModel(
             resolve = { item -> dualStream(item.id) },
             endedKeys = { emptySet() },
-            session = SportsLiveDualSession(a, b, listOf(a, b, c), null, SportsLiveTab.LIVE_NOW),
-            loadLayout = { DualLayout.BIG_SMALL }
+            session = SportsLiveDualSession(a, b, listOf(a, b, c), null, SportsLiveTab.LIVE_NOW)
         )
         runCurrent()
-        assertTrue(viewModel.watchFromAlert(b))
+        viewModel.highlight(Side.RIGHT)
+        assertTrue(viewModel.watchFromAlert(c))
+        runCurrent()
         val state = viewModel.state.value!!
-        assertEquals(b, state.left.item)
-        assertEquals(Side.LEFT, state.audibleSide)
+        assertEquals(c, state.left.item)
+        assertEquals(b, state.right.item)
+        assertEquals(Side.RIGHT, state.audibleSide)
+    }
+
+    @Test
+    fun `a pane's error card has one action - OK tries another link, Back closes the side, no arrows named`() {
+        val error = DualState(DualPane(a, dualStream("a"), PaneStatus.Error), DualPane(b, dualStream("b"), PaneStatus.Playing))
+        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(error))
+        // ▲ ▼ still zap that pane (the frozen lineup), they are just not named on the card.
+        assertEquals(DualKeyRoute.Zap(forward = true), dualKeyRoute(error, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+        val strings = listOf(java.io.File("src/main/res/values/strings_sports_live.xml"), java.io.File("app/src/main/res/values/strings_sports_live.xml"))
+            .first { it.exists() }.readText()
+        val hint = Regex("<string name=\"sports_live_dual_recovery_choices\">([^<]*)</string>").find(strings)!!.groupValues[1]
+        assertTrue(hint, hint.startsWith("OK  Try another link"))
+        assertTrue(hint, hint.contains("BACK  Close this side"))
+        assertFalse(hint, hint.contains("▲") || hint.contains("▼"))
     }
 
     // ▲ ▼ in a pane (user TV report 2026-11-21 ~14:10: zapping cycled the 3 games of a basketball filter, BYU lost)

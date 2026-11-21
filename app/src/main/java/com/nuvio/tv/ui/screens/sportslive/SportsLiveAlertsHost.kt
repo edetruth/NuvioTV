@@ -494,6 +494,8 @@ fun SportsLiveAlertsHost(
                 }
                 AlertCountdownCard(
                     game = alert.item.displayName,
+                    // Dual screen (user, live.24): the game goes into the pane without sound, the one heard plays on.
+                    intoPane = panes?.let { if (it.bigSmall) DualInto.SMALL else DualInto.OTHER },
                     secondsLeft = countdown.secondsLeft(nowMs),
                     selected = countdown.selected,
                     canBoth = canBoth(),
@@ -715,6 +717,7 @@ private fun KickoffToast(
 @Composable
 private fun AlertCountdownCard(
     game: String,
+    intoPane: DualInto?,
     secondsLeft: Int?,
     selected: AlertChoice,
     canBoth: Boolean,
@@ -733,7 +736,11 @@ private fun AlertCountdownCard(
     ) {
         Text(
             text = if (secondsLeft != null) {
-                stringResource(R.string.sports_live_alert_switching_to, game, secondsLeft)
+                when (intoPane) {
+                    DualInto.SMALL -> stringResource(R.string.sports_live_alert_switching_into_small, game, secondsLeft)
+                    DualInto.OTHER -> stringResource(R.string.sports_live_alert_switching_into_other, game, secondsLeft)
+                    null -> stringResource(R.string.sports_live_alert_switching_to, game, secondsLeft)
+                }
             } else {
                 stringResource(R.string.sports_live_alert_switch_to, game)
             },
@@ -752,6 +759,9 @@ private fun AlertCountdownCard(
         SmallLine(stringResource(R.string.sports_live_alert_hint_stay), SportsLiveTokens.Alert.Hint)
     }
 }
+
+/** Dual screen's pane an alert's game goes into (the one without sound): the small one in big + small, else the other. */
+private enum class DualInto { SMALL, OTHER }
 
 /** One choice of the countdown card: ringed and filled white while selected (the V2 focus look). */
 @Composable
