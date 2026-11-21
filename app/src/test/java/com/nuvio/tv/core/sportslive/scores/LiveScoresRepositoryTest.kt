@@ -1181,6 +1181,40 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `over the budget an undated card never keeps last night's final of a back-to-back pair`() = runTest {
+        // live.24 RC2 review R1: an undated card matched on last night's final kept it on yesterday's feed alone once the
+        // budget was full, while tonight's game of the same pair sat in today's feed that no longer fitted.
+        val today = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
+        val lastNightFinal = game(ScoreState.POST, 110, 100, "Final")
+        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(lastNightFinal)) else ScoreboardResult(emptyList()) }
+        val repo = repository("2026-11-16T17:00:00Z")
+        collect(repo)
+        val undated = item("Indiana Pacers at Philadelphia 76ers", "NBA", null)
+        repo.track(SECTION, listOf(undated))
+        runCurrent()
+        assertEquals(110, repo.scores.value[undated.streamKey]?.homeScore)
+        // Tonight's game of the pair is now listed today, and a busy day fills the budget: another card keeps yesterday's
+        // feed polled, other games take every other slot, so today's feed does not fit.
+        val tonight = game(ScoreState.IN, 50, 48, "Q2 5:00").copy(eventId = "tonight", startMs = ms("2026-11-16T16:00:00Z"))
+        provider.respond = { feed ->
+            when (feed) {
+                nba15 -> ScoreboardResult(listOf(lastNightFinal))
+                today -> ScoreboardResult(listOf(tonight))
+                else -> ScoreboardResult(emptyList())
+            }
+        }
+        val lastNight = item("Miami Heat at Chicago Bulls", "NBA", "2026-11-15T18:00:00Z")
+        val fillers = (1 until LiveScoresRepository.MAX_FEEDS).map { day ->
+            item("Team$day A vs Team$day B", "NBA", "${LocalDate.of(2026, 11, 17).plusDays(day.toLong())}T18:00:00Z")
+        }
+        repo.track(SECTION, listOf(lastNight) + fillers + undated)
+        runCurrent()
+        advanceTimeBy(30_001L); runCurrent()
+        // A wrong score is worse than none.
+        assertNull(repo.scores.value[undated.streamKey])
+    }
+
+    @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")

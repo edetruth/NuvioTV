@@ -974,9 +974,15 @@ class LiveScoresRepository internal constructor(
             if (!fits(cardFeeds)) {
                 cardFeeds.retainAll { it in needed }
                 // A card whose shown game sits in the feeds it kept is fully answered (live.24 RC review H1): an unrelated
-                // day or fallback feed that did not fit never takes away a score it already has.
+                // day or fallback feed that did not fit never takes away a score it already has. A card with no start holds
+                // its game only while it is in play or filed under ESPN's (Eastern) today (live.24 RC2 review R1): last night's
+                // final of a back-to-back pair, on yesterday's feed alone, never stays on today's card.
                 val shown = raw[card.key]
-                val holds = shown != null && cardFeeds.any { feed -> feeds[feed]?.events?.any { it.eventId == shown.eventId } == true }
+                val easternToday = Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate()
+                val holds = shown != null && cardFeeds.any { feed ->
+                    feeds[feed]?.events?.any { it.eventId == shown.eventId } == true &&
+                        (card.startMs != null || shown.state == ScoreState.IN || feed.date == easternToday)
+                }
                 if (!holds && feedsOf(leagues, dates).any { it !in cardFeeds }) {
                     partial += card.key
                     // A card with no start is matched across a league's days only with every day in (live.23 review M4:
