@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.ExoPlayer
 import com.nuvio.tv.core.sportslive.alerts.AlertKeyAction
@@ -13,6 +14,8 @@ import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveSecondDecoders
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +43,10 @@ internal interface SportsLiveAlertSurface {
 
 /** The full player during a peek (#136): its game goes quiet and comes back. */
 internal interface SportsLivePeekHost {
-    /** False when this player cannot go quiet (another engine than ExoPlayer, a watch party). */
+    /**
+     * False when this player cannot go quiet (another engine than ExoPlayer, a watch party), or this TV has no
+     * spare decoder for a peek beside the game (#106).
+     */
     fun canPeek(): Boolean
 
     /** The game playing loses its sound while the peek plays; it keeps playing, so it stays ready. */
@@ -177,7 +183,18 @@ internal fun sportsLivePlayerAlertSurface(
         /** The track selection from before the peek, given back as it was. */
         private var saved: TrackSelectionParameters? = null
 
-        override fun canPeek(): Boolean = !partyActive() && exoPlayer() != null
+        override fun canPeek(): Boolean {
+            val player = exoPlayer() ?: return false
+            if (partyActive()) return false
+            // The peek is a second full-size decoder beside the game's: only where the TV has one to spare.
+            val video = player.videoFormat
+            return SportsLiveSecondDecoders.allowedBesideMain(
+                mainPlaying = true,
+                mainAbove1080p = video != null && (video.width > 1920 || video.height > 1088),
+                hardwareInstances = SportsLiveSecondDecoders.hardwareInstances(video?.sampleMimeType ?: MimeTypes.VIDEO_H264),
+                limitSeen = SportsLiveDecoderLimit.seen
+            )
+        }
 
         override fun quiet() {
             val player = exoPlayer() ?: return

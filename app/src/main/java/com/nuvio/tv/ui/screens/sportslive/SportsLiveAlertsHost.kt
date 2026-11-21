@@ -64,6 +64,7 @@ import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.collectAsState
@@ -275,6 +276,8 @@ fun SportsLiveAlertsHost(
     val surface by SportsLiveAlertSurfaces.surface.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    // A decoder limit this TV showed before (#106): no peek offered beside a game.
+    remember(context) { SportsLiveDecoderLimit.init(context) }
 
     /** [item] plays here: [on]'s own way (a zap, the highlighted pane), else as Watch on a prompt. */
     fun playHere(item: SportsLiveItem, on: SportsLiveAlertSurface?) {
