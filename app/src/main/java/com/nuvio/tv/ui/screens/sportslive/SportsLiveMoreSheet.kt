@@ -150,8 +150,10 @@ internal fun SportsLiveCardMenu(
     savedForLater: Boolean = false,
     /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
     onScoresAhead: (() -> Unit)? = null,
-    /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; always last; null hides it. */
+    /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; last unless [reportFirst]; null hides it. */
     onReport: (() -> Unit)? = null,
+    /** [onReport] first (#218: the player menu Hold OK opens, there to report what was just on screen). */
+    reportFirst: Boolean = false,
     /** "Add to favorites" / "Remove from favorites" (Channels phase 1) by [favorite]: first in a channel's menu; null hides it. */
     onToggleFavorite: (() -> Unit)? = null,
     favorite: Boolean = false
@@ -170,6 +172,9 @@ internal fun SportsLiveCardMenu(
                 SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
             }
             return@SportsLiveSheet
+        }
+        if (onReport != null && reportFirst) {
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_setting_report_problem), onClick = onReport, modifier = first())
         }
         if (onToggleFavorite != null) {
             SportsLiveMenuButton(
@@ -263,7 +268,7 @@ internal fun SportsLiveCardMenu(
                 iconTint = Colors.TextSecondary
             )
         }
-        if (onReport != null) {
+        if (onReport != null && !reportFirst) {
             SportsLiveMenuButton(text = stringResource(R.string.sports_live_setting_report_problem), onClick = onReport, modifier = first())
         }
     }

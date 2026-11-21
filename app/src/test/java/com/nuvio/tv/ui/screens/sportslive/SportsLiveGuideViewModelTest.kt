@@ -71,7 +71,7 @@ class SportsLiveGuideViewModelTest {
     private fun okEvent(act: Int, down: Long = 0L, repeat: Int = 0): KeyEvent = keyEvent(KeyEvent.KEYCODE_DPAD_CENTER, act, down, repeat)
 
     @Test
-    fun `with the new guide OK opens it on its press in the player's preview, and it closes itself after 20 s without a key`() =
+    fun `with the new guide a short OK opens it on its release in the player's preview, and it closes itself after 20 s without a key`() =
         runTest(mainDispatcherRule.dispatcher) {
             val viewModel = guideViewModel(guide = true)
             runCurrent()
@@ -80,12 +80,14 @@ class SportsLiveGuideViewModelTest {
             // Not while the player is busy (controls, a dialog, a card).
             assertFalse(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 1L), playerIdle = false, partyActive = false))
             assertFalse(viewModel.panelOpen.value)
-            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 2L), playerIdle = true, partyActive = false))
-            assertTrue(viewModel.panelOpen.value)
-            // Its release is taken, so it never reaches a row of the table.
+            // #218: the press waits (it may be a hold); its release opens the guide, and never reaches a row of it.
             var tableKeys = 0
             viewModel.guideKeyHandler = { tableKeys++; true }
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 2L), playerIdle = true, partyActive = false))
+            assertFalse(viewModel.panelOpen.value)
             assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_UP, down = 2L), playerIdle = false, partyActive = false))
+            assertTrue(viewModel.panelOpen.value)
+            assertFalse(viewModel.playerMenu.value)
             assertEquals(0, tableKeys)
 
             advanceTimeBy(GUIDE_IDLE_CLOSE_MS - 1_000L)
@@ -151,9 +153,15 @@ class SportsLiveGuideViewModelTest {
         runTest(mainDispatcherRule.dispatcher) {
             val panel = guideViewModel(guide = false)
             runCurrent()
-            assertFalse(panel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN), playerIdle = true, partyActive = false))
-            assertFalse(panel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_UP), playerIdle = true, partyActive = false))
+            // #218: the press waits for its release (it may be a hold), then the player's own OK runs, once.
+            var replayed = 0
+            panel.shortOk = { replayed++; true }
+            assertTrue(panel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN), playerIdle = true, partyActive = false))
+            assertEquals(0, replayed)
+            assertTrue(panel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_UP), playerIdle = true, partyActive = false))
+            assertEquals(1, replayed)
             assertFalse(panel.panelOpen.value)
+            panel.shortOk = null
             // The side panel open: the preview leaves its keys alone.
             panel.openPanel()
             assertFalse(panel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 5L), playerIdle = false, partyActive = false))
@@ -179,12 +187,48 @@ class SportsLiveGuideViewModelTest {
             assertFalse(party.panelOpen.value)
         }
 
+    @Test
+    fun `Hold OK while watching opens the player menu on its release, with the report snapshot taken as the hold starts`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val captured = mutableListOf<String>()
+            var saved = 0
+            val viewModel = guideViewModel(guide = true, captureReport = { trigger -> captured += trigger; { saved++ } })
+            runCurrent()
+            var replayed = 0
+            viewModel.shortOk = { replayed++; true }
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 7L), playerIdle = true, partyActive = false))
+            // The system's long-press time: the first repeat. The snapshot now, before any menu draws.
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 7L, repeat = 1), playerIdle = true, partyActive = false))
+            assertEquals(1, captured.size)
+            assertFalse(viewModel.playerMenu.value)
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 7L, repeat = 2), playerIdle = true, partyActive = false))
+            assertEquals(1, captured.size)
+            // The release opens the menu; the guide and the player's own OK never ran.
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_UP, down = 7L), playerIdle = true, partyActive = false))
+            assertTrue(viewModel.playerMenu.value)
+            assertFalse(viewModel.panelOpen.value)
+            assertEquals(0, replayed)
+            // Report a problem saves the snapshot taken at the hold, once.
+            viewModel.onPlayerMenuReport()
+            assertFalse(viewModel.playerMenu.value)
+            assertEquals(1, saved)
+            assertEquals(1, captured.size)
+            // Dismissed with nothing picked: nothing is saved.
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 9L), playerIdle = true, partyActive = false))
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 9L, repeat = 1), playerIdle = true, partyActive = false))
+            assertTrue(viewModel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_UP, down = 9L), playerIdle = true, partyActive = false))
+            viewModel.dismissPlayerMenu()
+            assertEquals(1, saved)
+            viewModel.shortOk = null
+        }
+
     private val playing = item("a", now - HOUR)
     private val other = item("b", now - HOUR / 2)
 
     private fun TestScope.guideViewModel(
         guide: Boolean,
-        okOnLive: SportsLiveOkOnLive = SportsLiveOkOnLive.DEFAULT
+        okOnLive: SportsLiveOkOnLive = SportsLiveOkOnLive.DEFAULT,
+        captureReport: (String) -> (() -> Unit) = { { } }
     ): SportsLiveZapViewModel {
         val latest = MutableStateFlow(SportsLiveLoad(listOf(playing, other), emptyList(), 0L, setOf(CATALOG)))
         SportsLiveZapSessions.start(
@@ -213,7 +257,8 @@ class SportsLiveGuideViewModelTest {
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, mockk<DirectDebridResolver>(relaxed = true),
             profiles, repo, scores, mainDispatcherRule.dispatcher,
             okOnLive = flowOf(okOnLive),
-            guideStyleSetting = flowOf(if (guide) SportsLiveGuideStyle.TABLE_SMOOTH else SportsLiveGuideStyle.PANEL)
+            guideStyleSetting = flowOf(if (guide) SportsLiveGuideStyle.TABLE_SMOOTH else SportsLiveGuideStyle.PANEL),
+            captureReport = captureReport
         )
     }
 

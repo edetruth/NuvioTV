@@ -13,6 +13,7 @@ import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
@@ -183,7 +184,10 @@ class SportsLiveZapViewModel internal constructor(
     // #172, TV QA: Hold OK → More… → Report a problem saves a report by its trigger ([SportsLiveReporter.report]).
     private val report: (String) -> Unit = {},
     // live.21 B2: "In-player guide (beta)": the side panel, or the new table (smooth or jump); OK opens the table.
-    guideStyleSetting: Flow<SportsLiveGuideStyle> = flowOf(SportsLiveGuideStyle.DEFAULT)
+    guideStyleSetting: Flow<SportsLiveGuideStyle> = flowOf(SportsLiveGuideStyle.DEFAULT),
+    // #218: Hold OK in the player takes the report's snapshot at once ([SportsLiveReporter.capture]); the function it
+    // returns saves it when the menu's Report a problem is picked.
+    private val captureReport: (String) -> (() -> Unit) = { trigger -> { report(trigger) } }
 ) : ViewModel() {
 
     @Inject constructor(
@@ -214,7 +218,8 @@ class SportsLiveZapViewModel internal constructor(
         nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 },
         identify = { items -> identifier?.offer(items) },
         report = { trigger -> reporter?.report(trigger) },
-        guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.DEFAULT)
+        guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.DEFAULT),
+        captureReport = { trigger -> reporter?.capture(trigger) ?: {} }
     )
 
     /**
@@ -227,7 +232,22 @@ class SportsLiveZapViewModel internal constructor(
     val guideTable: StateFlow<Boolean> = guideStyle.map { it.table }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // B2: OK opens the guide (on its release); the guide closes itself after GUIDE_IDLE_CLOSE_MS with no key.
-    private val guideOk = SportsLiveGuideOkKey()
+    private val playerOk = SportsLivePlayerOkKey()
+
+    /**
+     * The player's own OK (#218), set by [rememberSportsLiveOkHandler] while the player shows: a short OK the key
+     * preview held back to tell it from a hold is replayed through it on the release (it shows the controls on live).
+     */
+    @Volatile
+    internal var shortOk: ((KeyEvent) -> Boolean)? = null
+
+    private val _playerMenu = MutableStateFlow(false)
+
+    /** The player menu is up (#218: Hold OK while watching, nothing else open): Report a problem, Choose stream, Scores ahead. */
+    val playerMenu: StateFlow<Boolean> = _playerMenu.asStateFlow()
+
+    // The report snapshot Hold OK took (#218), saved only if Report a problem is picked.
+    private var heldReport: (() -> Unit)? = null
     private val guideIdle = SportsLiveGuideIdle(viewModelScope) { closePanel() }
 
     /** "OK on live" is Pause (research Q19): a bare OK pauses a live game at once, as Google's TV-PC says. */
@@ -407,6 +427,8 @@ class SportsLiveZapViewModel internal constructor(
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
         // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).
         val items = combine(all, panelChip, mySports, logos.revision) { (list, followed), chip, sports, _ ->
+            // #218: every report says what My sports holds.
+            SportsLiveReportTrail.onMySports(mySportsReportLine(sports))
             val scoped = SportsLiveMySportsScope.scope(list, sports)
             val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) list else scoped
             PanelList(list, chip, filterPanelItems(base, chip), followed, scoped)
@@ -518,6 +540,11 @@ class SportsLiveZapViewModel internal constructor(
         // Under Off too: only the start of games listed live is read then, never a score (live.20, a wrong LIVE).
         // The game playing too, when the chip or My sports leaves it out: its pinned row gets its score (live.20).
         scoreTracker.update(panelTrackedCards(shown.lineup.list.shown, shown.state.nowPlayingRow?.item), enabled = true)
+        // #218: a report says what the panel showed: its scope, and each row's tag and whether its score showed.
+        SportsLiveReportTrail.onPanel(
+            panelReportScope(shown.lineup.list.chip),
+            shown.state.rows.take(SportsLiveReportTrail.MAX_PANEL_ROWS).mapNotNull { row -> shown.state.boards[row.item.streamKey]?.board?.let(::panelReportRow) }
+        )
         shown.state
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -961,8 +988,15 @@ class SportsLiveZapViewModel internal constructor(
      * live" left on Show controls (Pause keeps its pause; ◀ still opens the guide), and no "Looking for streams…" card
      * wanting OK for its Skip.
      */
-    private fun guideOkOpens(): Boolean =
-        guideTable.value && nowPlaying != null && nowPlaying.kind != com.nuvio.tv.domain.model.SportsLiveKind.REPLAY &&
+    private fun guideOkOpens(): Boolean = guideTable.value && playerOkOffered()
+
+    /**
+     * Where OK is the player's live-game OK at all (#218: Hold OK opens the player menu there): a live game (not a
+     * replay), "OK on live" left on Show controls (Pause keeps its pause, which the key preview cannot replay), and no
+     * card wanting OK for its own buttons.
+     */
+    private fun playerOkOffered(): Boolean =
+        nowPlaying != null && nowPlaying.kind != com.nuvio.tv.domain.model.SportsLiveKind.REPLAY &&
             !okPausesLive.value && banner.value?.looking != true &&
             // The end card and the "no next game" card hold OK for their own buttons.
             _endCard.value?.toastOnly != false && !_nextExhausted.value
@@ -982,21 +1016,33 @@ class SportsLiveZapViewModel internal constructor(
      * (no controls, panel, dialog, card or error) and no watch party runs ([partyActive]). True when the key was taken.
      */
     fun onGuidePreviewKey(event: KeyEvent, playerIdle: Boolean, partyActive: Boolean): Boolean {
-        if (_panelOpen.value) {
-            if (!guideTable.value) return false
-            if (guideOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, active = false) == SportsLiveShortPress.CONSUMED) {
-                return true
-            }
+        if (_panelOpen.value || _playerMenu.value) {
+            // The rest of the OK press that opened the guide or the menu is taken (its release never picks a row).
+            val rest = playerOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, guide = false, menu = false)
+            if (rest == SportsLivePlayerOk.CONSUMED) return true
+            if (_playerMenu.value || !guideTable.value) return false
             return guideKeyHandler?.invoke(event) ?: false
         }
-        val active = playerIdle && !partyActive && controller.session(contentId) != null && guideOkOpens()
-        return when (guideOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, active)) {
-            SportsLiveShortPress.OPEN_PANEL -> {
+        val idle = playerIdle && !partyActive && controller.session(contentId) != null
+        val menu = idle && playerOkOffered()
+        return when (playerOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, guide = idle && guideOkOpens(), menu = menu)) {
+            SportsLivePlayerOk.OPEN_GUIDE -> {
                 openPanel()
                 true
             }
-            SportsLiveShortPress.CONSUMED -> true
-            else -> false
+            // A short OK held back to tell it from a hold: the player's own OK now.
+            SportsLivePlayerOk.SHORT -> shortOk?.invoke(KeyEvent(event.downTime, event.eventTime, KeyEvent.ACTION_DOWN, event.keyCode, 0)) ?: false
+            // #218: the snapshot as the hold starts, before the menu draws; the menu on the release.
+            SportsLivePlayerOk.HOLD -> {
+                heldReport = captureReport(PLAYER_HOLD_TRIGGER)
+                true
+            }
+            SportsLivePlayerOk.MENU -> {
+                _playerMenu.value = true
+                true
+            }
+            SportsLivePlayerOk.CONSUMED -> true
+            SportsLivePlayerOk.NONE -> false
         }
     }
 
@@ -1278,6 +1324,26 @@ class SportsLiveZapViewModel internal constructor(
         report("Hold OK › More… › Report a problem (player)")
     }
 
+    /** The player menu's Report a problem (#218): the snapshot Hold OK took is saved, with the "Report #N saved" toast. */
+    fun onPlayerMenuReport() {
+        _playerMenu.value = false
+        (heldReport ?: captureReport(PLAYER_HOLD_TRIGGER)).invoke()
+        heldReport = null
+    }
+
+    /** The player menu's Choose stream (#218): the game playing's streams. */
+    fun onPlayerMenuChooseStream() {
+        _playerMenu.value = false
+        heldReport = null
+        nowPlaying?.let(::onPanelChooseStream)
+    }
+
+    /** The player menu closed with nothing picked (or Scores ahead, which acts on its own): its snapshot is dropped. */
+    fun dismissPlayerMenu() {
+        _playerMenu.value = false
+        heldReport = null
+    }
+
     override fun onCleared() {
         scoreTracker.onStop()
         nowTracker.onStop()
@@ -1363,6 +1429,9 @@ private fun onAllSports(session: SportsLiveZapSession): Boolean {
     val chip = session.panelChip ?: return session.filter == SportsLiveUiState.ALL_SPORTS_FILTER && session.tab == SportsLiveTab.LIVE_NOW
     return chip.filter == SportsLiveUiState.ALL_SPORTS_FILTER
 }
+
+/** The report trigger of Hold OK in the player (#218). */
+private const val PLAYER_HOLD_TRIGGER = "Hold OK in the player › Report a problem"
 
 /** true = next game, false = previous game, null = not a zap key or a watch party is active. */
 internal fun zapDirection(keyCode: Int, partyActive: Boolean): Boolean? = if (partyActive) null else when (keyCode) {

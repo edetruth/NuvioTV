@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import android.view.KeyEvent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -26,7 +27,7 @@ fun rememberSportsLiveOkHandler(
     val currentShowControls by rememberUpdatedState(showControls)
     val currentIsPlaying by rememberUpdatedState(isPlaying)
     val currentOpenGame by rememberUpdatedState(openGame)
-    return remember(zap, info) {
+    val handler = remember(zap, info) {
         { event: KeyEvent, partyActive: Boolean, controlsShown: Boolean ->
             if (event.action != KeyEvent.ACTION_DOWN || partyActive || !SportsLiveAlertKeys.isOk(event.keyCode)) {
                 false
@@ -66,6 +67,13 @@ fun rememberSportsLiveOkHandler(
             }
         }
     }
+    // #218: the key preview holds a live OK back to tell a short press from a hold, and replays a short one here (the
+    // player idle: no controls, no party).
+    DisposableEffect(zap, handler) {
+        zap.shortOk = { event -> handler(event, false, false) }
+        onDispose { zap.shortOk = null }
+    }
+    return handler
 }
 
 /** The player plays a live Sports & Live game or channel (a zap session, not a replay): OK never pauses it. */

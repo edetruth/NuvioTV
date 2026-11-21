@@ -334,6 +334,32 @@ internal fun BoxScope.SportsLiveZapOverlay(
         }
     }
 
+    // #218: Hold OK while watching (nothing else open): the player menu, Report a problem first (its snapshot was taken
+    // as the hold started), then Choose stream and Scores ahead.
+    val playerMenu by viewModel.playerMenu.collectAsState()
+    val playingNow = viewModel.nowPlaying
+    if (playerMenu && playingNow != null) {
+        SportsLiveCardMenu(
+            title = playingNow.displayName,
+            sides = emptyList(),
+            onToggleFollow = {},
+            onDetails = null,
+            onDismiss = viewModel::dismissPlayerMenu,
+            onReport = viewModel::onPlayerMenuReport,
+            reportFirst = true,
+            onChooseStream = viewModel::onPlayerMenuChooseStream,
+            onScoresAhead = {
+                viewModel.dismissPlayerMenu()
+                viewModel.onScoresAhead { seconds ->
+                    com.nuvio.tv.core.sportslive.SportsLiveToasts.show(
+                        com.nuvio.tv.core.sportslive.SportsLiveToastKind.INFO,
+                        scoresAheadToast.format(SportsLiveRewind.formatBehind(seconds * 1_000L))
+                    )
+                }
+            }
+        )
+    }
+
     menu?.let { shown ->
         val item = shown.item
         SportsLiveCardMenu(

@@ -350,23 +350,47 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
-    fun `with the guide closed OK opens it on its press, the rest of that press is taken, and other keys are left alone`() {
-        val ok = SportsLiveGuideOkKey()
+    fun `with the guide closed and no menu offered OK opens it on its press, the rest of that press is taken, and other keys are left alone`() {
+        val ok = SportsLivePlayerOkKey()
         val center = KeyEvent.KEYCODE_DPAD_CENTER
+        fun key(code: Int, action: Int, repeat: Int, down: Long, guide: Boolean) = ok.onKey(code, action, repeat, down, guide = guide, menu = false)
         // adb's OK: down and up within milliseconds, one down time.
-        assertEquals(SportsLiveShortPress.OPEN_PANEL, ok.onKey(center, KeyEvent.ACTION_DOWN, 0, downTime = 100L, active = true))
-        assertEquals(SportsLiveShortPress.CONSUMED, ok.onKey(center, KeyEvent.ACTION_DOWN, 1, downTime = 100L, active = false))
-        assertEquals(SportsLiveShortPress.CONSUMED, ok.onKey(center, KeyEvent.ACTION_UP, 0, downTime = 100L, active = false))
+        assertEquals(SportsLivePlayerOk.OPEN_GUIDE, key(center, KeyEvent.ACTION_DOWN, 0, 100L, guide = true))
+        assertEquals(SportsLivePlayerOk.CONSUMED, key(center, KeyEvent.ACTION_DOWN, 1, 100L, guide = false))
+        assertEquals(SportsLivePlayerOk.CONSUMED, key(center, KeyEvent.ACTION_UP, 0, 100L, guide = false))
         // Its release was the last of it: a later release is not taken.
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(center, KeyEvent.ACTION_UP, 0, downTime = 100L, active = false))
-        // A new press in the open guide is the guide's (not active): never taken here, its release neither.
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(center, KeyEvent.ACTION_DOWN, 0, downTime = 500L, active = false))
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(center, KeyEvent.ACTION_UP, 0, downTime = 500L, active = false))
+        assertEquals(SportsLivePlayerOk.NONE, key(center, KeyEvent.ACTION_UP, 0, 100L, guide = false))
+        // A new press in the open guide is the guide's: never taken here, its release neither.
+        assertEquals(SportsLivePlayerOk.NONE, key(center, KeyEvent.ACTION_DOWN, 0, 500L, guide = false))
+        assertEquals(SportsLivePlayerOk.NONE, key(center, KeyEvent.ACTION_UP, 0, 500L, guide = false))
         // Enter opens it too.
-        assertEquals(SportsLiveShortPress.OPEN_PANEL, ok.onKey(KeyEvent.KEYCODE_ENTER, KeyEvent.ACTION_DOWN, 0, downTime = 900L, active = true))
+        assertEquals(SportsLivePlayerOk.OPEN_GUIDE, key(KeyEvent.KEYCODE_ENTER, KeyEvent.ACTION_DOWN, 0, 900L, guide = true))
         // Zapping keys are never OK's.
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 0, downTime = 1_000L, active = true))
-        assertEquals(SportsLiveShortPress.NONE, ok.onKey(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.ACTION_DOWN, 0, downTime = 1_000L, active = true))
+        assertEquals(SportsLivePlayerOk.NONE, key(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 0, 1_000L, guide = true))
+        assertEquals(SportsLivePlayerOk.NONE, key(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.ACTION_DOWN, 0, 1_000L, guide = true))
+    }
+
+    @Test
+    fun `with the player menu offered a short OK acts on its release and a held one opens the menu, never both`() {
+        val ok = SportsLivePlayerOkKey()
+        val center = KeyEvent.KEYCODE_DPAD_CENTER
+        fun key(action: Int, repeat: Int, down: Long, guide: Boolean = true) = ok.onKey(center, action, repeat, down, guide = guide, menu = true)
+        // #218: short, with the guide on: it opens on the release.
+        assertEquals(SportsLivePlayerOk.CONSUMED, key(KeyEvent.ACTION_DOWN, 0, 100L))
+        assertEquals(SportsLivePlayerOk.OPEN_GUIDE, key(KeyEvent.ACTION_UP, 0, 100L))
+        // Short, with the side panel style: the player's own OK on the release.
+        assertEquals(SportsLivePlayerOk.CONSUMED, key(KeyEvent.ACTION_DOWN, 0, 200L, guide = false))
+        assertEquals(SportsLivePlayerOk.SHORT, key(KeyEvent.ACTION_UP, 0, 200L, guide = false))
+        // Held: the snapshot at the first repeat, once; the menu on the release; nothing else.
+        assertEquals(SportsLivePlayerOk.CONSUMED, key(KeyEvent.ACTION_DOWN, 0, 300L))
+        assertEquals(SportsLivePlayerOk.HOLD, key(KeyEvent.ACTION_DOWN, 1, 300L))
+        assertEquals(SportsLivePlayerOk.CONSUMED, key(KeyEvent.ACTION_DOWN, 2, 300L))
+        assertEquals(SportsLivePlayerOk.MENU, key(KeyEvent.ACTION_UP, 0, 300L))
+        // A repeat or release of another press is not taken.
+        assertEquals(SportsLivePlayerOk.NONE, key(KeyEvent.ACTION_DOWN, 1, 400L))
+        assertEquals(SportsLivePlayerOk.NONE, key(KeyEvent.ACTION_UP, 0, 400L))
+        // Neither offered: the player's, as always.
+        assertEquals(SportsLivePlayerOk.NONE, ok.onKey(center, KeyEvent.ACTION_DOWN, 0, 500L, guide = false, menu = false))
     }
 
     // ---- Idle close ----
