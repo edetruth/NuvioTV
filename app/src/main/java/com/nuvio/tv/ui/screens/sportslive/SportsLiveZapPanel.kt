@@ -93,6 +93,14 @@ internal fun filterPanelItems(items: List<SportsLiveItem>, chip: String?): List<
     if (chip == null) items else items.filter { it.matchesZapFilter(chip, SportsLiveTab.LIVE_NOW) }
 
 /**
+ * The games the "Just watched" line (J7) may stand for: the live ones the panel lists under its filter ([shown]: My
+ * sports' games, the chip's sport, ★ My teams' followed games), none [finished]. User 2026-11-21: a game watched earlier
+ * must not sit under Now playing in every category (Nice vs PSG under Basketball).
+ */
+internal fun justWatchedPool(shown: List<SportsLiveItem>, finished: Set<String>): List<SportsLiveItem> =
+    shown.filter { it.streamKey !in finished }
+
+/**
  * The session after [item] is picked in the live games panel ([panelItems], every game it has): moved
  * to it when the session lists it, otherwise a new Live now session over the panel list, keeping the
  * chip picked; null when neither has it.

@@ -536,10 +536,10 @@ class SportsLiveZapViewModel internal constructor(
                     listOf(listed?.item ?: current.list.all.firstOrNull { it.streamKey == playingKey } ?: session.current),
                     boardScores, current.mode, current.revealed, current.nowMs, current.ended, logos
                 ).firstOrNull()?.let { built -> listed?.let { built.copy(placed = it.placed, isNew = it.isNew, gone = it.gone) } ?: built }
-            // J7: the game played before this one, while it is still live, under Now playing.
+            // J7: the game played before this one, while it is still live and in the panel's filter, under Now playing.
             val backItem = SportsLiveJustWatched.shared.justWatched(
                 session.current,
-                current.list.all.filter { it.streamKey !in current.finished }
+                justWatchedPool(current.list.shown, current.finished)
             )
             val backRow = backItem?.let { item ->
                 current.rows.firstOrNull { it.item.streamKey == item.streamKey }
