@@ -72,8 +72,6 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
-import com.nuvio.tv.core.sportslive.SportsLiveSportKind
-import com.nuvio.tv.core.sportslive.SportsLiveTags
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -347,9 +345,10 @@ private fun rememberGuideRow(
 ): GuideRow {
     val strings = rememberGameStatusStrings()
     val kickoff = board.art?.let { kickoffText(it) }
-    val sport = remember(board) { board.sportTag ?: SportsLiveSportKind.plainTagOf(board.item) }
-    val tag = SportsLiveTags.short(rowTagText(board), sport)
-    val individual = sport in PANEL_INDIVIDUAL_SPORTS
+    // The one game identity (live.24): Live Now's tag and sport, read with the team lists as they load.
+    val identity = rememberGameIdentity(board)
+    val tag = identity.tag
+    val individual = identity.sport in PANEL_INDIVIDUAL_SPORTS
     val scoreFormat = stringResource(R.string.sports_live_chip_score)
     return remember(board, strings, kickoff, tag, ready, nowPlaying, gone, isNew, suffix, individual, scoreFormat) {
         guideRowOf(
@@ -497,11 +496,11 @@ private fun GuideNowPlaying(row: GuideRow, art: GameArt?, selected: Boolean) {
                     // ★ beside the followed team's own line (#212), not always the first.
                     val (firstMarks, secondMarks) = guideNowPlayingMarks(row)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        GuideTeam(logos?.first, logos?.shown == true, row.firstNames, GuideType.NowName, GUIDE_NOW_LOGO, Modifier.weight(1f, fill = false))
+                        GuideTeam(logos?.first, logos?.shown == true, row.firstNames, GuideType.NowName, GUIDE_NOW_LOGO, Modifier.weight(1f, fill = false), row.firstRank)
                         GuideMarks(firstMarks, isNew = false)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        GuideTeam(logos?.second, logos?.shown == true, row.secondNames, GuideType.NowName, GUIDE_NOW_LOGO, Modifier.weight(1f, fill = false))
+                        GuideTeam(logos?.second, logos?.shown == true, row.secondNames, GuideType.NowName, GUIDE_NOW_LOGO, Modifier.weight(1f, fill = false), row.secondRank)
                         GuideMarks(secondMarks, isNew = false)
                     }
                 }
@@ -540,9 +539,9 @@ private fun GuideTableRow(row: GuideRow, art: GameArt?, selected: Boolean) {
         when (row.kind) {
             GuideRowKind.GAME -> {
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
-                GuideTeam(logos?.first, logos?.shown == true, row.firstNames, GuideType.Name, GUIDE_LOGO, Modifier.width(GUIDE_TEAM_WIDTH))
+                GuideTeam(logos?.first, logos?.shown == true, row.firstNames, GuideType.Name, GUIDE_LOGO, Modifier.width(GUIDE_TEAM_WIDTH), row.firstRank)
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    GuideTeam(logos?.second, logos?.shown == true, row.secondNames, GuideType.Name, GUIDE_LOGO, Modifier.weight(1f, fill = false))
+                    GuideTeam(logos?.second, logos?.shown == true, row.secondNames, GuideType.Name, GUIDE_LOGO, Modifier.weight(1f, fill = false), row.secondRank)
                     GuideMarks(row.marks, row.isNew)
                 }
             }
@@ -595,10 +594,11 @@ private fun GuideRowGap() {
 
 /**
  * A team: its logo (the slot kept when there is none, so every name starts at one x) and the longest of its [names]
- * that fits ([PanelFirstFit]): the full name, the short name, then the code.
+ * that fits ([PanelFirstFit]): the full name, the short name, then the code; a ranked college team's small muted
+ * "#5" before each (live.24, [rankedName]), so the rank is never what is cut.
  */
 @Composable
-private fun GuideTeam(logo: Painter?, shown: Boolean, names: List<String>, style: TextStyle, logoSize: Dp, modifier: Modifier = Modifier) {
+private fun GuideTeam(logo: Painter?, shown: Boolean, names: List<String>, style: TextStyle, logoSize: Dp, modifier: Modifier = Modifier, rank: Int? = null) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(logoSize), contentAlignment = Alignment.Center) {
             if (logo != null) TeamLogoSlot(logo, shown, logoSize)
@@ -607,7 +607,7 @@ private fun GuideTeam(logo: Painter?, shown: Boolean, names: List<String>, style
         PanelFirstFit(modifier = Modifier.weight(1f, fill = false)) {
             names.ifEmpty { listOf("") }.forEach { name ->
                 Text(
-                    text = name,
+                    text = rankedName(name, rank, GuideType.Tag.fontSize),
                     style = SportsLiveTokens.style(style),
                     color = Colors.TextPrimary,
                     maxLines = 1,

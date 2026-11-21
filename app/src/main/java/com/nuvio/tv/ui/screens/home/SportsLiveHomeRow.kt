@@ -42,7 +42,9 @@ object SportsLiveHomeRow {
         items: List<SportsLiveItem>,
         title: String,
         scoreLabels: Map<String, String> = emptyMap(),
-        words: Words? = null
+        words: Words? = null,
+        /** Each card's tag read with its score ([tags]); without one the hero's eyebrow is read from the card alone. */
+        tags: Map<String, String> = emptyMap()
     ): CatalogRow = CatalogRow(
         addonId = ADDON_ID,
         addonName = "Sports & Live",
@@ -69,7 +71,7 @@ object SportsLiveHomeRow {
                     genres = listOf(SportsLiveHomeMeta.eyebrow(
                         // Live Now's own tag for the row (RC TV finding): its league ("EPL"), else the sport word; never a
                         // catalog's or addon's name, never a catch-all ("Other").
-                        liveNowItemTag(item, null, words.sportWord).ifEmpty { null },
+                        (tags[item.streamKey] ?: liveNowItemTag(item, null, words.sportWord)).ifEmpty { null },
                         words.liveNow
                     )),
                     description = SportsLiveHomeMeta.extraLine(item.followed, item.sourceCount, words.yourTeam, words.streams),
@@ -107,6 +109,14 @@ object SportsLiveHomeRow {
         // "● 4:12 · Q3 · IND 80–88 PHI" (V2 phase 10): the hero's status line, the abbreviations from the matched game.
         item.streamKey to SportsLiveHomeMeta.statusLine(chip, GameArt.of(item, snapshot), strings, liveFormat)
     }.toMap()
+
+    /**
+     * The Live now cards' tags by item streamKey (live.24): the game identity's, read with each game's [scores] as the
+     * card itself reads it ([rememberLiveNowCardArt]), so the hero's eyebrow says what the focused card says ("NCAAM",
+     * not "BASKETBALL").
+     */
+    fun tags(items: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, sportWord: (SportsLiveSportKind) -> String): Map<String, String> =
+        items.associate { item -> item.streamKey to liveNowItemTag(item, scores[item.streamKey], sportWord) }
 
     fun isLiveNowRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL
 

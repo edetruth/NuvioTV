@@ -27,7 +27,6 @@ import com.nuvio.tv.core.sportslive.scores.TennisColumns
 import com.nuvio.tv.core.sportslive.scores.TennisMatch
 import com.nuvio.tv.core.sportslive.scores.TennisSets
 import com.nuvio.tv.core.sportslive.scores.GameArt
-import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -322,14 +321,6 @@ internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: Sp
 /** A Just ended (#60) or "no streams yet" (#145) row is dimmed (60 %) until it has focus. */
 internal fun ScoreboardRow.dimmed(focused: Boolean): Boolean =
     (group == ScoreboardGroup.JUST_ENDED || noStreams) && !focused
-
-/**
- * The names a Scoreboard row may give [team], longest first (N1): the full name, ESPN's short name,
- * then the abbreviation. The row shows the first that fits both team lines; blanks and repeats are dropped.
- */
-internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
-    listOf(team.name, team.shortName, team.short).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-        .ifEmpty { listOf(team.name) }
 
 /**
  * The names level after a team line at level [from] did not fit: one step down, once per level, never past [max].

@@ -100,7 +100,10 @@ internal data class PanelLine(
     val live: Boolean = false,
     val tag: String = "",
     /** What tells this event or channel from another row of the same title ("Onboard", "UK"); null for none (live.20). */
-    val suffix: String? = null
+    val suffix: String? = null,
+    /** A ranked college team's rank (#137, live.24): "#5" before its name, as on every row ([GameIdentities.rankOf]). */
+    val firstRank: Int? = null,
+    val secondRank: Int? = null
 ) {
     /** Always one line: the row is [Size.PanelLine] tall. */
     val lines: Int get() = 1
@@ -145,7 +148,9 @@ internal fun panelLineOf(
             clock = clock.takeUnless { row.chip is ScoreChip.Hidden },
             period = period,
             live = status.live,
-            tag = tag
+            tag = tag,
+            firstRank = GameIdentities.rankOf(art.first, art),
+            secondRank = GameIdentities.rankOf(art.second, art)
         )
         else -> PanelLine(
             PanelLineKind.EVENT, title = panelTitleOf(row.item), clock = clock, period = period, live = status.live,
@@ -406,9 +411,10 @@ internal fun SportsLivePanelLine(
     val endedShort = stringResource(R.string.sports_live_panel_probably_ended_short)
     val kickoff = row.art?.let { kickoffText(it) }
     // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "RACING").
-    val sport = rememberRowPlainTag(row)
-    val tag = SportsLiveTags.short(rowTagText(row), sport)
-    val individual = sport in PANEL_INDIVIDUAL_SPORTS
+    // The one game identity (live.24): Live Now's tag and sport.
+    val identity = rememberGameIdentity(row)
+    val tag = identity.tag
+    val individual = identity.sport in PANEL_INDIVIDUAL_SPORTS
     val line = remember(row, strings, kickoff, tag, individual, titleSuffix) {
         panelLineOf(row, strings, kickoff, tag, titleSuffix) { side ->
             panelSideName(
@@ -575,6 +581,8 @@ private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: B
     PanelNames(
         firstChoices = firstChoices,
         secondChoices = secondChoices,
+        firstRank = line.firstRank,
+        secondRank = line.secondRank,
         firstLogo = { if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo) },
         middle = { LineMiddle(line.scores) },
         secondLogo = { if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo) },
@@ -675,7 +683,10 @@ private fun PanelNames(
     firstLogo: @Composable () -> Unit,
     middle: @Composable () -> Unit,
     secondLogo: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Ranked college teams' ranks (live.24): "#5" before every form, so the rank is never what is cut. */
+    firstRank: Int? = null,
+    secondRank: Int? = null
 ) {
     val firstForms = firstChoices.ifEmpty { listOf("") }
     val secondForms = secondChoices.ifEmpty { listOf("") }
@@ -683,9 +694,9 @@ private fun PanelNames(
     Layout(
         content = {
             Box { firstLogo() }
-            firstForms.forEach { LineText(it) }
+            firstForms.forEach { LineText(it, rank = firstRank) }
             Box { middle() }
-            secondForms.forEach { LineText(it) }
+            secondForms.forEach { LineText(it, rank = secondRank) }
             Box { secondLogo() }
         },
         modifier = modifier,
@@ -951,8 +962,21 @@ private fun RowScope.EventLine(line: PanelLine, favorite: Boolean = false) {
 private fun LineText(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = Colors.TextPrimary
+    color: Color = Colors.TextPrimary,
+    /** A ranked college team (live.24): a small muted "#5" before the name ([rankedName]). */
+    rank: Int? = null
 ) {
+    if (rank != null) {
+        Text(
+            text = rankedName(text, rank, SportsLiveTokens.Type.Tag.fontSize),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier
+        )
+        return
+    }
     Text(
         text = text,
         style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),

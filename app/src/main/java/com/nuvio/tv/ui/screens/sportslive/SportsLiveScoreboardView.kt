@@ -3,9 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.scores.TennisColumns
 import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import com.nuvio.tv.core.sportslive.scores.GameArt
-import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
-import com.nuvio.tv.core.sportslive.scores.TennisMatch
 import com.nuvio.tv.domain.model.SportsLiveItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -255,26 +253,29 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
     val scores = scoreboardScoresOf(row.chip)
     // Just ended rows are 40 dp: their names sit a little closer.
     val compact = row.group == ScoreboardGroup.JUST_ENDED
+    val identity = rememberGameIdentity(row)
     Row(
         modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LeagueTag(boardTagText(row), live)
+        LeagueTag(identity.tag, live)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
-            if (art != null) {
-                // Both lines step down together (full name, short name, abbreviation), so the two teams read alike.
-                val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
-                val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
+            // The one game identity (live.24): the same names, codes and ranks as every other surface.
+            val first = identity.first
+            val second = identity.second
+            if (art != null && first != null && second != null) {
+                // Both lines step down together (full name, short name, code), so the two teams read alike.
+                val firstChoices = first.names
+                val secondChoices = second.names
                 var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                 val tooLong: (Int) -> Unit = { from -> level = nextNameLevel(level, from, maxLevel) }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
                 val leader = row.tennis?.leader ?: (scores as? ScoreboardScores.Shown)?.leader
-                val ranks = art.takeIf { it.ranksOnRows }
-                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, leader == 0, compact, tooLong, ranks?.first?.rank)
-                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, leader == 1, compact, tooLong, ranks?.second?.rank)
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, first.followed, leader == 0, compact, tooLong, first.rank)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, second.followed, leader == 1, compact, tooLong, second.rank)
             } else {
                 // An unmatched title with no two sides: its clean name, in the same column.
                 NameText(item.displayName, bold = false, compact = compact, maxLines = 2)
@@ -287,29 +288,18 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 }
 
 /**
- * The sport [row]'s text tells ([SportsLiveSportKind.plainTagOf]) when it has no sport tag of its own, read again when
- * the team directory's lists change (a bare "Football" waits for the NFL list, release review).
- */
-@Composable
-internal fun rememberRowPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
-    val plain = rememberTextPlainTag(row)
-    return row.sportTag ?: plain
-}
-
-/**
  * The sport [row]'s text alone tells ([SportsLiveSportKind.plainTagOf]), kept per item and directory revision: a row
  * recomposes often, and a bare "Football" asks the team directory each time (release review, TV performance).
  */
 @Composable
-private fun rememberTextPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
+internal fun rememberTextPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
     val revision by TeamDirectory.shared.revision.collectAsState()
     return remember(row.item, revision) { SportsLiveSportKind.plainTagOf(row.item) }
 }
 
-/** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual). */
+/** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual): the game identity's. */
 @Composable
-internal fun boardTagText(row: ScoreboardRow): String =
-    com.nuvio.tv.core.sportslive.SportsLiveTags.short(rowTagText(row), rememberRowPlainTag(row))
+internal fun boardTagText(row: ScoreboardRow): String = rememberGameIdentity(row).tag
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
@@ -355,20 +345,15 @@ internal fun itemTagOf(
  * Live Now row ([itemTagOf], then [com.nuvio.tv.core.sportslive.SportsLiveTags.short]) with [snapshot]'s ESPN league when
  * known; [label] words a sport ("SOCCER"). Never an addon's or catalog's name.
  */
-internal fun liveNowItemTag(item: SportsLiveItem, snapshot: ScoreSnapshot?, label: (SportsLiveSportKind) -> String): String {
-    val sportTag = SportsLiveSportKind.tagOf(item)
-    val plain = SportsLiveSportKind.plainTagOf(item)
-    val tag = itemTagOf(
+internal fun liveNowItemTag(item: SportsLiveItem, snapshot: ScoreSnapshot?, label: (SportsLiveSportKind) -> String): String =
+    GameIdentities.tag(
         item = item,
         art = GameArt.of(item, snapshot),
-        sportTag = sportTag,
-        leagueTag = (ScoreChips.matchedEvent(item, snapshot)?.individual as? TennisMatch)?.takeIf { it.live }
-            ?.let { snapshot?.league?.league?.uppercase() },
-        sportLabel = sportTag?.let(label),
-        plainLabel = plain?.let(label)
+        sportTag = SportsLiveSportKind.tagOf(item),
+        leagueTag = GameIdentities.leagueTagOf(item, snapshot),
+        plain = SportsLiveSportKind.plainTagOf(item),
+        label = label
     )
-    return com.nuvio.tv.core.sportslive.SportsLiveTags.short(tag, sportTag ?: plain)
-}
 
 /**
  * A single-line row (V2 P3): not a two-sided match ("ATP 250 - Stockholm Open", "Tennis"): the sport tag, the
@@ -411,19 +396,21 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
         verticalAlignment = Alignment.CenterVertically
     ) {
         // No score column here: the tag gets the room to read at its full size, as on every other row.
-        LeagueTag(boardTagText(row), live = false)
+        val identity = rememberGameIdentity(row)
+        LeagueTag(identity.tag, live = false)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
-            if (art != null && row.twoSided) {
-                val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
-                val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
+            val first = identity.first
+            val second = identity.second
+            if (art != null && first != null && second != null) {
+                val firstChoices = first.names
+                val secondChoices = second.names
                 var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                 val tooLong: (Int) -> Unit = { from -> level = nextNameLevel(level, from, maxLevel) }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
-                val ranks = art.takeIf { it.ranksOnRows }
-                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, false, false, tooLong, ranks?.first?.rank)
-                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, false, false, tooLong, ranks?.second?.rank)
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, first.followed, false, false, tooLong, first.rank)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, second.followed, false, false, tooLong, second.rank)
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     // The event's mark in the logo slot (live.20 item 4), never an empty space.
