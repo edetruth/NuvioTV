@@ -814,6 +814,17 @@ private fun LiveGamesPanel(
                         if (it) focusedKey = null
                     }
                 }
+                // #216: All sports says so, as it lists sports the user never picked (it resets when the panel opens again).
+                if (state.chip == com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState.ALL_SPORTS_FILTER) {
+                    Text(
+                        text = stringResource(R.string.sports_live_panel_all_sports_scope),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                        color = SportsLiveTokens.Colors.TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM)
+                    )
+                }
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
                 // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first line.
                 nowRow?.let { row ->

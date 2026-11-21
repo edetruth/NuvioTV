@@ -1002,7 +1002,7 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     internal fun openPanel() {
-        val session = controller.session(contentId) ?: return
+        var session = controller.session(contentId) ?: return
         scoreTracker.onStart()
         panelKeyPressed = false
         focusedRowKey = null
@@ -1013,7 +1013,12 @@ class SportsLiveZapViewModel internal constructor(
         lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
-        // Opens on All, or on the chip picked earlier in this playback (#68).
+        // Opens on All, or on the chip picked earlier in this playback (#68); never on All sports (#216: it is for one look,
+        // and CH± go back to My sports with it).
+        if (onAllSports(session)) {
+            controller.pickChip(contentId, null)
+            session = controller.session(contentId) ?: session
+        }
         panelChip.value = openingChip(session)
         panelSession.value = session
         _panelOpen.value = true
@@ -1342,11 +1347,17 @@ private data class PanelList(
 )
 
 /**
- * The chip the panel opens on (#68): the one picked earlier in this playback, else All sports when the game was
- * started under All sports in the section (#146), else All (My sports).
+ * The chip the panel opens on (#68): the sport or My teams chip picked earlier in this playback, else All (My sports).
+ * Never All sports (#216: it stayed on after one press, listing sports the user never picked), wherever it was picked.
  */
-private fun openingChip(session: SportsLiveZapSession): String? =
-    session.panelChip?.filter ?: session.filter.takeIf { it == SportsLiveUiState.ALL_SPORTS_FILTER && session.tab == SportsLiveTab.LIVE_NOW }
+internal fun openingChip(session: SportsLiveZapSession): String? =
+    session.panelChip?.filter?.takeUnless { it == SportsLiveUiState.ALL_SPORTS_FILTER }
+
+/** The session walks All sports (picked in the panel, or the game started under it in the section): the panel resets it. */
+private fun onAllSports(session: SportsLiveZapSession): Boolean {
+    val chip = session.panelChip ?: return session.filter == SportsLiveUiState.ALL_SPORTS_FILTER && session.tab == SportsLiveTab.LIVE_NOW
+    return chip.filter == SportsLiveUiState.ALL_SPORTS_FILTER
+}
 
 /** true = next game, false = previous game, null = not a zap key or a watch party is active. */
 internal fun zapDirection(keyCode: Int, partyActive: Boolean): Boolean? = if (partyActive) null else when (keyCode) {

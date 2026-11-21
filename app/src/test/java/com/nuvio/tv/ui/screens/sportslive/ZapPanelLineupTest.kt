@@ -37,6 +37,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -134,6 +136,15 @@ class ZapPanelLineupTest {
         viewModel.closePanel()
         runCurrent()
         assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
+
+        // #216: All sports is for one look: the panel opens on My sports again, and the zaps follow it.
+        viewModel.openPanel()
+        val reopened = viewModel.panel.first { it != null }!!
+        assertNull(reopened.chip)
+        assertTrue(reopened.items.none { it.id == "c" })
+        viewModel.closePanel()
+        runCurrent()
+        assertNotEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
     }
 
     private fun TestScope.panelViewModel(

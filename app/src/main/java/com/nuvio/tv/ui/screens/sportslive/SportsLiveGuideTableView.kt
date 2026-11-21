@@ -249,6 +249,17 @@ internal fun SportsLiveGuideTable(
             )
             Spacer(modifier = Modifier.height(14.dp))
             state?.let { GuideChips(it) }
+            // #216: All sports says so (it resets when the guide opens again).
+            if (state?.chip == SportsLiveUiState.ALL_SPORTS_FILTER) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.sports_live_panel_all_sports_scope),
+                    style = SportsLiveTokens.style(GuideType.Label),
+                    color = Colors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(modifier = Modifier.height(22.dp))
             nowRow?.let { row ->
                 val board = boardOf(state, row)

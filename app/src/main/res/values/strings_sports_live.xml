@@ -794,6 +794,8 @@
     <string name="sports_live_replays_undated">Other replays</string>
     <string name="sports_live_filter_all_regions">All regions</string>
     <string name="sports_live_filter_all_sports">All sports</string>
+    <!-- #216: under the in-player panel and guide chips while All sports is picked (it resets when they open again). -->
+    <string name="sports_live_panel_all_sports_scope">All sports · showing sports you don\'t follow</string>
     <string name="sports_live_region_other">Other</string>
     <string name="sports_live_filter_title_region">Region</string>
     <string name="sports_live_filter_title_sport">Sport</string>
