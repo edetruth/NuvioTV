@@ -503,11 +503,18 @@ class SportsLiveResultsViewModel internal constructor(
         }
     }
 
-    /** More… → Reveal all for this day: every result of the day on screen, other sports' included once fetched. */
+    /**
+     * More… → Reveal all for this day: the results of the day on screen hidden by the Scores setting (Hide until
+     * focused), other sports' included once fetched, for this visit. A followed team's or a saved game's result keeps
+     * its own Reveal result: this never ends a protection (live.23 review S3).
+     */
     override fun revealDay() {
         val loaded = load.value as? ResultsLoad.Loaded ?: return
         val others = other.value?.takeIf { it.date == loaded.date }?.rows.orEmpty()
-        reveal(loaded.rows + others.filter { row -> loaded.rows.none { it.key == row.key } })
+        val state = uiState.value
+        val rows = (loaded.rows + others.filter { row -> loaded.rows.none { it.key == row.key } })
+            .filter { state.hiddenReason(it) == ResultHiddenReason.SETTING }
+        if (rows.isNotEmpty()) revealer.add(rows.map { it.key })
     }
 
     /** OK on "+ N more": the section lists all its games. */

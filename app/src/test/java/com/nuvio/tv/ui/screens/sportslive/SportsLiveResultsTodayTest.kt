@@ -493,6 +493,37 @@ class SportsLiveResultsTodayTest {
     }
 
     @Test
+    fun `Reveal all for this day leaves a followed team's result hidden and its protection on`() = runTest {
+        // Review S3: Reveal all used to end your teams' and saved games' protection for good, everywhere.
+        settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        val celtics = aFinal.home
+        followed.value = listOf(FollowedTeam(celtics.displayName.orEmpty(), "Basketball", espnId = celtics.id, league = "basketball/nba"))
+        val stored = MutableStateFlow<List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>>(emptyList())
+        val protection = kotlinx.coroutines.flow.combine(stored, followed) { games, teams ->
+            com.nuvio.tv.core.sportslive.scores.SpoilerProtection(games = games, myTeams = true, followed = teams, nowMs = base + 60_000L)
+        }
+        every { prefs.spoilerProtection } returns protection
+        io.mockk.coEvery { prefs.updateProtectedGames(any()) } answers {
+            val change = firstArg<(List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>) -> List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>>()
+            stored.value = change(stored.value)
+        }
+        todayHasFinal(true)
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        val row = vm.uiState.value.items.filterIsInstance<ResultListItem.Row>().single().row
+        assertTrue(row.followed)
+        assertFalse(vm.uiState.value.showsScore(row))
+        vm.revealDay()
+        advanceTimeBy(1_000); runCurrent()
+        assertFalse(vm.uiState.value.showsScore(row))
+        assertTrue(stored.value.isEmpty())
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
     fun `Scores Off makes no request at all`() = runTest {
         settings.value = ScoreSettings(mode = ScoresMode.OFF)
         val vm = viewModel()
