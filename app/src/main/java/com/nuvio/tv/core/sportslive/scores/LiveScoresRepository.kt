@@ -155,6 +155,15 @@ class LiveScoresRepository internal constructor(
      */
     val scores: StateFlow<Map<String, ScoreSnapshot>> = output.asStateFlow()
 
+    private val watchedOutput = MutableStateFlow<Map<String, ScoreSnapshot>>(emptyMap())
+
+    /**
+     * The games being watched (Q18) as [scores] would serve them unmasked: their delayed score and clock, by card key,
+     * stamped as [scores] are. Only for the in-player guide's Now playing (#213), drawn beside the picture; every other
+     * surface keeps [scores]' masked reading.
+     */
+    val watchedScores: StateFlow<Map<String, ScoreSnapshot>> = watchedOutput.asStateFlow()
+
     private val protectionState = MutableStateFlow(SpoilerProtection())
 
     /** The active profile's spoiler protection (#151), as the scores were last stamped with it. */
@@ -307,6 +316,7 @@ class LiveScoresRepository internal constructor(
                 lock.withLock {
                     protectionState.value = latest
                     if (output.value.isNotEmpty()) output.value = latest.stampAll(output.value)
+                    if (watchedOutput.value.isNotEmpty()) watchedOutput.value = latest.stampAll(watchedOutput.value)
                 }
             }
         }
@@ -321,6 +331,7 @@ class LiveScoresRepository internal constructor(
                         raw = emptyMap()
                         nextRelease.value = null
                         output.value = emptyMap()
+                        watchedOutput.value = emptyMap()
                     }
                 }
             }
@@ -911,6 +922,7 @@ class LiveScoresRepository internal constructor(
             scoreDelay.apply(emptyMap(), 0L, now())
             nextRelease.value = null
             output.value = emptyMap()
+            watchedOutput.value = emptyMap()
             return
         }
         // Read against the clock now, so a protection's 7 days run out without a settings change.
@@ -919,7 +931,9 @@ class LiveScoresRepository internal constructor(
         // The games being watched: no score and no clock from us; the broadcast shows its own (Q18).
         val watched = ScoreWatch.watchedEvents(playing, shown)
         val served = if (watched.isEmpty()) shown else shown.mapValues { (_, event) -> if (event.eventId in watched) ScoreWatch.masked(event) else event }
-        output.value = protectionState.value.copy(nowMs = now()).stampAll(served)
+        val stamping = protectionState.value.copy(nowMs = now())
+        output.value = stamping.stampAll(served)
+        watchedOutput.value = if (watched.isEmpty()) emptyMap() else stamping.stampAll(shown.filterValues { it.eventId in watched })
         nextRelease.value = scoreDelay.nextChangeAt
     }
 

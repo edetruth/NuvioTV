@@ -1304,6 +1304,25 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
         assertFalse(repo.scores.value.getValue(key).watched)
+        assertTrue(repo.watchedScores.value.isEmpty())
+    }
+
+    @Test
+    fun `the game being watched keeps its delayed score and clock for the guide's Now playing only`() = runTest {
+        val (repo, key) = undatedLiveGame({ 50 })
+        watching.watch("player", setOf(key), "addon-a")
+        runCurrent()
+        // #213: past the playing delay, Now playing reads the score and clock; every other surface stays masked.
+        advanceTimeBy(ScoreWatch.MIN_PLAYING_DELAY_MS); runCurrent()
+        val forNowPlaying = repo.watchedScores.value.getValue(key)
+        assertEquals(50, forNowPlaying.homeScore)
+        assertFalse(forNowPlaying.watched)
+        assertEquals(repo.scores.value.getValue(key).eventId, forNowPlaying.eventId)
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        assertTrue(repo.scores.value.getValue(key).watched)
+        watching.stop("player")
+        runCurrent()
+        assertTrue(repo.watchedScores.value.isEmpty())
     }
 
     @Test

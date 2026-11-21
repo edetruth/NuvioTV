@@ -458,17 +458,22 @@ class SportsLiveZapViewModel internal constructor(
      * Nothing is shown before the kept logo map is read (I3): known teams never show as letters first; nor
      * before the Scores setting is read. Its games are tracked for scores while it shows.
      */
-    val panel: StateFlow<SportsLiveZapPanelState?> = combine(lineup, panelSession) { current, session ->
+    val panel: StateFlow<SportsLiveZapPanelState?> = combine(lineup, panelSession, liveScores.watchedScores) { current, session, watchedScores ->
         if (session == null || current == null || !current.logosLoaded) {
             null
         } else {
             val playingKey = session.current.streamKey
+            // #213: the game playing is served with no score or clock (Q18); Now playing, beside the picture, shows its
+            // delayed score and clock as the rows do. Only its own row reads it: its other copies are never drawn.
+            val watchedScore = watchedScores[playingKey]?.takeIf { current.mode != ScoresMode.OFF }
+            val boardScores = if (watchedScore == null) current.boardScores else current.boardScores + (playingKey to watchedScore)
+            val listed = current.rows.firstOrNull { it.item.streamKey == playingKey }
             // #140: Now playing is pinned above the list; a game the chip or My sports leaves out gets its own row.
-            val nowRow = current.rows.firstOrNull { it.item.streamKey == playingKey }
+            val nowRow = listed?.takeIf { watchedScore == null }
                 ?: groupPanelRows(
-                    listOf(current.list.all.firstOrNull { it.streamKey == playingKey } ?: session.current),
-                    current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, logos
-                ).firstOrNull()
+                    listOf(listed?.item ?: current.list.all.firstOrNull { it.streamKey == playingKey } ?: session.current),
+                    boardScores, current.mode, current.revealed, current.nowMs, current.ended, logos
+                ).firstOrNull()?.let { built -> listed?.let { built.copy(placed = it.placed, isNew = it.isNew, gone = it.gone) } ?: built }
             val drawn = if (nowRow == null || nowRow in current.rows) current.rows else current.rows + nowRow
             val state = SportsLiveZapPanelState(
                 rows = current.rows,
@@ -481,7 +486,7 @@ class SportsLiveZapViewModel internal constructor(
                     current.list.scoped.filterNot { it.streamKey in current.finished }
                 ),
                 // #83: each row drawn as the Scoreboard draws it.
-                boards = panelBoards(drawn, current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
+                boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
                     .associateBy { it.board.item.streamKey },
                 boxScores = current.rows
                     .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }
