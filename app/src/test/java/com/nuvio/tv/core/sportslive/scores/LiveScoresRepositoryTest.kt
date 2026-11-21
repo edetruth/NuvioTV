@@ -1641,7 +1641,8 @@ class LiveScoresRepositoryTest {
         com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
         // The men's game is late that evening, out of the card's reach, but on its ESPN day.
         val mens = wslGame.copy(
-            eventId = "epl-liv-che", league = EspnLeague("soccer", "eng.1"), leagueName = "Premier League", startMs = ms("2026-11-22T03:00:00Z"),
+            eventId = "epl-liv-che", league = EspnLeague("soccer", "eng.1"), leagueSlug = "eng.1", leagueName = "Premier League",
+            startMs = ms("2026-11-22T03:00:00Z"),
             state = ScoreState.PRE, home = club("liv", "Liverpool", "LIV"), away = club("che", "Chelsea", "CHE")
         )
         provider.respond = { feed ->

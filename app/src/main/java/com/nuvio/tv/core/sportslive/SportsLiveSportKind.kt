@@ -53,6 +53,17 @@ enum class SportsLiveSportKind {
                 """j1 league|k league|serie b\b|coppa italia|dfb pokal"""
         ).map { (kind, pattern) -> kind to Regex(pattern) }
 
+        /**
+         * True when [text] names a sport with no [SportsLiveSportKind] ("Volleyball", "Beach Volleyball", "Handball",
+         * "Netball"): a known sport all the same, so a card tagged so is never placed in another sport by its teams.
+         */
+        fun namesOtherSport(text: String?): Boolean = text != null && OTHER_SPORT.containsMatchIn(fold(text))
+
+        private val OTHER_SPORT = Regex(
+            """volley|handball|balonmano|handebol|pallamano|netball|lacrosse|water ?polo|futsal|badminton|table tennis|""" +
+                """squash|bowls|athletics|swimming"""
+        )
+
         /** The sport [text] names ("American Football" → FOOTBALL, "Football" → SOCCER); null when none. */
         fun of(text: String?): SportsLiveSportKind? = text?.let(sportOf::invoke)
 
