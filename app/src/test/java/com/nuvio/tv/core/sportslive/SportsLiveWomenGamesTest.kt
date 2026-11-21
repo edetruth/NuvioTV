@@ -163,4 +163,46 @@ class SportsLiveWomenGamesTest {
         advanceTimeBy(5_000L); runCurrent()
         assertEquals(1, signals.size)
     }
+
+    @Test
+    fun `matches and women's marks go when their sources leave the lists or ESPN's day changes`() {
+        // Review B3/B4: kept until restart, a re-used source key merged or lost its star by an old game.
+        val noon = java.time.Instant.parse("2026-11-21T17:00:00Z").toEpochMilli()
+        val events = SportsLiveMatchedEvents()
+        val women = SportsLiveWomenGames()
+        events.record(listOf("a|1", "b|1"), wslGame, noon)
+        women.record(listOf("a|1", "b|1"), noon)
+        assertTrue(events.sameEvent("a|1", "b|1"))
+        // The newest load lists "a|1" only.
+        events.retain(setOf("a|1"))
+        women.retain(setOf("a|1"))
+        assertFalse(events.sameEvent("a|1", "b|1"))
+        assertNull(events.leagueOf("b|1"))
+        assertTrue(women.has("a|1"))
+        assertFalse(women.has("b|1"))
+        // The next ESPN (US Eastern) day: yesterday's matches and marks are gone.
+        val tomorrow = noon + 24 * 60 * 60_000L
+        events.record(listOf("c|1"), wslGame.copy(eventId = "next"), tomorrow)
+        women.record(listOf("c|1"), tomorrow)
+        assertNull(events.leagueOf("a|1"))
+        assertFalse(women.has("a|1"))
+        assertTrue(women.has("c|1"))
+    }
+
+    @Test
+    fun `a new load forgets the matches of sources it no longer lists`() {
+        val events = SportsLiveMatchedEvents()
+        val women = SportsLiveWomenGames()
+        events.record(listOf(eplCopy.streamKey, plainCopy.streamKey), wslGame)
+        women.record(listOf(eplCopy.streamKey, plainCopy.streamKey))
+        val buckets = SportsLiveSharedBuckets(matchedEvents = events, womenGames = women)
+        val load = com.nuvio.tv.domain.repository.SportsLiveLoad(
+            items = listOf(eplCopy), failures = emptyList(), loadedAtMs = 0L, claimedKeys = setOf(eplCopy.catalogKey)
+        )
+        buckets.tab(load, setOf(eplCopy.catalogKey), listOf("a", "b", "c"), com.nuvio.tv.domain.model.SportsLiveTab.LIVE_NOW, 0L, stamp = 0L)
+        assertTrue(events.leagueOf(eplCopy.streamKey) != null)
+        assertNull(events.leagueOf(plainCopy.streamKey))
+        assertTrue(women.has(eplCopy.streamKey))
+        assertFalse(women.has(plainCopy.streamKey))
+    }
 }

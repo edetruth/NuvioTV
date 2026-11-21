@@ -827,8 +827,8 @@ class LiveScoresRepository internal constructor(
             // Copies matched to one ESPN game merge on the next list build; a women's soccer game is never a men's
             // club's "my team" (live.23, TV report #10).
             val sources = listOf(card.key) + entry.liveKeys
-            SportsLiveMatchedEvents.shared.record(sources, match)
-            if (match.league.sport == "soccer" && ScoreMatcher.isWomenGame(match)) SportsLiveWomenGames.shared.record(sources)
+            SportsLiveMatchedEvents.shared.record(sources, match, nowMs)
+            if (match.league.sport == "soccer" && ScoreMatcher.isWomenGame(match)) SportsLiveWomenGames.shared.record(sources, nowMs)
             if (match.league == EspnLeagueMap.SOCCER_ALL && match.leagueSlug != EspnLeagueMap.SOCCER_ALL.league &&
                 SLUG.matches(match.leagueSlug) && card.key !in remembered
             ) {

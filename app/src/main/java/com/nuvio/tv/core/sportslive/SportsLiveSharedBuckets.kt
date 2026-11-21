@@ -23,7 +23,10 @@ import kotlinx.coroutines.flow.merge
 class SportsLiveSharedBuckets(
     private val maxAgeMs: Long = MAX_AGE_MS,
     // Where unplaced rows are recorded (live.20); null: nowhere (tests).
-    private val unidentified: SportsLiveUnidentified? = null
+    private val unidentified: SportsLiveUnidentified? = null,
+    // The score matches and women's-game marks to forget once their sources leave the lists (live.23 review B3/B4).
+    private val matchedEvents: SportsLiveMatchedEvents? = null,
+    private val womenGames: SportsLiveWomenGames? = null
 ) {
 
     private class Entry(
@@ -81,6 +84,12 @@ class SportsLiveSharedBuckets(
             }
         }
         val raw = load.items.filter { it.catalogKey in claimedKeys }
+        // A new load: the matches and marks of sources it no longer lists go (live.23 review B3/B4).
+        if (entry?.load !== load && (matchedEvents != null || womenGames != null)) {
+            val listed = load.items.mapTo(HashSet()) { it.streamKey }
+            matchedEvents?.retain(listed)
+            womenGames?.retain(listed)
+        }
         return Entry(load, claimedKeys, addonOrder, stamp, nowMs, raw, SportsLiveItemBucketer.reclock(raw, nowMs)).also { entry = it }
     }
 
@@ -89,7 +98,11 @@ class SportsLiveSharedBuckets(
         const val MAX_AGE_MS = 5 * 60_000L
 
         /** The one the app shares. */
-        val shared = SportsLiveSharedBuckets(unidentified = SportsLiveUnidentified.shared)
+        val shared = SportsLiveSharedBuckets(
+            unidentified = SportsLiveUnidentified.shared,
+            matchedEvents = SportsLiveMatchedEvents.shared,
+            womenGames = SportsLiveWomenGames.shared
+        )
 
         /**
          * The team directory's, identities' and ESPN starts' ([SportsLiveEspnStarts]) revisions as one number: copies

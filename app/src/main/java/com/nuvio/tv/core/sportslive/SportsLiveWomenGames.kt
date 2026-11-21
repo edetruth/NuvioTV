@@ -3,23 +3,32 @@ package com.nuvio.tv.core.sportslive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.LocalDate
 
 /**
  * Source keys ([com.nuvio.tv.domain.model.SportsLiveItem.streamKey]) of games an addon filed under a men's league that
  * ESPN shows are its women's league game (live.23: "Liverpool vs Chelsea · Premier League" was the WSL game). Filled by
  * the score repository when a card matches its women's counterpart; read when lists mark followed games, so a followed
  * men's club never makes its women's game "my team". Bounded, in memory, thread-safe.
+ *
+ * A mark lasts while its source is listed ([retain], live.23 review B4) and until ESPN's day changes, so a source key an
+ * addon re-uses for a men's game later never stays "women's".
  */
 class SportsLiveWomenGames {
 
     private val keys = LinkedHashSet<String>()
     private val revisionFlow = MutableStateFlow(0L)
+    /** ESPN's (US Eastern) day of the marks kept. */
+    private var day: LocalDate? = null
 
     /** Bumped when a game becomes a women's game: lists mark followed games again ([SportsLiveSharedBuckets.matchChanges]). */
     val revision: StateFlow<Long> = revisionFlow.asStateFlow()
 
     @Synchronized
-    fun record(sourceKeys: Collection<String>) {
+    fun record(sourceKeys: Collection<String>, nowMs: Long = System.currentTimeMillis()) {
+        val today = SportsLiveMatchedEvents.espnDay(nowMs)
+        if (day != today) keys.clear()
+        day = today
         var changed = false
         for (key in sourceKeys) {
             if (key in keys) continue
@@ -32,6 +41,12 @@ class SportsLiveWomenGames {
 
     @Synchronized
     fun has(key: String): Boolean = key in keys
+
+    /** Forgets the marks of sources no longer listed: [listed] are the source keys of the newest load. */
+    @Synchronized
+    fun retain(listed: Set<String>) {
+        keys.retainAll(listed)
+    }
 
     @Synchronized
     internal fun clear() = keys.clear()
