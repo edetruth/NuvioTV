@@ -109,8 +109,11 @@ enum class SportsLiveSportKind {
          * franchises or A sides ([SportsLiveCricket]), two rugby clubs ([SportsLiveRugby]), or a wrestling show's name
          * alone ("Raw", "Dynamite"). Null when none tells: the card's sport stays unknown (sport null or a non-sport tag
          * like "OTHER"), which is the "unknown sport" signal the lists read ([SportsLiveUnidentified.isUntagged]).
+         * A card whose sport word, genres or title name a sport with no kind ([namesOtherSport]: "Volleyball", "Netball",
+         * "Handball") is that sport: never placed in another by its teams (live.23 review A1).
          */
         fun fromTeamsOrTitle(item: SportsLiveItem): SportsLiveSportKind? = when {
+            (listOf(item.sport, item.meta.name) + item.meta.genres).any(::namesOtherSport) -> null
             SportsLiveCricket.isCricketGame(item.teams) -> CRICKET
             SportsLiveRugby.isRugbyGame(item.teams) -> RUGBY
             fold(SportsLiveDisplayText.name(item.meta.name)) in WRESTLING_TITLES -> WRESTLING

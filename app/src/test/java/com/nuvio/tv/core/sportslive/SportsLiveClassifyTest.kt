@@ -165,6 +165,17 @@ class SportsLiveClassifyTest {
     }
 
     @Test
+    fun `a volleyball, netball or handball game of two cricket sides is never tagged cricket`() {
+        // Review A1: a sport with no kind of its own still says the game is not cricket.
+        assertNull(SportsLiveSportKind.tagOf(item("India vs Pakistan").copy(sport = "Volleyball")))
+        assertNull(SportsLiveSportKind.tagOf(item("Sri Lanka vs Singapore", genres = listOf("Netball"))))
+        assertNull(SportsLiveSportKind.tagOf(item("India A vs Pakistan A").copy(sport = "Handball")))
+        assertNull(SportsLiveMySportsScope.kindOf(item("India A vs Pakistan A").copy(sport = "Handball")))
+        // Named nothing else: an A side pair is cricket.
+        assertEquals(SportsLiveSportKind.CRICKET, SportsLiveSportKind.tagOf(item("India A vs Pakistan A")))
+    }
+
+    @Test
     fun `two plain nations with nothing else stay untagged unless one is a mainly-cricket nation`() {
         // Coordinator decision 2026-11-21: a pair of cricket nations with a mainly-cricket one (Bangladesh) is cricket,
         // unless ESPN's soccer or field-hockey feeds list that pairing that day (SportsLiveOtherSportPairs).
