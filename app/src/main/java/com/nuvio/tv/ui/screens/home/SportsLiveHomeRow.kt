@@ -106,6 +106,8 @@ object SportsLiveHomeRow {
     ): Map<String, String> = if (mode != ScoresMode.SHOW) emptyMap() else items.mapNotNull { item ->
         val snapshot = scores[item.streamKey]
         val chip = ScoreChips.of(item, snapshot, mode, revealed = false) ?: return@mapNotNull null
+        // l24 polish P1: the hero reads "… · Live now" over this line, so a final never gives one (the card leaves the row).
+        if (chip is ScoreChip.Final) return@mapNotNull null
         // "● 4:12 · Q3 · IND 80–88 PHI" (V2 phase 10): the hero's status line, the abbreviations from the matched game.
         item.streamKey to SportsLiveHomeMeta.statusLine(
             chip, GameArt.of(item, snapshot), strings, liveFormat,

@@ -247,9 +247,10 @@ private fun SportsLiveHomeScores(
     val sportWord = com.nuvio.tv.ui.screens.sportslive.rememberSportWord()
     val tags = remember(items, current, sportWord) { SportsLiveHomeRow.tags(items, current, sportWord) }
     LaunchedEffect(labels, tags) { viewModel.setLiveNowScoreLabels(labels, tags) }
-    // Games ESPN confirmed final (#60, past the grace) leave the row; an estimate never drops one.
+    // Games ESPN shows final leave the row (#60), at once (l24 polish P1: in the postgame grace too, so a final never
+    // reads "Live now"); an estimate never drops one.
     val clockMs by rememberSportsLiveClockMs()
-    val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.confirmedEndedKeys(items, current, clockMs) }
+    val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.finalKeys(items, current, clockMs) }
     LaunchedEffect(ended) { viewModel.setLiveNowEnded(ended) }
 }
 

@@ -56,23 +56,35 @@ internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>, ta
     if (labels == liveNowScoreLabels && tags == liveNowTags) return
     liveNowScoreLabels = labels
     liveNowTags = tags
+    replaceLiveNowRow()
+}
+
+/** Rebuilds the Live now row in place from [HomeUiState.liveNowShown]; with none left it leaves Home's rows. */
+private fun HomeViewModel.replaceLiveNowRow() {
     _uiState.update { state ->
         val index = state.homeRows.indexOfFirst { it is HomeRow.Catalog && SportsLiveHomeRow.isLiveNowRow(it.row.addonBaseUrl) }
-        if (index < 0 || state.liveNowShown.isEmpty()) return@update state
-        val old = (state.homeRows[index] as HomeRow.Catalog).row
+        if (index < 0) return@update state
         val rows = state.homeRows.toMutableList()
-        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, labels, sportsLiveHomeWords(), tags))
+        if (state.liveNowShown.isEmpty()) {
+            rows.removeAt(index)
+        } else {
+            val old = (state.homeRows[index] as HomeRow.Catalog).row
+            rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, liveNowScoreLabels, sportsLiveHomeWords(), liveNowTags))
+        }
         state.copy(homeRows = rows)
     }
 }
 
 /**
  * The Live now cards whose game is over (#60, worked out by Home's screen from the live scores and the
- * clock): they leave the row. The rows are rebuilt only when the set changes.
+ * clock): they leave the row. The rows are rebuilt only when the set changes. l24 polish P1: the Live now row is
+ * rebuilt in place at once, never after the debounced full rebuild (seconds while Home's catalogs load at a cold
+ * start), so a finished game kept from the last session never shows under "Live now" with its final score.
  */
 internal fun HomeViewModel.setLiveNowEnded(keys: Set<String>) {
     if (keys == _uiState.value.liveNowEnded) return
     _uiState.update { it.copy(liveNowEnded = keys) }
+    replaceLiveNowRow()
     if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
 }
 

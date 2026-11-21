@@ -111,6 +111,7 @@ class SportsLiveHomeRowTest {
     @Test
     fun `two addons sharing an item id keep their own score labels`() {
         val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+            .let { it.copy(state = ScoreState.IN, isFinal = false, clockText = "Q3 4:12", home = it.home.copy(score = 88), away = it.away.copy(score = 80)) }
         fun game(addon: String) = item("same").let {
             it.copy(addonId = addon, meta = it.meta.copy(name = "Pacers at 76ers"), teams = SportsLiveTeams.parse("Pacers at 76ers"))
         }
@@ -119,9 +120,18 @@ class SportsLiveHomeRowTest {
         val strings = ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
         // Only the first addon's card is matched.
         val labels = SportsLiveHomeRow.scoreLabels(listOf(first, second), mapOf(first.streamKey to event), ScoresMode.SHOW, strings, "● %1\$s")
-        assertEquals(mapOf(first.streamKey to "Final 124–131"), labels)
+        assertEquals(mapOf(first.streamKey to "● Q3 4:12 · IND 80–88 PHI"), labels)
         val row = SportsLiveHomeRow.build(listOf(first, second), "Live now", labels)
-        assertEquals(listOf("Final 124–131", null), row.items.map { it.releaseInfo })
+        assertEquals(listOf("● Q3 4:12 · IND 80–88 PHI", null), row.items.map { it.releaseInfo })
+    }
+
+    @Test
+    fun `a final never gives a live now card a label, so the hero never reads Live now over a final score`() {
+        val final = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val game = item("g").let { it.copy(meta = it.meta.copy(name = "Pacers at 76ers"), teams = SportsLiveTeams.parse("Pacers at 76ers")) }
+        val strings = ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
+        val labels = SportsLiveHomeRow.scoreLabels(listOf(game), mapOf(game.streamKey to final), ScoresMode.SHOW, strings, "● %1\$s")
+        assertEquals(emptyMap<String, String>(), labels)
     }
 
     companion object {

@@ -69,6 +69,25 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `Home's final keys take an ESPN final at once, in the grace too, never a live game or an estimate`() {
+        val games = SportsLiveEndedGames()
+        val card = item()
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "o", startMs = START - 10 * HOUR)
+        val end = START + 2 * HOUR
+        // A cold start from the kept scores: the final is first seen with no play seen before.
+        assertEquals(setOf(card.streamKey), games.finalKeys(listOf(card, overdue), mapOf(card.streamKey to pacersFinal), end))
+        // Seen in play, then final: in the section's grace, already out of Home's Live now row.
+        val watched = SportsLiveEndedGames()
+        watched.verdict(card, live(pacersFinal), START + HOUR)
+        val finals = mapOf(card.streamKey to pacersFinal)
+        assertTrue(watched.confirmedEndedKeys(listOf(card), finals, end + MINUTE).isEmpty())
+        assertEquals(setOf(card.streamKey), watched.finalKeys(listOf(card), finals, end + MINUTE))
+        val running = SportsLiveEndedGames()
+        assertTrue(running.finalKeys(listOf(card), mapOf(card.streamKey to live(pacersFinal)), end).isEmpty())
+        assertTrue(running.finalKeys(listOf(overdue), emptyMap(), START + 8 * HOUR).isEmpty())
+    }
+
+    @Test
     fun `a game ESPN shows live never moves, however long past its estimated length`() {
         val games = SportsLiveEndedGames()
         val card = item()

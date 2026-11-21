@@ -211,6 +211,16 @@ class SportsLiveEndedGames {
         }
 
     /**
+     * The card keys of [items] ESPN shows final at [nowMs], in the postgame grace too: what Home's Live now row leaves
+     * out (l24 polish P1), so a finished game never reads "Live now" over its final score, not even at a cold start
+     * from the scores kept on disk. Never an estimate.
+     */
+    fun finalKeys(items: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long): Set<String> =
+        items.mapNotNullTo(HashSet()) { item ->
+            item.streamKey.takeIf { verdict(item, scores[item.streamKey], nowMs, canEstimate = false)?.signal == EndedSignal.FINAL }
+        }
+
+    /**
      * Restores the final times kept from an earlier run ([saved], as [decodeTimes] reads them) and from
      * then on hands every change to [onChange] (the store's save). A time already seen this run keeps
      * the earlier of the two. Times older than [FORGET_AFTER_MS] at [nowMs] are dropped.
