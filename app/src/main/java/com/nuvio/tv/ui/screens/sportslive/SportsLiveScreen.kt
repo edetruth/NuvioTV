@@ -22,7 +22,6 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,7 +34,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,7 +51,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -151,7 +148,8 @@ fun SportsLiveScreen(
     /** Opens the Team page (#62) on the request just put in [SportsLiveTeamRequests]. */
     onOpenTeam: () -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // #143: the state as drawn; a focus move alone (the selected id) does not recompose the section again.
+    val uiState by viewModel.screenState.collectAsStateWithLifecycle()
     val channelBrowse by viewModel.channelBrowse.collectAsStateWithLifecycle()
     // While Sports Live shows, the mini player stays docked in its stage on every tab (#157).
     val miniSection = remember { Any() }
@@ -287,7 +285,14 @@ fun SportsLiveScreen(
     }
     val playing = preview as? SportsLivePreviewState.Playing
     LaunchedEffect(playing?.item?.previewKey, playing?.stream) {
-        if (playing == null) previewPlayer.release() else previewPlayer.play(playing.item, playing.stream)
+        // #143, as the panel (#167): a focus move only stops the preview, keeping the player; releasing and building
+        // one per move held the main thread. It is released when the screen pauses or leaves, or hands its stream over,
+        // and at once when the mini player took over (it wants the decoder now).
+        when {
+            playing != null -> previewPlayer.play(playing.item, playing.stream)
+            SportsLiveMiniPlayers.controller.isActive -> previewPlayer.release()
+            else -> previewPlayer.stop()
+        }
     }
 
     // A live game or channel plays its best stream (#56); other cards keep their behaviour.
@@ -654,7 +659,9 @@ private fun SportsLiveContent(
     val watchFocusRequester = remember { FocusRequester() }
     // One requester per card, keyed like the LazyColumn: two addons can list the same meta id, and a
     // requester shared by two cards sends focus to whichever of them attached last.
-    val cardFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    // Held by the list's actions (#115), which its rows reach them through.
+    val listActions = remember { SportsLiveListActions() }
+    val cardFocusRequesters = listActions.requesters
     fun cardFocusRequester(item: SportsLiveItem) = cardFocusRequesters.getOrPut(item.listKey) { FocusRequester() }
     // A game listed twice on Upcoming (#137: in its day's Games to watch and in its time slot): its pick row has its own.
     fun pickFocusRequester(item: SportsLiveItem) = cardFocusRequesters.getOrPut("pick|${item.listKey}") { FocusRequester() }
@@ -715,11 +722,16 @@ private fun SportsLiveContent(
     val channelBarShown = channelViewKey != null && channelBrowse != null
     val channelBarFocusRequester = remember { FocusRequester() }
     var channelBarHasFocus by remember { mutableStateOf(false) }
-    val channelLetters = if (channelBarShown && channelBrowse?.kind != SportsLiveChannelBrowseKind.POPULAR) {
-        items.map { boardRowOf[it.listKey]?.section.orEmpty() }
-    } else {
-        null
+    // Once per list (#143): a new list each composition made every browse row's key handler new.
+    val channelLetters = remember(channelBarShown, channelBrowse?.kind, items, boardRowOf) {
+        if (channelBarShown && channelBrowse?.kind != SportsLiveChannelBrowseKind.POPULAR) {
+            items.map { boardRowOf[it.listKey]?.section.orEmpty() }
+        } else {
+            null
+        }
     }
+    // The rows' keys, once per list (#143).
+    val itemKeys = remember(items) { items.map { it.listKey } }
     var countriesOpen by remember { mutableStateOf(false) }
     var findOpen by remember { mutableStateOf(false) }
     // Opening or leaving the browse view puts focus on the new list's first row once its board is drawn.
@@ -739,7 +751,7 @@ private fun SportsLiveContent(
     // F23: the focused row, else the mini player's game, else the first row (the first live game); never the view
     // model's selection alone, which a tab focus once reset to the addon's first item.
     val stageKey = sportsLiveStageKey(
-        keys = items.map { it.listKey },
+        keys = itemKeys,
         focusedKey = focusedCardKey.takeIf { listedFilterKey == filterKey },
         miniKey = playingKey ?: lastMiniKey
     )
@@ -764,7 +776,7 @@ private fun SportsLiveContent(
     }
     // Where a move into the list lands: the focused card while on screen, else the first card on
     // screen. Read from the layout, so Down never aims at a card scrolled away (which traps focus).
-    val currentItemKeys by rememberUpdatedState(items.map { it.listKey })
+    val currentItemKeys by rememberUpdatedState(itemKeys)
     val currentAgenda by rememberUpdatedState(agenda)
     val entryKey by remember(listState) {
         derivedStateOf {
@@ -1492,7 +1504,6 @@ private fun SportsLiveContent(
     // A refresh or an ended verdict can drop the focused card. The selection (and with it the pane
     // and preview) moves to the card that took its place, never staying on a card no longer listed,
     // and focus follows when it was in the list, instead of falling onto the filter chips.
-    val itemKeys = remember(items) { items.map { it.listKey } }
     var shownListing by remember { mutableStateOf(filterKey to itemKeys) }
     // Read while composing the change, before the removed card's focus is gone.
     val listFocusedAtChange = remember(itemKeys) { listHasFocus }
@@ -1553,6 +1564,26 @@ private fun SportsLiveContent(
         }
     }
 
+    // The list's actions (#115, #143): set as the section composes, read when a row is pressed or focused, so the rows'
+    // own lambdas stay the same across focus moves and score polls.
+    listActions.onClick = { item -> cardClick(item) }
+    listActions.onLongClick = { item -> cardLongClick(item) }
+    listActions.onFocus = { item -> cardFocused(item) }
+    listActions.onListFocus = { focused ->
+        listHasFocus = focused
+        if (!focused) onCardFocus(null)
+    }
+    listActions.onJump = { target ->
+        items.getOrNull(target)?.let { targetItem ->
+            liveNowScope.launch {
+                scrollToCard(targetItem.listKey, target, onlyIfHidden = false)
+                withFrameNanos { }
+                runCatching { cardFocusRequester(targetItem).requestFocus() }
+            }
+        }
+    }
+    listActions.onOpenBrowse = openChannelBrowse
+    listActions.onShowAllSports = { onSelectFilter(SportsLiveUiState.ALL_SPORTS_FILTER) }
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
     val currentOnPreviewKey by rememberUpdatedState(onPreviewKey)
     Column(
@@ -1793,6 +1824,10 @@ private fun SportsLiveContent(
                 // A team folder lists its videos on the detail page; a replay plays at once, spoiler-safe.
                 if (item.apiType == "series") onOpenDetail(item) else onWatchReplay(item, replayTitleOf(boardRowOf[item.listKey] ?: selectedRow))
             }
+            // The row with the stage's bar and OK's action, read outside the list (#143): a focus move in the list leaves
+            // its rows alone.
+            val replayStageKey = selected.listKey.takeIf { paneHasFocus }
+            val currentWatchReplay by rememberUpdatedState(watchReplay)
             Row(modifier = Modifier.fillMaxSize()) {
                 Column(
                     modifier = Modifier
@@ -1829,8 +1864,8 @@ private fun SportsLiveContent(
                                             item(key = item.listKey) {
                                                 SportsLiveScoreboardRow(
                                                     row = row,
-                                                    selected = paneHasFocus && item.listKey == selected.listKey,
-                                                    onClick = { watchReplay(item) },
+                                                    selected = item.listKey == replayStageKey,
+                                                    onClick = { currentWatchReplay(item) },
                                                     onLongClick = { cardLongClick(item) },
                                                     onFocus = { cardFocused(item) },
                                                     menuOpen = item.listKey == menuCardKey,
@@ -1919,6 +1954,8 @@ private fun SportsLiveContent(
                     }
                 }
             }
+            // The row with the stage's bar, read outside the list (#143): a focus move in the list leaves its rows alone.
+            val agendaStageKey = selected.listKey.takeIf { paneHasFocus || dayBarHasFocus }
             Row(modifier = Modifier.fillMaxSize()) {
                 Column(
                     modifier = Modifier
@@ -1977,7 +2014,7 @@ private fun SportsLiveContent(
                                                     SportsLiveScoreboardRow(
                                                         row = game.row,
                                                         // The row the stage shows keeps its bar while focus is on the stage or the day tabs.
-                                                        selected = (paneHasFocus || dayBarHasFocus) && item.listKey == selected.listKey,
+                                                        selected = item.listKey == agendaStageKey,
                                                         onClick = { agendaOk(item, game.row) },
                                                         onLongClick = { cardLongClick(item) },
                                                         onFocus = { cardFocused(item) },
@@ -2066,137 +2103,59 @@ private fun SportsLiveContent(
                         // The strip keeps its own room for the focus ring (BUG10): its cards line up with the rows.
                         YourTeamsStrip(stageShown = true, modifier = Modifier.padding(start = LIST_FOCUS_ROOM - YOUR_TEAMS_FOCUS_ROOM, bottom = NuvioTheme.spacing.xs))
                     }
-                    val groupCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().groupingBy { it.group }.eachCount() }
                     // Channels (P4): one list, under a header per region while more than one region shows.
                     val channelsTab = uiState.selectedTab == SportsLiveTab.CHANNELS
-                    val sectionCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().mapNotNull { it.section }.groupingBy { it }.eachCount() }
+                    // What the list shows, once per board, tab and filter (#115).
+                    val listModel = remember(shownBoard, channelsTab, channelBrowse, uiState.selectedFilter, uiState.hiddenByMySports, otherRegionLabel, channelLetters) {
+                        val rows = shownBoard?.rows.orEmpty()
+                        val sectionCounts = rows.mapNotNull { it.section }.groupingBy { it }.eachCount()
+                        SportsLiveListModel(
+                            items = items,
+                            rowOf = boardRowOf,
+                            channelsTab = channelsTab,
+                            groupCounts = rows.groupingBy { it.group }.eachCount(),
+                            sectionCounts = sectionCounts,
+                            // Phase 1: on the tab's own view with no favorite listed, the Favorites heading and its hint lead.
+                            favoritesHint = channelBrowse == null && uiState.selectedFilter == null &&
+                                SportsLiveChannelFavorites.FAVORITES !in sectionCounts,
+                            otherRegionLabel = otherRegionLabel,
+                            channelEntries = channelSummary?.takeIf { channelsTab && channelBrowse == null && uiState.selectedFilter == null && !it.fallback },
+                            hiddenByMySports = if (channelsTab) 0 else uiState.hiddenByMySports,
+                            channelLetters = channelLetters
+                        )
+                    }
+                    // The rows' marks (#143): equal from one D-pad move to the next while the list holds focus.
+                    val remindedKeys = remember(items, reminders, uiState.nowMs) {
+                        items.asSequence().filter { remindedCard(it) }.map { it.listKey }.toSet()
+                    }
+                    val readyKeys = remember(items, rowReadyOf, uiState.nowMs) {
+                        items.asSequence().filter(rowReadyOf).map { it.listKey }.toSet()
+                    }
+                    val rowMarks = SportsLiveRowMarks(
+                        stageKey = selected.listKey.takeIf { paneHasFocus && stripStageKey == null },
+                        menuKey = menuCardKey,
+                        watchingKey = nowPlaying?.listKey,
+                        reminded = remindedKeys,
+                        replays = replayKeys,
+                        ready = readyKeys
+                    )
+                    val railLetters = channelLetters?.takeIf { listHasFocus }?.let { letters ->
+                        SportsLiveChannelList.around(letters, items.indexOfFirst { it.listKey == focusedCardKey })
+                    }
                     // Recreated per tab and filter, so its focus restorer never brings back another list's card.
                     key(filterKey) {
                         SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
-                          // Channels phase 2: the browse list keeps room at its right edge for its letter.
-                          Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .sportsLiveFadingEdges(listState, LIST_FADE)
-                                    .onFocusChanged {
-                                        listHasFocus = it.hasFocus
-                                        if (!it.hasFocus) onCardFocus(null)
-                                    }
-                                    .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
-                                    .dpadRepeatThrottle(),
-                                contentPadding = PaddingValues(
-                                    start = LIST_FOCUS_ROOM,
-                                    end = LIST_FOCUS_ROOM + if (channelLetters != null) LETTER_RAIL_WIDTH else 0.dp,
-                                    top = LIST_FOCUS_ROOM,
-                                    bottom = LIST_FOCUS_ROOM
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
-                            ) {
-                                itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
-                                    val boardRow = boardRowOf[item.listKey] ?: return@itemsIndexed
-                                    // The group's heading rides on its first row, so list indices stay the rows' own.
-                                    Column {
-                                        if (channelsTab) {
-                                            val section = boardRow.section
-                                            // Phase 1: on the tab's own view with no favorite listed, the Favorites heading and its hint lead.
-                                            val favoritesHint = channelBrowse == null && uiState.selectedFilter == null &&
-                                                SportsLiveChannelFavorites.FAVORITES !in sectionCounts
-                                            if (index == 0 && favoritesHint) SportsLiveFavoritesHint()
-                                            // Phase 2: every section is headed (Favorites, Recent, Popular now, a letter); no region headings.
-                                            if (section != null && (index == 0 || boardRowOf[items[index - 1].listKey]?.section != section)) {
-                                                SportsLiveSectionHeader(channelSectionLabel(section, otherRegionLabel), sectionCounts[section] ?: 0)
-                                            }
-                                        } else if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
-                                            SportsLiveScoreboardHeader(boardRow.group, groupCounts[boardRow.group] ?: 0)
-                                        }
-                                        SportsLiveScoreboardRow(
-                                            row = boardRow,
-                                            // Focus in the stage: the selected row keeps a white left bar (not while it shows a strip card).
-                                            selected = paneHasFocus && stripStageKey == null && item.listKey == selected.listKey,
-                                            onClick = { cardClick(item) },
-                                            onLongClick = { cardLongClick(item) },
-                                            onFocus = { cardFocused(item) },
-                                            menuOpen = item.listKey == menuCardKey,
-                                            reminded = remindedCard(item),
-                                            hasReplay = item.streamKey in replayKeys,
-                                            watching = item.listKey == nowPlaying?.listKey,
-                                            ready = rowReadyOf(item),
-                                            modifier = Modifier
-                                                .focusRequester(cardFocusRequester(item))
-                                                .focusProperties {
-                                                    right = watchFocusRequester
-                                                    if (index == 0) up = aboveListFocusRequester
-                                                }
-                                                .onPreviewKeyEvent { event ->
-                                                    // Channels phase 2: ◂ ▸ on a browse row jump to the previous or next letter.
-                                                    val letters = channelLetters ?: return@onPreviewKeyEvent false
-                                                    val native = event.nativeKeyEvent
-                                                    val forward = when (native.keyCode) {
-                                                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
-                                                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> false
-                                                        else -> return@onPreviewKeyEvent false
-                                                    }
-                                                    if (native.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent true
-                                                    val target = SportsLiveChannelList.jump(letters, index, forward) ?: return@onPreviewKeyEvent true
-                                                    val targetItem = items.getOrNull(target) ?: return@onPreviewKeyEvent true
-                                                    liveNowScope.launch {
-                                                        scrollToCard(targetItem.listKey, target, onlyIfHidden = false)
-                                                        withFrameNanos { }
-                                                        runCatching { cardFocusRequester(targetItem).requestFocus() }
-                                                    }
-                                                    true
-                                                }
-                                        )
-                                    }
-                                }
-                                // Channels phase 2: the entry rows under the tab's sections open the browse view.
-                                val summary = channelSummary
-                                if (channelsTab && channelBrowse == null && uiState.selectedFilter == null && summary != null && !summary.fallback) {
-                                    if (summary.popularTotal > summary.popularShown) {
-                                        item(key = CHANNEL_POPULAR_KEY) {
-                                            SportsLiveChannelEntryLine(
-                                                text = stringResource(R.string.sports_live_channels_see_all_popular, summary.popularTotal),
-                                                onClick = { openChannelBrowse(SportsLiveChannelBrowseKind.POPULAR) },
-                                                modifier = Modifier.focusProperties { right = watchFocusRequester }
-                                            )
-                                        }
-                                    }
-                                    item(key = CHANNEL_SPORTS_KEY) {
-                                        SportsLiveChannelEntryLine(
-                                            text = stringResource(R.string.sports_live_channels_sports_entry, summary.sports),
-                                            onClick = { openChannelBrowse(SportsLiveChannelBrowseKind.SPORTS) },
-                                            modifier = Modifier.focusProperties { right = watchFocusRequester }
-                                        )
-                                    }
-                                    item(key = CHANNEL_ALL_KEY) {
-                                        SportsLiveChannelEntryLine(
-                                            text = stringResource(R.string.sports_live_channels_all_entry, summary.all),
-                                            onClick = { openChannelBrowse(SportsLiveChannelBrowseKind.ALL) },
-                                            modifier = Modifier.focusProperties { right = watchFocusRequester }
-                                        )
-                                    }
-                                }
-                                // #167: under My sports, the games it hides are one press away (OK: All sports).
-                                if (uiState.hiddenByMySports > 0 && !channelsTab) {
-                                    item(key = HIDDEN_BY_MY_SPORTS_KEY) {
-                                        SportsLiveHiddenByMySportsLine(
-                                            count = uiState.hiddenByMySports,
-                                            onClick = { onSelectFilter(SportsLiveUiState.ALL_SPORTS_FILTER) },
-                                            height = SportsLiveTokens.Size.PanelLine + 8.dp,
-                                            modifier = Modifier.focusProperties { right = watchFocusRequester }
-                                        )
-                                    }
-                                }
-                            }
-                            val railLetters = channelLetters?.takeIf { listHasFocus }?.let { letters ->
-                                SportsLiveChannelList.around(letters, items.indexOfFirst { it.listKey == focusedCardKey })
-                            }
-                            if (railLetters != null) {
-                                SportsLiveChannelLetterRail(railLetters, Modifier.align(Alignment.CenterEnd))
-                            }
-                          }
+                            SportsLiveBoardList(
+                                model = listModel,
+                                marks = rowMarks,
+                                actions = listActions,
+                                listState = listState,
+                                restoreFocusRequester = entryCardFocusRequester ?: selectedCardFocusRequester,
+                                upFocusRequester = aboveListFocusRequester,
+                                stageFocusRequester = watchFocusRequester,
+                                railLetters = railLetters,
+                                modifier = Modifier.weight(1f).fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -2281,10 +2240,6 @@ private fun SportsLiveContent(
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
 
-/** Channels phase 2: the entry rows' list keys (never a channel's `addonId|id`). */
-private const val CHANNEL_POPULAR_KEY = "\u0000channels:popular"
-private const val CHANNEL_SPORTS_KEY = "\u0000channels:sports"
-private const val CHANNEL_ALL_KEY = "\u0000channels:all"
 private const val RETURN_FOCUS_FRAMES = 10
 
 /** How long Back's return waits for the strip card it left from to be listed again (BUG9). */
@@ -2301,10 +2256,10 @@ private const val RETURN_ROWS_ON_SCREEN = 4
 private val YOUR_TEAMS_FOCUS_ROOM = 4.dp
 
 /** Room round the list's rows for the focus ring and lift, so neither is clipped. */
-private val LIST_FOCUS_ROOM = 8.dp
+internal val LIST_FOCUS_ROOM = 8.dp
 
 /** The list's scroll edges fade over 80 px (V2) instead of a hard cut. */
-private val LIST_FADE = 40.dp
+internal val LIST_FADE = 40.dp
 
 /** Focus keeps about two rows from the list's top and bottom edges (V2). */
 private val LIST_EDGE_KEEP = 100.dp
@@ -2322,4 +2277,4 @@ internal fun agendaKeyOf(keyCode: Int): AgendaKey? = when (keyCode) {
 }
 
 /** Unique within a tab: the bucketer keeps one copy of an item per addon. */
-private val SportsLiveItem.listKey: String get() = "$addonId|$id"
+internal val SportsLiveItem.listKey: String get() = "$addonId|$id"

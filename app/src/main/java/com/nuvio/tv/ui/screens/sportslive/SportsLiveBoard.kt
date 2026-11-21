@@ -185,3 +185,26 @@ data class SportsLiveBoard(
         }
     }
 }
+
+/**
+ * This board with [previous]'s row instances wherever a row did not change (#143). A score poll builds every row of the
+ * tab again, and the list tells a row's change by its instance, so keeping the equal ones lets only the rows whose game
+ * moved draw again. Only for the same tab and filter; the Agenda's rows are left as built.
+ */
+internal fun SportsLiveBoard.reusingRows(previous: SportsLiveBoard?): SportsLiveBoard {
+    val built = rows ?: return this
+    val before = previous?.takeIf { it.tab == tab && it.filter == filter }?.rows
+    if (before.isNullOrEmpty()) return this
+    val beforeByKey = HashMap<String, ScoreboardRow>(before.size * 2)
+    before.forEach { beforeByKey[it.item.streamKey] = it }
+    var reused = 0
+    val rows = built.map { row ->
+        val kept = beforeByKey[row.item.streamKey]?.takeIf { it == row }
+        if (kept != null) reused++
+        kept ?: row
+    }
+    if (reused == 0) return this
+    // Nothing changed at all: the same list too.
+    val sameList = rows.size == before.size && rows.indices.all { rows[it] === before[it] }
+    return copy(rows = if (sameList) before else rows)
+}

@@ -212,6 +212,51 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `a focus move alone gives the screen no new state, a tab change does`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = false, startMs = NOW + HOUR)))
+        val viewModel = newViewModel(SportsLiveListCache.NONE)
+        val drawn = mutableListOf<SportsLiveUiState>()
+        backgroundScope.launch { viewModel.screenState.collect { drawn += it } }
+        runCurrent()
+        val shown = viewModel.screenState.value
+        val emissions = drawn.size
+        viewModel.selectItem("b")
+        runCurrent()
+        assertEquals("b", viewModel.uiState.value.selectedItemId)
+        assertSame(shown, viewModel.screenState.value)
+        assertEquals(emissions, drawn.size)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(SportsLiveTab.UPCOMING, viewModel.screenState.value.selectedTab)
+        assertTrue(drawn.size > emissions)
+    }
+
+    @Test
+    fun `a board built again keeps the rows that did not change, so only changed rows draw again`() {
+        val a = item("a", isLive = true)
+        val b = item("b", isLive = true)
+        fun row(item: SportsLiveItem, followed: Boolean = false) = ScoreboardRow(
+            item = item, group = ScoreboardGroup.LIVE, chip = null, art = null,
+            firstFollowed = followed, secondFollowed = false, probablyEnded = false
+        )
+        fun board(filter: String?, vararg rows: ScoreboardRow) =
+            SportsLiveBoard(SportsLiveTab.LIVE_NOW, filter, rows.map { it.item }, rows.toList(), emptyMap())
+        val before = board(null, row(a), row(b))
+
+        // One row changed (a follow): the other keeps its instance.
+        val changed = board(null, row(a), row(b, followed = true)).reusingRows(before)
+        assertSame(before.rows!![0], changed.rows!![0])
+        assertTrue(changed.rows!![1].firstFollowed)
+        // Nothing changed: the same list.
+        assertSame(before.rows, board(null, row(a), row(b)).reusingRows(before).rows)
+        // Another filter (or tab) reuses nothing.
+        val other = board("Basketball", row(a))
+        assertSame(other, other.reusingRows(before))
+        assertSame(other, other.reusingRows(null))
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)
