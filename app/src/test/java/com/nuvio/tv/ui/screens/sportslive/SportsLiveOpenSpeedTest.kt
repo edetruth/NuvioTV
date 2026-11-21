@@ -363,6 +363,32 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `a Watch later save or Hide my teams' scores drops every kept board`() {
+        // Review S2: a kept board built before a game was protected drew its score on the next tab switch.
+        val cache = SportsLiveBoardCache()
+        val inputs = SportsLiveBoardInputs(
+            tab = SportsLiveTab.LIVE_NOW, filter = null, items = listOf(item("a", isLive = true)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = NOW, logoRevision = 0
+        )
+        val board = SportsLiveBoard(SportsLiveTab.LIVE_NOW, null, emptyList(), emptyList(), emptyMap())
+        val none = com.nuvio.tv.core.sportslive.scores.SpoilerProtection(nowMs = NOW)
+        cache.scopeTo(SportsLiveBoardCache.ProtectionScope.of(none))
+        cache.put(inputs, board)
+        // Only the clock moved: the same scope, the board stays.
+        cache.scopeTo(SportsLiveBoardCache.ProtectionScope.of(none.copy(nowMs = NOW + MINUTE)))
+        assertSame(board, cache.shownFor(inputs))
+        // A game saved for later: dropped.
+        val saved = none.copy(games = listOf(com.nuvio.tv.core.sportslive.scores.ProtectedGame("e1", "A", "B", NOW, savedAtMs = NOW)))
+        cache.scopeTo(SportsLiveBoardCache.ProtectionScope.of(saved))
+        assertNull(cache.shownFor(inputs))
+        // Hide my teams' scores turned on: dropped.
+        cache.put(inputs, board)
+        cache.scopeTo(SportsLiveBoardCache.ProtectionScope.of(saved.copy(myTeams = true)))
+        assertNull(cache.shownFor(inputs))
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)

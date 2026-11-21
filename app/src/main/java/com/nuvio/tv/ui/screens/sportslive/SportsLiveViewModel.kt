@@ -184,7 +184,9 @@ class SportsLiveViewModel internal constructor(
     /** #143: Upcoming's ESPN scoreboards asked for ahead ([LiveScoresRepository.prefetchUpcoming]); the requests made. */
     private val prefetchUpcomingScores: suspend () -> Int = { 0 },
     /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
-    unmatchedScores: Flow<Set<String>> = flowOf(emptySet())
+    unmatchedScores: Flow<Set<String>> = flowOf(emptySet()),
+    /** The spoiler protection the kept boards depend on (live.23 review S2). */
+    protectionScope: Flow<SportsLiveBoardCache.ProtectionScope> = flowOf(SportsLiveBoardCache.ProtectionScope.NONE)
 ) : ViewModel() {
 
     @Inject
@@ -262,7 +264,8 @@ class SportsLiveViewModel internal constructor(
         addMySport = { sport -> prefs.updateMySports { if (it.isDefault || sport in it.effectiveSports) it else it.toggleSport(sport) } },
         scoresSettleMs = SCORES_SETTLE_MS,
         prefetchUpcomingScores = liveScores::prefetchUpcoming,
-        unmatchedScores = liveScores.unmatched
+        unmatchedScores = liveScores.unmatched,
+        protectionScope = liveScores.protection.map(SportsLiveBoardCache.ProtectionScope::of).distinctUntilChanged()
     )
 
     private data class Selection(
@@ -666,12 +669,19 @@ class SportsLiveViewModel internal constructor(
             boardScores.firstThenCoalesce(scoresSettleMs),
             repo.followedTeams,
             logoRevision,
-            combine(standings, combine(channelLists, unmatchedScores, ::Pair), combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), ::Triple)
-        ) { state, scores, followed, revision, (books, listsAndUnmatched, profile) ->
+            combine(
+                standings,
+                combine(channelLists, unmatchedScores, ::Pair),
+                combine(combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), protectionScope, ::Pair),
+                ::Triple
+            )
+        ) { state, scores, followed, revision, (books, listsAndUnmatched, profileAndProtection) ->
             val (lists, unmatched) = listsAndUnmatched
-            // #143: another profile or setting drops every tab's kept board before any is shown again.
+            // #143: another profile or setting drops every tab's kept board before any is shown again; so does a
+            // spoiler protection change (a Watch later save, Hide my teams' scores; review S2).
+            val (profile, protection) = profileAndProtection
             val (claimed, sports, hidden) = profile
-            boardCache.scopeTo(SportsLiveBoardScope(claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode))
+            boardCache.scopeTo(SportsLiveBoardScope(claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode, protection))
             val tab = state.selectedTab
             val live = tab == SportsLiveTab.LIVE_NOW
             SportsLiveBoardInputs(
@@ -1491,5 +1501,6 @@ private data class SportsLiveBoardScope(
     val mySports: MySports,
     val hidden: Set<String>,
     val followed: List<FollowedTeam>,
-    val mode: ScoresMode?
+    val mode: ScoresMode?,
+    val protection: SportsLiveBoardCache.ProtectionScope
 )
