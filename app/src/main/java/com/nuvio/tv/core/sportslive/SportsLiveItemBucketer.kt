@@ -89,11 +89,11 @@ object SportsLiveItemBucketer {
     private fun describeWithSignal(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): Pair<SportsLiveItem, Boolean> {
         val catalog = claimed.catalog
         // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game; so is a broadcaster's
-        // channel without a suffix ("Fox Footy", live.20), a title naming nothing but a stream ("Streams") and one naming
-        // nothing but a sport or tour ("Tennis", "ATP": a rolling feed, TV report #5).
+        // channel without a suffix ("Fox Footy", live.20) and a title naming nothing but a stream ("Streams"). One naming
+        // nothing but a sport or tour ("Tennis", "ATP") is no channel (H, live.23): Live now folds it under Other events.
         val network = claimed.kind == SportsLiveKind.EVENTS &&
             (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name) ||
-                isPlaceholderChannel(rawMeta, catalog.name) || isSportFeed(rawMeta))
+                isPlaceholderChannel(rawMeta, catalog.name))
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
         val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
@@ -186,14 +186,6 @@ object SportsLiveItemBucketer {
     }
 
     private val CHANNEL_WORDS = setOf("network", "channel", "tv")
-
-    /**
-     * True when [meta] is titled by a sport or a tour alone ([SportsLiveBroadcasters.isSportFeed]: "Tennis", "ATP") and its
-     * description names no fuller event ("ATP v Stockholm Open" makes it that event's feed): a rolling feed, a channel.
-     */
-    internal fun isSportFeed(meta: MetaPreview): Boolean =
-        SportsLiveBroadcasters.isSportFeed(meta.name) &&
-            SportsLiveDisplayText.fullName(meta.name, meta.description) == SportsLiveDisplayText.name(meta.name)
 
     /**
      * True when [meta] is titled as nothing but a stream ("Streams", "Live Stream 2", live.20) and names no sport in its
@@ -355,7 +347,8 @@ object SportsLiveItemBucketer {
         items: List<SportsLiveItem>,
         addonOrder: List<String>,
         nowMs: Long = System.currentTimeMillis(),
-        directory: TeamDirectory = TeamDirectory.shared
+        directory: TeamDirectory = TeamDirectory.shared,
+        matchedEvents: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared
     ): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
         // Each copy's id view ([idView]: league inference and #168 identity) once per merge, not four times per pair
@@ -386,6 +379,7 @@ object SportsLiveItemBucketer {
             )
             for (item in ordered) {
                 var byIds = false
+                var byEvent = false
                 val index = primaries.indexOfFirst { primary ->
                     // A source already pooled under this primary is not pooled twice (no list built per pair).
                     if (primary.streamKey == item.streamKey ||
@@ -393,11 +387,16 @@ object SportsLiveItemBucketer {
                     ) {
                         return@indexOfFirst false
                     }
+                    // Matched to one ESPN game (live.23, TV report #10): one game, whatever the addons call it.
+                    if (matchedEvents.sameEvent(primary.streamKey, item.streamKey)) {
+                        byEvent = true
+                        return@indexOfFirst true
+                    }
                     // ESPN team ids decide first; names only for teams the directory does not know.
                     val viewA = view(primary)
                     val viewB = view(item)
                     when (idVerdictOfViews(viewA, viewB, directory)) {
-                        IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs)) {
+                        IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs, directory)) {
                             null -> true.also { byIds = true }
                             // A copy of unknown sport: its teams were read in the other copy's league; names decide.
                             SPORT_UNKNOWN -> sameGame(primary, item, nowMs)
@@ -414,6 +413,13 @@ object SportsLiveItemBucketer {
                     alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
                     folded += item.streamKey
                     if (byIds && !namesLeague(primary) && namesLeague(item)) presentedBy.putIfAbsent(primary.streamKey, item)
+                    // The copy naming the matched game's league ("WSL", not "Premier League") is the one shown.
+                    if (byEvent) {
+                        val league = matchedEvents.leagueOf(item.streamKey)
+                        if (league != null && league in EspnLeagueMap.leaguesFor(item) && league !in EspnLeagueMap.leaguesFor(primary)) {
+                            presentedBy[primary.streamKey] = item
+                        }
+                    }
                     if (timedStart(primary) == null && timedStart(item) != null) {
                         adoptedStart[primary.streamKey] = item
                         primaries[index] = primary.copy(startMs = item.startMs, startHasTimeOfDay = true)
@@ -571,12 +577,12 @@ object SportsLiveItemBucketer {
         b: SportsLiveItem,
         nowMs: Long,
         directory: TeamDirectory = TeamDirectory.shared
-    ): String? = idGuardFailureOfViews(idView(a, directory), idView(b, directory), nowMs)
+    ): String? = idGuardFailureOfViews(idView(a, directory), idView(b, directory), nowMs, directory)
 
     // [idGuardFailure] on two copies' views ([idView]) already built.
-    private fun idGuardFailureOfViews(viewA: SportsLiveItem, viewB: SportsLiveItem, nowMs: Long): String? {
+    private fun idGuardFailureOfViews(viewA: SportsLiveItem, viewB: SportsLiveItem, nowMs: Long, directory: TeamDirectory): String? {
         if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return SPORT_UNKNOWN
-        if (!sportsAgree(viewA, viewB)) return "sport mismatch"
+        if (!sportsAgree(viewA, viewB) && !footballWordMixUp(viewA, viewB, directory)) return "sport mismatch"
         // A women's copy is never one game with a copy that does not say women's; "NCAAM" and an unmarked "College"
         // copy of the same two schools are (live.18: the sweep's most common split).
         val womenA = EspnLeagueMap.saysWomen(viewA) || saysWomenCompetition(viewA)
@@ -585,6 +591,31 @@ object SportsLiveItemBucketer {
         if (!sameTime(viewA, viewB, nowMs)) return "start window"
         return null
     }
+
+    /**
+     * True when one copy is filed under soccer ("Soccer", "⚽ Football") and the other under American football, and all
+     * four sides resolve to the same two teams of the NFL or college football list (#215.3, live.23 nightly: an addon
+     * files college football as "Soccer"; "Clemson Tigers vs Duke Blue Devils" stayed a second, unscored row beside
+     * "Duke vs Clemson", NCAAF). One game: the merged row shows the copy that names its league. No other sport pair.
+     */
+    private fun footballWordMixUp(viewA: SportsLiveItem, viewB: SportsLiveItem, directory: TeamDirectory): Boolean {
+        val kindsA = SportsLiveTeams.knownSport(viewA)?.let(::sportKinds) ?: return false
+        val kindsB = SportsLiveTeams.knownSport(viewB)?.let(::sportKinds) ?: return false
+        val soccerOnly = setOf(SportsLiveSportKind.SOCCER)
+        val american = SportsLiveSportKind.FOOTBALL
+        if (!((kindsA == soccerOnly && american in kindsB) || (kindsB == soccerOnly && american in kindsA))) return false
+        val teamsA = viewA.teams ?: return false
+        val teamsB = viewB.teams ?: return false
+        return AMERICAN_FOOTBALL_LISTS.any { league ->
+            val a1 = directory.teamId(league, teamsA.home) ?: return@any false
+            val a2 = directory.teamId(league, teamsA.away) ?: return@any false
+            val b1 = directory.teamId(league, teamsB.home) ?: return@any false
+            val b2 = directory.teamId(league, teamsB.away) ?: return@any false
+            a1 != a2 && ((a1 == b1 && a2 == b2) || (a1 == b2 && a2 == b1))
+        }
+    }
+
+    private val AMERICAN_FOOTBALL_LISTS = listOf(EspnLeagueMap.NFL, EspnLeagueMap.COLLEGE_FOOTBALL)
 
     /**
      * Why [a] and [b] are not one row (the debug duplicate log, live.18), or null when [merge] would join them:
@@ -672,9 +703,24 @@ object SportsLiveItemBucketer {
         val sportA = SportsLiveTeams.knownSport(a) ?: return true
         val sportB = SportsLiveTeams.knownSport(b) ?: return true
         if (sportA.equals(sportB, ignoreCase = true)) return true
+        // Volleyball and handball (live.23): known sports, so a copy of one never agrees with another sport's copy.
+        val otherA = otherSportOf(sportA)
+        val otherB = otherSportOf(sportB)
+        if (otherA != null || otherB != null) return otherA == otherB
         val kindsA = sportKinds(sportA) ?: return true
         val kindsB = sportKinds(sportB) ?: return true
         return kindsA.any { it in kindsB }
+    }
+
+    // Sports with no [SportsLiveSportKind] that still tell two copies apart, by a word of their sport ("Beach Volleyball").
+    private val OTHER_SPORTS = listOf(
+        "volleyball" to Regex("""volley"""),
+        "handball" to Regex("""handball|balonmano|handebol|pallamano""")
+    )
+
+    private fun otherSportOf(sport: String): String? {
+        val text = SportsLiveTeams.foldAccents(sport).lowercase()
+        return OTHER_SPORTS.firstOrNull { (_, regex) -> regex.containsMatchIn(text) }?.first
     }
 
     private val bareFootball = Regex("""^\s*football\s*$""", RegexOption.IGNORE_CASE)
@@ -771,14 +817,28 @@ object SportsLiveItemBucketer {
         return pinned + rest
     }
 
-    /** Marks the items a followed team plays in, keeping the order (Channels). */
-    fun markFollowed(items: List<SportsLiveItem>, followed: List<FollowedTeam>): List<SportsLiveItem> =
+    /**
+     * Marks the items a followed team plays in, keeping the order (Channels). A game ESPN showed is a women's game
+     * ([SportsLiveWomenGames], live.23) is followed only through a women's team.
+     */
+    fun markFollowed(
+        items: List<SportsLiveItem>,
+        followed: List<FollowedTeam>,
+        womenGames: SportsLiveWomenGames = SportsLiveWomenGames.shared
+    ): List<SportsLiveItem> =
         if (followed.isEmpty()) {
             items
         } else {
             // A merged game is followed when any of its sources is (their sports may differ).
             items.map { item ->
-                val isFollowed = followed.any { SportsLiveTeams.followsAnySource(it, item) }
+                // ESPN matched a women's game, or a soccer copy says women's ("WSL", "Liverpool W", live.23).
+                val women = (listOf(item) + item.alternates).any { copy ->
+                    womenGames.has(copy.streamKey) || (SportsLiveMySportsScope.kindOf(copy) == SportsLiveSportKind.SOCCER &&
+                        (EspnLeagueMap.saysWomen(copy) || saysWomenCompetition(copy)))
+                }
+                val isFollowed = followed.any { team ->
+                    SportsLiveTeams.followsAnySource(team, item) && (!women || SportsLiveTeams.followsWomen(team))
+                }
                 if (isFollowed) item.copy(followed = true) else item
             }
         }

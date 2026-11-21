@@ -1067,7 +1067,9 @@ internal fun SportsLiveHiddenByMySportsLine(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
-    height: androidx.compose.ui.unit.Dp = Size.PanelLine
+    height: androidx.compose.ui.unit.Dp = Size.PanelLine,
+    /** More live's row (user 2026-11-21): "More live: 4 Racing · 3 Cricket ›" in place of the count's words. */
+    summary: List<Pair<String, Int>> = emptyList()
 ) {
     val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
     Surface(
@@ -1090,7 +1092,7 @@ internal fun SportsLiveHiddenByMySportsLine(
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
             Text(
-                text = stringResource(R.string.sports_live_hidden_by_my_sports, count),
+                text = if (summary.isNotEmpty()) moreLiveRowText(summary) else stringResource(R.string.sports_live_hidden_by_my_sports, count),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

@@ -5,7 +5,9 @@ import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveLoad
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -94,14 +96,29 @@ class SportsLiveSharedBuckets(
          * merge differently once they move, and a game ESPN schedules later leaves Live now.
          */
         fun currentStamp(): Long =
-            (TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value) * 31 +
-                SportsLiveEspnStarts.shared.revision.value
+            ((TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value) * 31 +
+                SportsLiveEspnStarts.shared.revision.value) * 31 +
+                SportsLiveMatchedEvents.shared.revision.value * 17 + SportsLiveWomenGames.shared.revision.value
 
         /** Every change of [currentStamp] after the current one: what lists are built again on. */
         fun stampChanges(): Flow<Long> = merge(
             TeamDirectory.shared.revision.drop(1).map { it.toLong() },
             TeamIdentityBook.shared.revision.drop(1).map { it.toLong() },
-            SportsLiveEspnStarts.shared.revision.drop(1).map { it.toLong() }
+            SportsLiveEspnStarts.shared.revision.drop(1).map { it.toLong() },
+            matchChanges()
         )
+
+        /** How long score matches are gathered before one rebuild (a poll matches many cards at once). */
+        const val MATCH_DEBOUNCE_MS = 1_000L
+
+        /**
+         * One signal per burst of score matches that merge copies or mark women's games (live.23, TV report #10), after
+         * [MATCH_DEBOUNCE_MS] of quiet: the lists are built again once, not once per card.
+         */
+        @OptIn(FlowPreview::class)
+        fun matchChanges(
+            events: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared,
+            women: SportsLiveWomenGames = SportsLiveWomenGames.shared
+        ): Flow<Long> = merge(events.revision.drop(1), women.revision.drop(1)).debounce(MATCH_DEBOUNCE_MS)
     }
 }

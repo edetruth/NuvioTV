@@ -37,6 +37,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import org.junit.Test
 
 /**
@@ -104,7 +105,7 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
-    fun `the last list shows at once, marked with its time, while the first load runs`() = runTest {
+    fun `Live now waits for the first load up to the hold, then shows the last list, and later rows wait for N new`() = runTest {
         val savedAt = NOW - 20 * MINUTE
         // On the device: no addon URL (it comes from the claimed catalog).
         val saved = SportsLiveListSnapshot(savedAt, mapOf(SportsLiveTab.LIVE_NOW to listOf(item("a", isLive = true).copy(addonBaseUrl = ""))))
@@ -112,18 +113,47 @@ class SportsLiveOpenSpeedTest {
         val viewModel = newViewModel(MemoryCache(saved))
         runCurrent()
 
+        // J1: the loading rows, not the saved list, while this visit's load runs.
+        val holding = viewModel.uiState.value
+        assertTrue(holding.visibleItems.isEmpty())
+        assertTrue(holding.firstLoadPending)
+
+        // The hold is over: the saved list at once, marked with its time.
+        advanceTimeBy(SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
         val shown = viewModel.uiState.value
         assertFalse(shown.isLoading)
         assertEquals(listOf("a"), shown.visibleItems.map { it.id })
         assertEquals(CLAIMED.addon.baseUrl, shown.visibleItems.single().addonBaseUrl)
         assertEquals(savedAt, shown.staleListAtMs)
 
-        // The fresh list replaces it and the mark goes.
-        loadGate!!.complete(load(listOf(item("a", isLive = true), item("b", isLive = true))))
+        // The fresh list refreshes the shown row in place; its new row waits behind "N new", and the mark goes.
+        loadGate!!.complete(load(listOf(item("b", isLive = true), item("a", isLive = true))))
         runCurrent()
         val fresh = viewModel.uiState.value
-        assertEquals(listOf("a", "b"), fresh.visibleItems.map { it.id })
+        assertEquals(listOf("a"), fresh.visibleItems.map { it.id })
+        assertEquals(1, fresh.newLiveRows)
         assertNull(fresh.staleListAtMs)
+
+        // "N new": the whole list, in its order.
+        viewModel.showNewRows()
+        runCurrent()
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `a first load that lands within the hold shows at once, whole`() = runTest {
+        val saved = SportsLiveListSnapshot(NOW - 20 * MINUTE, mapOf(SportsLiveTab.LIVE_NOW to listOf(item("old", isLive = true).copy(addonBaseUrl = ""))))
+        loadGate = CompletableDeferred()
+        val viewModel = newViewModel(MemoryCache(saved))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.visibleItems.isEmpty())
+        advanceTimeBy(1_000L)
+        loadGate!!.complete(load(listOf(item("a", isLive = true), item("b", isLive = true))))
+        runCurrent()
+        // Never the old list first: the new one, all of it.
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(0, viewModel.uiState.value.newLiveRows)
     }
 
     @Test
@@ -209,6 +239,51 @@ class SportsLiveOpenSpeedTest {
         runCurrent()
         assertEquals(listOf("a", "c"), viewModel.uiState.value.visibleItems.map { it.id })
         assertEquals(afterLoad + 1, viewModel.stateBuilds)
+    }
+
+    @Test
+    fun `a focus move alone gives the screen no new state, a tab change does`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = false, startMs = NOW + HOUR)))
+        val viewModel = newViewModel(SportsLiveListCache.NONE)
+        val drawn = mutableListOf<SportsLiveUiState>()
+        backgroundScope.launch { viewModel.screenState.collect { drawn += it } }
+        runCurrent()
+        val shown = viewModel.screenState.value
+        val emissions = drawn.size
+        viewModel.selectItem("b")
+        runCurrent()
+        assertEquals("b", viewModel.uiState.value.selectedItemId)
+        assertSame(shown, viewModel.screenState.value)
+        assertEquals(emissions, drawn.size)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(SportsLiveTab.UPCOMING, viewModel.screenState.value.selectedTab)
+        assertTrue(drawn.size > emissions)
+    }
+
+    @Test
+    fun `a board built again keeps the rows that did not change, so only changed rows draw again`() {
+        val a = item("a", isLive = true)
+        val b = item("b", isLive = true)
+        fun row(item: SportsLiveItem, followed: Boolean = false) = ScoreboardRow(
+            item = item, group = ScoreboardGroup.LIVE, chip = null, art = null,
+            firstFollowed = followed, secondFollowed = false, probablyEnded = false
+        )
+        fun board(filter: String?, vararg rows: ScoreboardRow) =
+            SportsLiveBoard(SportsLiveTab.LIVE_NOW, filter, rows.map { it.item }, rows.toList(), emptyMap())
+        val before = board(null, row(a), row(b))
+
+        // One row changed (a follow): the other keeps its instance.
+        val changed = board(null, row(a), row(b, followed = true)).reusingRows(before)
+        assertSame(before.rows!![0], changed.rows!![0])
+        assertTrue(changed.rows!![1].firstFollowed)
+        // Nothing changed: the same list.
+        assertSame(before.rows, board(null, row(a), row(b)).reusingRows(before).rows)
+        // Another filter (or tab) reuses nothing.
+        val other = board("Basketball", row(a))
+        assertSame(other, other.reusingRows(before))
+        assertSame(other, other.reusingRows(null))
     }
 
     @Test

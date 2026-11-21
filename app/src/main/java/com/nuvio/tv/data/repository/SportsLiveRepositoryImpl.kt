@@ -2,6 +2,7 @@ package com.nuvio.tv.data.repository
 
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
@@ -42,6 +43,8 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -131,7 +134,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
         val claimedKeys = claimed.map { it.key }.toSet()
         val options = optionsOf(claimed)
         val cached = _latest.value
-        if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS &&
+        if (!force && cached != null && !cached.partial && nowMs() - cached.loadedAtMs < CACHE_MS &&
             cached.claimedKeys == claimedKeys && cached.catalogOptions == options
         ) {
             return@withLock cached
@@ -157,8 +160,62 @@ class SportsLiveRepositoryImpl @Inject constructor(
             }
 
         SportsLiveDebugTiming.log { "sportsOpen stage=loadStart t=${elapsedMs()} catalogs=${claimed.size} carried=${carriedItems.size} force=$force" }
+        // The load's items, failures and stats from [fetched] (every catalog, or most of them for the early list).
+        suspend fun built(fetched: Map<String, NetworkResult<CatalogRow>>, partial: Boolean): Pair<SportsLiveLoad, Map<String, CatalogStats>> {
+            val now = nowMs()
+            val items = mutableListOf<SportsLiveItem>()
+            val failures = mutableListOf<SportsLiveFailure>()
+            val stats = mutableMapOf<String, CatalogStats>()
+            withContext(computeDispatcher) {
+                // In claimed order, as the bucketer keeps an item's first occurrence.
+                for (catalog in claimed) {
+                    val catalogItems = when (val result = fetched[catalog.key]) {
+                        null -> carriedItems[catalog.key].orEmpty()
+                        is NetworkResult.Success -> SportsLiveItemBucketer.describeCatalog(result.data.items, catalog, now)
+                        is NetworkResult.Error -> {
+                            failures += SportsLiveFailure(catalog, result.message)
+                            continue
+                        }
+                        NetworkResult.Loading -> continue
+                    }
+                    items += catalogItems
+                    stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
+                }
+            }
+            val load = SportsLiveLoad(
+                items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options,
+                fetchedSources = claimed.filter { it.key in fetched }.associate { it.addon.id to it.addon.displayName },
+                claimedSources = claimed.mapTo(HashSet()) { it.addon.id },
+                partial = partial
+            )
+            return load to stats
+        }
+
+        suspend fun publish(load: SportsLiveLoad, stats: Map<String, CatalogStats>) {
+            val claimedNow = claimedCatalogs.first()
+            if (claimedNow.map { it.key }.toSet() == claimedKeys && optionsOf(claimedNow) == options) {
+                _latest.value = load
+                _catalogStats.value = stats
+            }
+        }
+
+        val toFetch = claimed.filterNot { it.key in carriedItems }
+        val answered = java.util.concurrent.ConcurrentHashMap<String, NetworkResult<CatalogRow>>()
+        val answeredCount = MutableStateFlow(0)
         val fetched = coroutineScope {
-            claimed.filterNot { it.key in carriedItems }
+            // J1 (live.23): on the first load (nothing in memory to show), the list goes out once most catalogs have
+            // answered, so one slow addon never holds the whole list; the rest follow with the full load.
+            val early = if (cached == null && SportsLiveCalmOpen.offersEarlyList(toFetch.size)) {
+                launch {
+                    answeredCount.first { SportsLiveCalmOpen.mostAnswered(it, toFetch.size) }
+                    val (load, stats) = built(HashMap(answered), partial = true)
+                    SportsLiveDebugTiming.log { "sportsOpen stage=early t=${elapsedMs()} answered=${answered.size}/${toFetch.size}" }
+                    publish(load, stats)
+                }
+            } else {
+                null
+            }
+            val results = toFetch
                 .map { catalog ->
                     async(ioDispatcher) {
                         val fetchedAt = System.nanoTime()
@@ -168,43 +225,20 @@ class SportsLiveRepositoryImpl @Inject constructor(
                             "sportsOpen stage=catalog ms=${(System.nanoTime() - fetchedAt) / 1_000_000} source=${SportsLiveDebugTiming.label(catalog.addon.displayName)} " +
                                 "kind=${catalog.kind.name} items=${size ?: "error"}"
                         }
+                        answered[catalog.key] = result
+                        answeredCount.update { it + 1 }
                         catalog.key to result
                     }
                 }
                 .awaitAll()
+            // Every catalog answered before the early list went out: none is needed.
+            early?.cancel()
+            results
         }.toMap()
         SportsLiveDebugTiming.log { "sportsOpen stage=fetched t=${elapsedMs()}" }
-        val now = nowMs()
-        val items = mutableListOf<SportsLiveItem>()
-        val failures = mutableListOf<SportsLiveFailure>()
-        val stats = mutableMapOf<String, CatalogStats>()
-        withContext(computeDispatcher) {
-            // In claimed order, as the bucketer keeps an item's first occurrence.
-            for (catalog in claimed) {
-                val catalogItems = when (val result = fetched[catalog.key]) {
-                    null -> carriedItems[catalog.key].orEmpty()
-                    is NetworkResult.Success -> SportsLiveItemBucketer.describeCatalog(result.data.items, catalog, now)
-                    is NetworkResult.Error -> {
-                        failures += SportsLiveFailure(catalog, result.message)
-                        continue
-                    }
-                    NetworkResult.Loading -> continue
-                }
-                items += catalogItems
-                stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
-            }
-        }
-        SportsLiveDebugTiming.log { "sportsOpen stage=described t=${elapsedMs()} items=${items.size} failures=${failures.size}" }
-        val load = SportsLiveLoad(
-            items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options,
-            fetchedSources = claimed.filter { it.key in fetched }.associate { it.addon.id to it.addon.displayName },
-            claimedSources = claimed.mapTo(HashSet()) { it.addon.id }
-        )
-        val claimedNow = claimedCatalogs.first()
-        if (claimedNow.map { it.key }.toSet() == claimedKeys && optionsOf(claimedNow) == options) {
-            _latest.value = load
-            _catalogStats.value = stats
-        }
+        val (load, stats) = built(fetched, partial = false)
+        SportsLiveDebugTiming.log { "sportsOpen stage=described t=${elapsedMs()} items=${load.items.size} failures=${load.failures.size}" }
+        publish(load, stats)
         load
     }
 

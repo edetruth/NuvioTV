@@ -102,15 +102,19 @@ class TeamIdentifier internal constructor(
             val start = item.startMs
             if (!item.isLive && (start == null || start < dayStart || start >= dayEnd)) continue
             val unknownSport = SportsLiveTeamIdentity.sportUnknown(item)
+            // No text names a sport, though the teams may suggest one (a cricket guess for two nations, 2026-11-21).
+            val textUnknown = unknownSport || SportsLiveTeamIdentity.sportUnknownByText(item)
             // A soccer game naming no competition (item 3): only while live or starting within 3 h.
             val soon = item.isLive || (start != null && start >= at && start - at <= SOCCER_LOOKUP_AHEAD_MS)
-            if (!unknownSport && !(soon && SportsLiveTeamIdentity.soccerLeagueUnknown(item))) continue
+            if (!textUnknown && !(soon && SportsLiveTeamIdentity.soccerLeagueUnknown(item))) continue
             val (first, second) = SportsLiveTeamIdentity.sides(item.meta.name) ?: continue
             // Two nations play several sports (#204): never a team search, only cricket's live list while live.
-            if (unknownSport && SportsLiveNations.isNationalPair(first, second)) {
+            if (textUnknown && SportsLiveNations.isNationalPair(first, second)) {
                 if (item.isLive && cricket != null) offerCricket(first, second)
                 continue
             }
+            // A sport told by the teams alone (rugby clubs, cricket franchises): no team search either.
+            if (!unknownSport && !(soon && SportsLiveTeamIdentity.soccerLeagueUnknown(item))) continue
             offerGame(first, second)
         }
         val any = synchronized(pending) { pending.isNotEmpty() } || synchronized(cricketPending) { cricketPending.isNotEmpty() }

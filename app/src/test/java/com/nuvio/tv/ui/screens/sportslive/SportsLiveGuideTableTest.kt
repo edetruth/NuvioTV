@@ -205,16 +205,17 @@ class SportsLiveGuideTableTest {
     private fun row(id: String, group: ZapPanelGroup = ZapPanelGroup.LIVE_NOW) = ZapPanelRow(game(id, now), group, chip = null, art = null)
 
     @Test
-    fun `the selection opens on the game down would zap to, past games over, wrapping`() {
+    fun `the selection always opens on Now playing, else the first line`() {
         val lineup = listOf(row("a"), row("b"), row("c", ZapPanelGroup.JUST_ENDED), row("d"))
         val key = { id: String -> lineup.first { it.item.id == id }.item.streamKey }
-        fun opening(current: String?) = panelGuide(lineup, current?.let(key)).let { guideOpeningKey(guideLines(it), lineup, current?.let(key)) }
-        assertEquals(key("b"), opening("a"))
-        // c ended: the zap passes it.
-        assertEquals(key("d"), opening("b"))
-        assertEquals(key("a"), opening("d"))
+        fun opening(current: String?) = panelGuide(lineup, current?.let(key)).let { guideOpeningKey(guideLines(it), nowPlaying = it.nowPlaying != null) }
+        // J6: wherever the game playing sits in the lineup, the same place every time.
+        for (playing in listOf("a", "b", "d")) assertEquals(GUIDE_NOW_PLAYING_KEY, opening(playing))
         // The game playing unknown: the first line.
         assertEquals(key("a"), opening(null))
+        // ▼ from Now playing: the table's first row.
+        val keys = guideSelectableKeys(nowPlaying = true, guideLines(panelGuide(lineup, key("b"))))
+        assertEquals(key("a"), keys[guideMove(0, 1, keys.size)])
         // No headers in the table's lines.
         assertTrue(guideLines(panelGuide(lineup, key("a"))).none { it is PanelGuideEntry.Header })
     }

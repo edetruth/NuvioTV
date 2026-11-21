@@ -324,10 +324,12 @@ internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?, plainLabel: Strin
     // One word per sport (F4): an addon's plain sport word ("Football", "Soccer") as the sport's one name, unless ESPN named the league.
     plainLabel?.takeIf { row.art?.league.let { league -> league == null || league == item.sport } }?.let { return it.uppercase(Locale.getDefault()) }
     // A non-sport tag ("OTHER", #145) says nothing about the game: the sport its title names, else none.
+    val sport = item.sport?.takeUnless(SportsLiveTeams::isNonSportTag)
     val tag = scoreboardRowTag(
         row.art?.league,
-        item.sport?.takeUnless(SportsLiveTeams::isNonSportTag),
-        item.catalogName.takeUnless(SportsLiveTeams::isNonSportTag).orEmpty()
+        sport,
+        item.catalogName.takeUnless(SportsLiveTeams::isNonSportTag).orEmpty(),
+        row.sportTag ?: SportsLiveSportKind.of(sport)
     )
     if (tag.isNotEmpty()) return tag
     return sportLabel?.uppercase(Locale.getDefault()).orEmpty()
@@ -802,12 +804,13 @@ internal fun channelNowText(item: com.nuvio.tv.domain.model.SportsLiveItem): Str
  * A row's league tag (QA pass 3): [name] in capitals while it is short ("NBA", "BASKETBALL"); a longer one
  * by its words' initials ("Brazil Serie A" → "BSA"), never an ellipsis that leaves "BRAZIL …".
  */
-internal fun scoreboardTag(name: String): String {
+internal fun scoreboardTag(name: String, sport: SportsLiveSportKind? = null): String {
     // Addon decoration goes first (#100): emoji and symbols, and bracketed parts ("⚡ Live Events (X)").
     val upper = scoreboardTagText(name).uppercase()
     // #217: a long name is never cut to its initials ("Combat Sports" read "CS"): a known league, else plain words.
     SportsLiveLeagueTags.of(upper)?.let { return it }
-    return com.nuvio.tv.core.sportslive.SportsLiveTags.short(upper, null)
+    // live.23: a long competition no rule knows ("Men's U-21 Friendly") reads as its game's sport, not its first word.
+    return com.nuvio.tv.core.sportslive.SportsLiveTags.short(upper, sport)
 }
 
 /**
@@ -825,14 +828,19 @@ private fun scoreboardTagText(name: String): String = SportsLiveDisplayText.labe
  * ("LIVE NOW", "Live Events") and never a word that names no sport ("Live", "Sports", #134): such a row takes
  * the sport its text tells ([rowTagText]), else no tag.
  */
-internal fun scoreboardRowTag(league: String?, sport: String?, catalogName: String): String {
+internal fun scoreboardRowTag(
+    league: String?,
+    sport: String?,
+    catalogName: String,
+    sportKind: SportsLiveSportKind? = SportsLiveSportKind.of(sport)
+): String {
     // A sport that is only the catalog's name (the addon gave none) says nothing about the game.
     val catalog = catalogName.trim()
     // ESPN's raw abbreviation ("FU17W") gives way to a readable short tag ("U17 WC") when one is known.
     // A catch-all ("Other Sports") is no league either: it would read "OS".
     league?.takeIf { it.isNotBlank() && it.trim() != catalog }
         ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }
-        ?.let { return SportsLiveLeagueTags.of(it) ?: scoreboardTag(it) }
+        ?.let { return SportsLiveLeagueTags.of(it) ?: scoreboardTag(it, sportKind) }
     return sport
         ?.takeIf { it.trim() != catalog }
         ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }

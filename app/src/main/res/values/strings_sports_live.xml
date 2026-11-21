@@ -449,6 +449,23 @@
     <string name="sports_live_channels_see_all_popular">See all popular · %1$d ›</string>
     <string name="sports_live_channels_sports_entry">Sports · %1$d ›</string>
     <string name="sports_live_channels_all_entry">All channels · %1$d ›</string>
+    <!-- More live (live.23): Live now's last row under My sports, the live games it leaves out by sport; OK opens them. -->
+    <string name="sports_live_more_live_row">More live: %1$s ›</string>
+    <!-- One sport's count in the More live row: "4 Racing". -->
+    <string name="sports_live_more_live_count">%1$d %2$s</string>
+    <string name="sports_live_more_live_fights">Fights</string>
+    <string name="sports_live_more_live_other">Other</string>
+    <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->
+    <string name="sports_live_more_live_title">More live</string>
+    <!-- After a More live game was played: the card at the top of Live now, and the toast after Add. -->
+    <string name="sports_live_add_sport_question">You watched %1$s · Add to My sports?</string>
+    <string name="sports_live_add_sport_add">Add</string>
+    <string name="sports_live_add_sport_not_now">Not now</string>
+    <string name="sports_live_add_sport_added">%1$s added to My sports</string>
+    <!-- J7: the line under Now playing in the player's panel, and the guide row's tag: the game played before this one. -->
+    <string name="sports_live_just_watched">Just watched</string>
+    <string name="sports_live_just_watched_tag">WATCHED</string>
+    <string name="sports_live_more_live_scope">More live: games outside My sports</string>
     <string name="sports_live_channels_browse_all">All channels</string>
     <string name="sports_live_channels_browse_sports">Sports channels</string>
     <string name="sports_live_channels_browse_popular">Popular now</string>
@@ -831,8 +848,6 @@
     <string name="sports_live_replays_undated">Other replays</string>
     <string name="sports_live_filter_all_regions">All regions</string>
     <string name="sports_live_filter_all_sports">All sports</string>
-    <!-- #216: under the in-player panel and guide chips while All sports is picked (it resets when they open again). -->
-    <string name="sports_live_panel_all_sports_scope">All sports · showing sports you don\'t follow</string>
     <string name="sports_live_region_other">Other</string>
     <string name="sports_live_filter_title_region">Region</string>
     <string name="sports_live_filter_title_sport">Sport</string>

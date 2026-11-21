@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.DirectoryTeam
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -60,6 +61,51 @@ class SportsLiveTeamIdMergeTest {
         assertEquals(2, merge(men, women).size)
         val womensBasketball = game("c", "San Antonio Spurs vs Los Angeles Clippers", "Women's Basketball")
         assertEquals(2, merge(men, womensBasketball).size)
+    }
+
+    // ---- #215.3, live.23 nightly: a copy of a college football game filed under soccer ----
+
+    private val collegeFootball = TeamDirectory().apply {
+        put(
+            EspnLeagueMap.COLLEGE_FOOTBALL,
+            listOf(
+                DirectoryTeam("228", "Clemson Tigers", "Clemson", "CLEM", "Clemson", "Tigers", "https://example.invalid/228.png"),
+                DirectoryTeam("150", "Duke Blue Devils", "Duke", "DUKE", "Duke", "Blue Devils", "https://example.invalid/150.png"),
+                DirectoryTeam("2649", "Toledo Rockets", "Toledo", "TOL", "Toledo", "Rockets", "https://example.invalid/2649.png"),
+                DirectoryTeam("189", "Bowling Green Falcons", "Bowling Green", "BGSU", "Bowling Green", "Falcons", "https://example.invalid/189.png")
+            ),
+            fetchedAt = 1L
+        )
+    }
+
+    private fun mergeFootball(vararg items: SportsLiveItem) =
+        SportsLiveItemBucketer.merge(items.toList(), listOf("a", "b"), now, collegeFootball)
+
+    @Test
+    fun `a college football copy an addon files under soccer merges with the NCAAF copy`() {
+        val ncaaf = game("a", "Duke vs Clemson", "NCAAF")
+        val soccer = game("b", "Clemson Tigers vs Duke Blue Devils", "⚽ Soccer")
+        val row = mergeFootball(soccer, ncaaf).single()
+        assertEquals(2, row.sourceCount)
+        // Shown as the copy that names its league, the one ESPN scores.
+        assertEquals("NCAAF", row.sport)
+        assertEquals("Duke vs Clemson", row.meta.name)
+        assertNull(SportsLiveItemBucketer.splitReason(game("a", "Toledo vs Bowling Green", "NCAAF"),
+            game("b", "Bowling Green Falcons vs Toledo Rockets", "Soccer"), now, collegeFootball))
+    }
+
+    @Test
+    fun `only soccer and American football are read as one football word, never basketball, volleyball or handball`() {
+        val ncaaf = game("a", "Duke vs Clemson", "NCAAF")
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Clemson Tigers vs Duke Blue Devils", "Basketball")).size)
+        // Volleyball and handball are sports of their own, never the football game of the same two schools.
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Clemson Tigers vs Duke Blue Devils", "Volleyball")).size)
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Duke vs Clemson", "Women's Volleyball")).size)
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Duke vs Clemson", "Handball")).size)
+        // Two volleyball copies still merge.
+        assertEquals(1, mergeFootball(game("a", "Duke vs Clemson", "Volleyball"), game("b", "Clemson vs Duke", "Beach Volleyball")).size)
+        // Another pairing filed under soccer stays its own row.
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Toledo Rockets vs Duke Blue Devils", "Soccer")).size)
     }
 
     private fun game(addon: String, name: String, sport: String) = SportsLiveItem(

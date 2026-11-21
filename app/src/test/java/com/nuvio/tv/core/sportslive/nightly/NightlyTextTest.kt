@@ -103,4 +103,32 @@ class NightlyTextTest {
         assertEquals("67%", NightlyText.percent(2, 3))
         assertEquals("-", NightlyText.percent(0, 0))
     }
+
+    @Test
+    fun `unscored live games are counted by league, most first, with hashed addon labels only`() {
+        fun row(group: String, label: String, verdict: Verdict) = NightlyText.LiveRow(group, label, NightlyText.isUnscored(verdict))
+        val rows = listOf(
+            row("soccer/all", "addon-aaaaaa", Verdict.NOT_FOUND),
+            row("soccer/all", "addon-aaaaaa", Verdict.NOT_FOUND),
+            row("soccer/all", "addon-bbbbbb", Verdict.NOT_FOUND),
+            row("soccer/all", "addon-bbbbbb", Verdict.IN_PLAY),
+            row("can't place (no sport)", "addon-cccccc", Verdict.UNPLACED),
+            row("basketball/nba", "addon-dddddd", Verdict.IN_PLAY),
+            row("basketball/nba", "addon-dddddd", Verdict.FINAL)
+        )
+        assertEquals(
+            listOf(
+                "| league or reason | unscored | listed live | addons (unscored) |",
+                "|---|---|---|---|",
+                "| soccer/all | 3 | 4 | addon-aaaaaa ×2, addon-bbbbbb ×1 |",
+                "| can't place (no sport) | 1 | 1 | addon-cccccc ×1 |"
+            ),
+            NightlyText.unscoredByLeague(rows)
+        )
+        // Every live row scored: no table.
+        assertTrue(NightlyText.unscoredByLeague(rows.filter { it.group == "basketball/nba" }).isEmpty())
+        assertTrue(NightlyText.isUnscored(Verdict.NO_FEED))
+        assertTrue(NightlyText.isUnscored(Verdict.NO_TEAMS))
+        assertFalse(NightlyText.isUnscored(Verdict.SCHEDULED_LATER))
+    }
 }

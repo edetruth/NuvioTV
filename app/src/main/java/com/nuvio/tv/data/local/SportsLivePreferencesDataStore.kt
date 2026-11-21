@@ -14,6 +14,7 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRef
 import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
+import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
 import com.nuvio.tv.core.sportslive.ReplayPosition
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLiveReplayResume
@@ -83,6 +84,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
+    // "Add Cricket to My sports?" (More live): the sports declined, and "id:count" of cards left unanswered.
+    private val addSportDeclinedKey = stringSetPreferencesKey("sports_live_add_sport_declined")
+    private val addSportIgnoredKey = stringSetPreferencesKey("sports_live_add_sport_ignored")
     private val panelHintShownKey = intPreferencesKey("sports_live_panel_hint_shown")
     private val panelLastOpenKey = longPreferencesKey("sports_live_panel_last_open")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
@@ -198,6 +202,29 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** Titles hidden from Live Now (#134), by clean name ([SportsLiveHiddenTitles]); Settings → More → Hidden lists them. */
     val hiddenTitles: Flow<Set<String>> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[hiddenTitlesKey].orEmpty() }
+    }
+
+    /** What the profile said to "Add ‹sport› to My sports?" ([SportsLiveAddSportPrompt]). */
+    val addSportMemory: Flow<SportsLiveAddSportPrompt.Memory> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs ->
+            SportsLiveAddSportPrompt.Memory(
+                declined = prefs[addSportDeclinedKey].orEmpty(),
+                ignored = SportsLiveAddSportPrompt.decodeIgnored(prefs[addSportIgnoredKey])
+            )
+        }
+    }
+
+    /** Saves [change] of the active profile's "Add ‹sport› to My sports?" answers in one edit. */
+    suspend fun updateAddSportMemory(change: (SportsLiveAddSportPrompt.Memory) -> SportsLiveAddSportPrompt.Memory) {
+        store().edit { prefs ->
+            val now = SportsLiveAddSportPrompt.Memory(
+                declined = prefs[addSportDeclinedKey].orEmpty(),
+                ignored = SportsLiveAddSportPrompt.decodeIgnored(prefs[addSportIgnoredKey])
+            )
+            val next = change(now)
+            prefs[addSportDeclinedKey] = next.declined
+            prefs[addSportIgnoredKey] = next.encodeIgnored()
+        }
     }
 
     /** Hides [title] from Live Now for the active profile. */

@@ -33,7 +33,7 @@ class SportsLiveTagsTest {
     fun `a long league tag takes its short form, else the row's sport, else its first word, else its start`() {
         // League names of up to ten capitals are written whole.
         assertEquals("BUNDESLIGA", SportsLiveTags.short("BUNDESLIGA", SportsLiveSportKind.SOCCER))
-        assertEquals("NATIONS LG", SportsLiveTags.short("NATIONS LG", null))
+        assertEquals("LEAGUE ONE", SportsLiveTags.short("LEAGUE ONE", null))
         assertEquals("EUROLEAGUE", SportsLiveTags.short("EUROLEAGUE", SportsLiveSportKind.BASKETBALL))
         assertEquals("SOCCER", SportsLiveTags.short("EKSTRAKLASA", SportsLiveSportKind.SOCCER))
         assertEquals("GRAND", SportsLiveTags.short("GRAND SLAM CUP", null))
@@ -46,8 +46,8 @@ class SportsLiveTagsTest {
     fun `every word of the vocabulary fits the column`() {
         SportsLiveSportKind.values().forEach { assertTrue(it.name, SportsLiveTags.sportWord(it).length <= SportsLiveTags.MAX_CHARS) }
         listOf(
-            "WORLD CUP", "WOMEN'S WC", "U21 FRNDLY", "NATIONS LG", "EURO QUAL", "AFCON QUAL", "ASIAN CUP", "CHAMPNSHP",
-            "LEAGUE CUP", "BUNDESLIGA", "DFB POKAL", "EREDIVISIE", "SUPER LIG", "SAUDI PRO", "LIGA 1 ROU", "EUROLEAGUE",
+            "WORLD CUP", "FRIENDLY", "EFL", "LEAGUE ONE", "LEAGUE TWO", "LALIGA 2", "ASIAN CUP", "ARGENTINA",
+            "LEAGUE CUP", "BUNDESLIGA", "DFB POKAL", "EREDIVISIE", "SUPER LIG", "PORTUGAL", "ROMANIA", "EUROLEAGUE",
             "SOME LONG UNKNOWN LEAGUE"
         ).forEach { assertTrue(it, SportsLiveTags.short(it, null).length in 1..SportsLiveTags.MAX_CHARS) }
     }

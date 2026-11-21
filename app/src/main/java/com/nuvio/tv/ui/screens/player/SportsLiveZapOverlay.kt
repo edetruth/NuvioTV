@@ -844,10 +844,10 @@ private fun LiveGamesPanel(
                         if (it) focusedKey = null
                     }
                 }
-                // #216: All sports says so, as it lists sports the user never picked (it resets when the panel opens again).
+                // #216: More live says so, as it lists sports the user never picked (it resets when the panel opens again).
                 if (state.chip == com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState.ALL_SPORTS_FILTER) {
                     Text(
-                        text = stringResource(R.string.sports_live_panel_all_sports_scope),
+                        text = stringResource(R.string.sports_live_more_live_scope),
                         style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
                         color = SportsLiveTokens.Colors.TextSecondary,
                         maxLines = 1,
@@ -925,6 +925,7 @@ private fun LiveGamesPanel(
                                 is PanelGuideEntry.HiddenByMySports -> item(key = entry.key) {
                                     SportsLiveHiddenByMySportsLine(
                                         count = entry.count,
+                                        summary = entry.summary,
                                         onClick = { onChip(SportsLiveUiState.ALL_SPORTS_FILTER) },
                                         onFocus = { lineFocus(entry.key, null) },
                                         modifier = Modifier
@@ -942,28 +943,40 @@ private fun LiveGamesPanel(
                                     val row = entry.row
                                     val item = row.item
                                     item(key = entry.key) {
-                                        SportsLivePanelLine(
-                                            row = state.boards[item.streamKey]?.board
-                                                ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
-                                            nowPlaying = false,
-                                            titleSuffix = suffixes[item.streamKey],
-                                            isNew = row.isNew,
-                                            gone = row.gone,
-                                            onClick = { onPick(item) },
-                                            onLongClick = { onLongPick(item) },
-                                            onFocus = { lineFocus(item.streamKey, item.streamKey) },
-                                            okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
-                                            readyMark = readiness[item.streamKey],
-                                            onReadyHidden = { hidden ->
-                                                readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
-                                            },
-                                            modifier = when {
-                                                entry.key == firstKey && upFromFirst != null ->
-                                                    Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
-                                                else -> Modifier.focusRequester(requesterOf(entry.key))
-                                            },
-                                            menuOpen = menuOpen
-                                        )
+                                        Column {
+                                            // J7: the game played before this one, one ▼ OK away.
+                                            if (entry.justWatched) {
+                                                Text(
+                                                    text = stringResource(R.string.sports_live_just_watched).uppercase(),
+                                                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                                                    color = SportsLiveTokens.Colors.TextSecondary,
+                                                    maxLines = 1,
+                                                    modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
+                                                )
+                                            }
+                                            SportsLivePanelLine(
+                                                row = state.boards[item.streamKey]?.board
+                                                    ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+                                                nowPlaying = false,
+                                                titleSuffix = suffixes[item.streamKey],
+                                                isNew = row.isNew,
+                                                gone = row.gone,
+                                                onClick = { onPick(item) },
+                                                onLongClick = { onLongPick(item) },
+                                                onFocus = { lineFocus(item.streamKey, item.streamKey) },
+                                                okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
+                                                readyMark = readiness[item.streamKey],
+                                                onReadyHidden = { hidden ->
+                                                    readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
+                                                },
+                                                modifier = when {
+                                                    entry.key == firstKey && upFromFirst != null ->
+                                                        Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
+                                                    else -> Modifier.focusRequester(requesterOf(entry.key))
+                                                },
+                                                menuOpen = menuOpen
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1015,9 +1028,10 @@ private fun PanelFilter(
     onOpenChange: (Boolean) -> Unit,
     onFocused: (Boolean) -> Unit
 ) {
-    val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
+    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
     val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
-    val allSportsLabel = stringResource(R.string.sports_live_filter_all_sports)
+    // More live (user 2026-11-21): the All sports value is More live's view.
+    val allSportsLabel = stringResource(R.string.sports_live_more_live_title)
     val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams)
     val options = state.chips.map { chip ->
         val name = when (chip) {

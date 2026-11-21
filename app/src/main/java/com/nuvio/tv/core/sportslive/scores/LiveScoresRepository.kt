@@ -8,6 +8,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents
+import com.nuvio.tv.core.sportslive.SportsLiveWomenGames
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -363,7 +365,9 @@ class LiveScoresRepository internal constructor(
             }
             val (source, leagues) = routed
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
-            TrackedCard(card, leagues, item.followed, EspnLeagueMap.collegeFallbackFor(source)?.takeIf { it !in leagues }, liveKeys = liveKeys)
+            // A bare sport word's college feed (#66), else a men's soccer league's women's counterpart (live.23).
+            val fallback = (EspnLeagueMap.collegeFallbackFor(source) ?: EspnLeagueMap.womenFallbackFor(source))?.takeIf { it !in leagues }
+            TrackedCard(card, leagues, item.followed, fallback, liveKeys = liveKeys)
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
@@ -592,6 +596,8 @@ class LiveScoresRepository internal constructor(
             state.failures = 0
             state.retryAfterMs = null
             state.events = result.events
+            // Soccer pairings of the day keep two nations from being guessed as cricket (2026-11-21).
+            com.nuvio.tv.core.sportslive.SportsLiveOtherSportPairs.shared.record(result.events)
             state.fetched = true
             state.lastSuccessAt = state.lastAttemptAt
         }
@@ -682,6 +688,11 @@ class LiveScoresRepository internal constructor(
                 state == null || !state.fetched || state.events.any { it.eventId == match.eventId }
             }
             matched[card.key] = match
+            // Copies matched to one ESPN game merge on the next list build; a women's soccer game is never a men's
+            // club's "my team" (live.23, TV report #10).
+            val sources = listOf(card.key) + entry.liveKeys
+            SportsLiveMatchedEvents.shared.record(sources, match)
+            if (match.league.sport == "soccer" && ScoreMatcher.isWomenGame(match)) SportsLiveWomenGames.shared.record(sources)
             if (match.league == EspnLeagueMap.SOCCER_ALL && match.leagueSlug != EspnLeagueMap.SOCCER_ALL.league &&
                 SLUG.matches(match.leagueSlug) && card.key !in remembered
             ) {
@@ -728,6 +739,11 @@ class LiveScoresRepository internal constructor(
             if (match == null && fallback != null && card.key !in remembered &&
                 cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused && it.isFresh(nowMs) } == true }
             ) {
+                // Never the women's game of a pair its men's league plays today (live.23).
+                if (EspnLeagueMap.isWomenFallback(fallback) && matcher.meets(card, cardFeeds.flatMap { feeds[it]?.events.orEmpty() })) {
+                    settle(entry, dates, cardFeeds, null)
+                    continue
+                }
                 needed += cardFeeds
                 deferred += Deferral(entry, dates, cardFeeds, fallback)
                 continue
@@ -807,7 +823,10 @@ class LiveScoresRepository internal constructor(
     ): List<EspnLeague> {
         // A bare "Basketball" card's women's college list too (item 4): two schools are told men's or women's by both lists.
         val onScreen = cards.values.flatten().flatMap { card ->
-            card.leagues + listOfNotNull(card.fallback, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN.takeIf { card.fallback == EspnLeagueMap.COLLEGE_BASKETBALL })
+            card.leagues + listOfNotNull(
+                card.fallback?.takeUnless(EspnLeagueMap::isWomenFallback),
+                EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN.takeIf { card.fallback == EspnLeagueMap.COLLEGE_BASKETBALL }
+            )
         }
         // The named My sports leagues' lists (#159, soccer competitions included) tell games with no league apart.
         return directoryLeagueOrder(onScreen + picked.feeds() + picked.teamListLeagues() + followed)

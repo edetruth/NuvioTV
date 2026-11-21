@@ -22,12 +22,48 @@ object SportsLiveTags {
         val text = tag.trim().uppercase(Locale.ROOT)
         if (text.isEmpty()) return ""
         PLAIN_WORDS[text]?.let { return it }
+        // A nationality alone ("INDIAN") is no tag: its country (live.23).
+        COUNTRIES[text]?.let { return it }
         if (text.length <= MAX_CHARS) return text
         SportsLiveSportKind.of(text)?.let { return sportWord(it) }
+        // "INDIAN SUPER LEAGUE" no table knows: its country, never "INDIAN" (live.23); else the sport, else its next word.
+        val adjective = leadingNationality(text)
+        if (adjective != null) {
+            COUNTRIES[adjective]?.let { return it }
+            sport?.let { return sportWord(it) }
+            text.removePrefix(adjective).trim().split(' ').first().takeIf { it.isNotEmpty() && it.length <= MAX_CHARS }?.let { return it }
+            return text.take(MAX_CHARS).trim()
+        }
         sport?.let { return sportWord(it) }
         text.split(' ').first().takeIf { it.isNotEmpty() && it.length <= MAX_CHARS }?.let { return it }
         return text.take(MAX_CHARS).trim()
     }
+
+    // The nationality [text] starts with ("COSTA RICAN", "INDIAN"), or null.
+    private fun leadingNationality(text: String): String? {
+        val words = text.split(' ').filter { it.isNotEmpty() }
+        if (words.size >= 2 && "${words[0]} ${words[1]}" in NATIONALITIES) return "${words[0]} ${words[1]}"
+        return words.firstOrNull()?.takeIf { it in NATIONALITIES }
+    }
+
+    /** Nationalities competitions are named by, and the country a tag says instead (when it fits ten capitals). */
+    private val COUNTRIES: Map<String, String> = mapOf(
+        "ENGLISH" to "ENGLAND", "SPANISH" to "SPAIN", "GERMAN" to "GERMANY", "ITALIAN" to "ITALY", "FRENCH" to "FRANCE",
+        "SCOTTISH" to "SCOTLAND", "WELSH" to "WALES", "IRISH" to "IRELAND", "PORTUGUESE" to "PORTUGAL", "TURKISH" to "TURKEY",
+        "GREEK" to "GREECE", "BELGIAN" to "BELGIUM", "AUSTRIAN" to "AUSTRIA", "DANISH" to "DENMARK", "SWEDISH" to "SWEDEN",
+        "NORWEGIAN" to "NORWAY", "FINNISH" to "FINLAND", "RUSSIAN" to "RUSSIA", "UKRAINIAN" to "UKRAINE", "POLISH" to "POLAND",
+        "CZECH" to "CZECHIA", "CROATIAN" to "CROATIA", "SERBIAN" to "SERBIA", "ROMANIAN" to "ROMANIA", "HUNGARIAN" to "HUNGARY",
+        "ISRAELI" to "ISRAEL", "CYPRIOT" to "CYPRUS", "CHINESE" to "CHINA", "JAPANESE" to "JAPAN", "KOREAN" to "KOREA",
+        "THAI" to "THAILAND", "INDONESIAN" to "INDONESIA", "MALAYSIAN" to "MALAYSIA", "INDIAN" to "INDIA",
+        "AUSTRALIAN" to "AUSTRALIA", "AMERICAN" to "USA", "CANADIAN" to "CANADA", "MEXICAN" to "MEXICO", "BRAZILIAN" to "BRAZIL",
+        "ARGENTINE" to "ARGENTINA", "ARGENTINIAN" to "ARGENTINA", "CHILEAN" to "CHILE", "COLOMBIAN" to "COLOMBIA",
+        "PERUVIAN" to "PERU", "URUGUAYAN" to "URUGUAY", "PARAGUAYAN" to "PARAGUAY", "ECUADORIAN" to "ECUADOR",
+        "VENEZUELAN" to "VENEZUELA", "BOLIVIAN" to "BOLIVIA", "HONDURAN" to "HONDURAS", "GUATEMALAN" to "GUATEMALA",
+        "COSTA RICAN" to "COSTA RICA", "EGYPTIAN" to "EGYPT", "MOROCCAN" to "MOROCCO", "NIGERIAN" to "NIGERIA", "GHANAIAN" to "GHANA"
+    )
+
+    // Nationalities whose country does not fit a tag: never a tag alone either.
+    private val NATIONALITIES: Set<String> = COUNTRIES.keys + setOf("DUTCH", "SWISS", "SAUDI", "SOUTH AFRICAN", "SALVADORAN")
 
     /** A sport's tag: its plain word ("BASKETBALL", "WRESTLING"); motorsport reads "RACING". */
     fun sportWord(sport: SportsLiveSportKind): String = when (sport) {

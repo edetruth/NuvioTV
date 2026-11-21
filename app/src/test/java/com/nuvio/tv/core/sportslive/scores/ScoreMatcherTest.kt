@@ -633,4 +633,56 @@ class ScoreMatcherTest {
         // The U17 card itself does match.
         assertEquals("u17", match("New Zealand U17 vs Mali U17", "2026-11-20T13:30:00Z", listOf(u17), now = "2026-11-20T22:40:00Z"))
     }
+
+    // ---- live.23: the nightly run's alias candidates ----
+
+    private fun collegeTeam(id: String, abbr: String, location: String, nickname: String) = ScoreTeam(
+        id = id, abbreviation = abbr, displayName = "$location $nickname", shortDisplayName = location, name = nickname,
+        location = location, logo = null, score = 0, linescores = emptyList()
+    )
+
+    @Test
+    fun `the names addons write for ESPN's clubs and schools match both sides strongly`() {
+        val laLiga = soccerGame("dep", "esp.1", "Spanish LALIGA", espnTeam("96", "ALA", "Alavés", "Alavés"),
+            espnTeam("90", "DEP", "Deportivo", "Deportivo"), "2026-11-21T13:00:00Z")
+        val ligue1 = soccerGame("bre", "fra.1", "French Ligue 1", espnTeam("180", "STR", "Strasbourg", "Strasbourg"),
+            espnTeam("6997", "BRE", "Brest", "Brest"), "2026-11-21T16:00:00Z")
+        val lilleLyon = soccerGame("lil", "fra.1", "French Ligue 1", espnTeam("166", "LIL", "Lille", "Lille"),
+            espnTeam("167", "LYON", "Lyon", "Lyon"), "2026-11-21T20:05:00Z")
+        val bundesliga = soccerGame("bmg", "ger.1", "German Bundesliga", espnTeam("268", "BMG", "Borussia Mönchengladbach", "M'gladbach"),
+            espnTeam("124", "DOR", "Borussia Dortmund", "Dortmund"), "2026-11-21T14:30:00Z")
+        val events = listOf(laLiga, ligue1, lilleLyon, bundesliga)
+        val now = "2026-11-21T17:00:00Z"
+        assertEquals("dep", match("Deportivo Alavés vs Deportivo de A Coruña", "2026-11-21T13:00:00Z", events, now))
+        assertEquals("dep", match("Alavés vs Deportivo de La Coruña", "2026-11-21T13:00:00Z", events, now))
+        assertEquals("bre", match("RC Strasbourg vs Stade Brestois", "2026-11-21T16:00:00Z", events, now))
+        assertEquals("lil", match("LOSC Lille vs Olympique Lyonnais", "2026-11-21T20:05:00Z", events, now))
+        assertEquals("bmg", match("Borussia M'gladbach vs Borussia Dortmund", "2026-11-21T14:30:00Z", events, now))
+        // Both sides strong, so a soccer/all game of unknown league would match too.
+        val unknown = laLiga.copy(eventId = "all", leagueSlug = EspnLeagueMap.SOCCER_ALL.league, leagueName = null)
+        assertEquals("all", match("Deportivo Alavés vs Deportivo de A Coruña", "2026-11-21T13:00:00Z", listOf(unknown), now))
+
+        val cfb = ScoreSnapshot(
+            eventId = "shsu", league = EspnLeagueMap.COLLEGE_FOOTBALL, startMs = ms("2026-11-21T19:00:00Z"), state = ScoreState.IN,
+            clockText = "Q2", isFinal = false, home = collegeTeam("2534", "SHSU", "Sam Houston", "Bearkats"),
+            away = collegeTeam("2393", "MTSU", "Middle Tennessee", "Blue Raiders")
+        )
+        val app = cfb.copy(eventId = "app", home = collegeTeam("2026", "APP", "App State", "Mountaineers"),
+            away = collegeTeam("2433", "ULM", "UL Monroe", "Warhawks"))
+        assertEquals("shsu", match("Sam Houston State vs Middle Tennessee", "2026-11-21T19:00:00Z", listOf(cfb, app), "2026-11-21T20:00:00Z"))
+        assertEquals("app", match("Appalachian State vs Louisiana-Monroe", "2026-11-21T19:00:00Z", listOf(cfb, app), "2026-11-21T20:00:00Z"))
+    }
+
+    @Test
+    fun `a club's reserve side and a different club of the same first word never take the alias`() {
+        val reserves = soccerGame("rsb", "esp.3", "Spanish Primera RFEF", espnTeam("1", "RSB", "Real Sociedad II", "Real Sociedad II"),
+            espnTeam("2", "CAD", "Cádiz", "Cádiz"), "2026-11-21T15:00:00Z")
+        val now = "2026-11-21T16:00:00Z"
+        assertEquals("rsb", match("Real Sociedad B vs Cádiz", "2026-11-21T15:00:00Z", listOf(reserves), now))
+        assertNull(match("Real Sociedad vs Cádiz", "2026-11-21T15:00:00Z", listOf(reserves), now))
+        val alaves = soccerGame("ala", "esp.1", "Spanish LALIGA", espnTeam("96", "ALA", "Alavés", "Alavés"),
+            espnTeam("3", "BET", "Real Betis", "Betis"), "2026-11-21T15:00:00Z")
+        // "Deportivo" is Deportivo de La Coruña, never Deportivo Alavés.
+        assertNull(match("Deportivo vs Real Betis", "2026-11-21T15:00:00Z", listOf(alaves), now))
+    }
 }

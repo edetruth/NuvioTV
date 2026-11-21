@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
@@ -67,8 +69,24 @@ data class SportsLiveUiState(
      */
     val staleListAtMs: Long? = null,
     /** Live now's new rows waiting while it is browsed (TV QA BUG7 / Q5): "N new" on Refresh shows them. */
-    val newLiveRows: Int = 0
+    val newLiveRows: Int = 0,
+    /**
+     * More live (user 2026-11-21): under My sports, the live games Live now leaves out and the listings that are no game
+     * (H), by sport, largest first, Other last ([SportsLiveMoreLive]); empty with nothing picked, or on a chip.
+     */
+    val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
+    /** Its view is open: [visibleItems] are [moreLive]'s games, group by group. */
+    val moreLiveOpen: Boolean = false,
+    /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
+    val moreLiveOther: Set<String> = emptySet(),
+    /** "You watched ‹sport› · Add to My sports?": the sport its card at the top of Live now offers; null for none. */
+    val addSportPrompt: MySport? = null
 ) {
+    /** Each More live game's group key, by card key. */
+    val moreLiveGroupOf: Map<String, String> by lazy {
+        moreLive.flatMap { group -> group.items.map { it.streamKey to group.key } }.toMap()
+    }
+
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
     val selectedFilterEmpty: Boolean get() = selectedFilter != null && (filterCounts[selectedFilter] ?: 0) == 0
 
@@ -183,3 +201,11 @@ internal fun SportsLiveUiState.finishedKeys(scores: Map<String, ScoreSnapshot>):
     tabs[SportsLiveTab.LIVE_NOW].orEmpty()
         .filter { it.streamKey in justEnded || SportsLiveEndedGames.isEspnFinal(it, scores[it.streamKey]) }
         .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
+
+/**
+ * [new] draws exactly as [old] (#143): at most the focused card's id ([SportsLiveUiState.selectedItemId]) differs, which
+ * the screen never reads (its stage follows the focused row). A focus move rebuilds no state ([SportsLiveViewModel]'s
+ * fast path keeps the build's clock), so its copy is told apart from a real build by the clock first, then by value.
+ */
+internal fun sportsLiveSameScreen(old: SportsLiveUiState, new: SportsLiveUiState): Boolean =
+    old.nowMs == new.nowMs && old == new.copy(selectedItemId = old.selectedItemId)

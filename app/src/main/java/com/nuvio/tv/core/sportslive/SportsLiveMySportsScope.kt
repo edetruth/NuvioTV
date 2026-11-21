@@ -22,7 +22,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
  *   only choose the Results feeds). With leagues named, a game whose league is known must be one of them. A
  *   game whose league is unknown (a bare "Basketball" or "Football") is told by its teams (#159): hidden when
  *   neither is a team of a named league, by those leagues' ESPN team lists ([MyLeague.teamList], kept in the
- *   [TeamDirectory]); shown while a list is not loaded yet, or when no named league has one (Internationals).
+ *   [TeamDirectory]); hidden too while a list is not loaded yet or the game names no two sides (J3, live.23: an
+ *   unplaced game is listed under All sports only), shown only when no named league has a list (Internationals).
  */
 object SportsLiveMySportsScope {
 
@@ -73,10 +74,14 @@ object SportsLiveMySportsScope {
      * catalog's name only when that names a single sport (a mixed catalog never decides). Null: unknown.
      */
     internal fun kindOf(item: SportsLiveItem): SportsLiveSportKind? =
+        textKindOf(item)
+            // Cricket or rugby told from its teams alone (#145, live.23), a wrestling show by its name: as a tagged game is.
+            ?: SportsLiveSportKind.fromTeamsOrTitle(item)
+
+    /** [kindOf] from the card's texts only: its sport word, title, genres, description, a single-sport catalog name. */
+    internal fun textKindOf(item: SportsLiveItem): SportsLiveSportKind? =
         (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description).firstNotNullOfOrNull { SportsLiveSportKind.of(it) }
             ?: SportsLiveSportKind.single(item.catalogName)
-            // Cricket told from its teams alone (#145): out under My sports, as a tagged cricket game is.
-            ?: SportsLiveSportKind.CRICKET.takeIf { SportsLiveCricket.isCricketGame(item.teams) }
 
     /**
      * The My sports [item]'s sport can be ([kindOf]); empty for a sport My sports cannot hold. A bare
@@ -117,7 +122,10 @@ object SportsLiveMySportsScope {
         if (EspnLeagueMap.collegeFallbackFor(item) == null && routed.isNotEmpty()) {
             return routed.any { league -> named.any { it.coversLeague(league) } }
         }
-        return teamsInNamed(item, named, directory) != false
+        // J3 (live.23): a game whose league cannot be told is listed only under All sports, never under named leagues;
+        // only named leagues with no team list at all (Internationals) cannot rule a game out.
+        if (named.none { it.teamList != null }) return true
+        return teamsInNamed(item, named, directory) == true
     }
 
     /**

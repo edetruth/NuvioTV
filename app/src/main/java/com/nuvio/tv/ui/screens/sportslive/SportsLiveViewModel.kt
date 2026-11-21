@@ -20,6 +20,12 @@ import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.SportsLiveImportance
+import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
+import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
+import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
@@ -168,7 +174,13 @@ class SportsLiveViewModel internal constructor(
     /** Saves the countries chosen (null: back to the viewer's own). */
     private val saveChannelCountries: suspend (Set<String>?) -> Unit = {},
     /** This TV's region, a viewer's own country (phase 2); null in tests. */
-    tvRegion: String? = null
+    tvRegion: String? = null,
+    /** What the profile said to "Add ‹sport› to My sports?" (More live). */
+    addSportMemory: Flow<SportsLiveAddSportPrompt.Memory> = flowOf(SportsLiveAddSportPrompt.Memory()),
+    /** Saves a change of those answers. */
+    private val saveAddSportMemory: suspend ((SportsLiveAddSportPrompt.Memory) -> SportsLiveAddSportPrompt.Memory) -> Unit = {},
+    /** Puts a sport in My sports (Add on the card). */
+    private val addMySport: suspend (MySport) -> Unit = {}
 ) : ViewModel() {
 
     @Inject
@@ -239,7 +251,10 @@ class SportsLiveViewModel internal constructor(
         updateChannelPicks = prefs::updateChannelPicks,
         channelCountries = prefs.channelCountries,
         saveChannelCountries = prefs::setChannelCountries,
-        tvRegion = SportsLiveChannelCountries.tvRegion()
+        tvRegion = SportsLiveChannelCountries.tvRegion(),
+        addSportMemory = prefs.addSportMemory,
+        saveAddSportMemory = prefs::updateAddSportMemory,
+        addMySport = { sport -> prefs.updateMySports { if (it.isDefault || sport in it.effectiveSports) it else it.toggleSport(sport) } }
     )
 
     private data class Selection(
@@ -252,6 +267,14 @@ class SportsLiveViewModel internal constructor(
         val browsing: Boolean = false,
         /** Bumped by "N new" on Refresh ([showNewRows]): the next build shows Live now as it is now, once. */
         val thaw: Int = 0,
+        /** Live now's "More live" view is open (user 2026-11-21): the games My sports leaves out, by sport. */
+        val moreLiveOpen: Boolean = false,
+        /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
+        val holdOver: Boolean = false,
+        /** The sport of a More live game just played, to offer adding to My sports ([SportsLiveAddSportPrompt]). */
+        val addSport: MySport? = null,
+        /** Its card is on screen now (Live now shown since the game was played): leaving it unanswered counts. */
+        val addSportShown: Boolean = false,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
         val lastRefreshedMs: Long? = null,
@@ -296,6 +319,14 @@ class SportsLiveViewModel internal constructor(
 
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
+
+    // The profile's answers to "Add ‹sport› to My sports?", as last read.
+    @Volatile
+    private var addSportMemoryNow = SportsLiveAddSportPrompt.Memory()
+
+    // J1: Live now has been shown this visit of the tab (reset when another tab or screen is shown): it stays calm.
+    @Volatile
+    private var liveNowShown = false
 
     // The mini player's game while it plays (TV QA BUG7): it stays listed.
     @Volatile
@@ -494,6 +525,14 @@ class SportsLiveViewModel internal constructor(
             .flowOn(computeDispatcher)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
+    /**
+     * [uiState] as the screen draws it (#143): a focus move alone (only the selected id changed, which the screen never
+     * reads) emits nothing, so a D-pad move no longer recomposes the whole section a second time, every row included.
+     */
+    val screenState: StateFlow<SportsLiveUiState> =
+        uiState.distinctUntilChanged(::sportsLiveSameScreen)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
+
     private val boardScores = MutableStateFlow(SportsLiveBoardScores())
 
     /** The scores, Scores setting and reveals the screen shows: the Scoreboard and drawn cards read them. */
@@ -574,6 +613,10 @@ class SportsLiveViewModel internal constructor(
         viewModelScope.launch { runCatching { updateChannelPicks { SportsLiveChannelFavorites.played(it, item, at) } } }
     }
 
+    /** The board last built ([SportsLiveBoard.reusingRows]). */
+    @Volatile
+    private var lastBoard: SportsLiveBoard? = null
+
     /** Builds a board; tests swap it to see where it runs. */
     @VisibleForTesting
     internal var buildBoard: suspend (SportsLiveBoardInputs) -> SportsLiveBoard = { SportsLiveBoard.build(it) }
@@ -596,6 +639,8 @@ class SportsLiveViewModel internal constructor(
                 ended = if (live) state.justEnded else emptyMap(),
                 noStreams = if (live) state.noStreams else emptySet(),
                 excitement = if (live) state.whyTags else emptyMap(),
+                otherEvents = if (live && state.moreLiveOpen) state.moreLiveOther else emptySet(),
+                moreLive = if (live && state.moreLiveOpen) state.moreLiveGroupOf else emptyMap(),
                 followed = followed,
                 clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
                 logoRevision = revision,
@@ -610,7 +655,9 @@ class SportsLiveViewModel internal constructor(
             .mapFinishing({ running, next -> running.tab != next.tab || running.filter != next.filter }) { inputs ->
                 withContext(computeDispatcher) {
                     val startedAt = System.nanoTime()
-                    buildBoard(inputs).also {
+                    // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
+                    buildBoard(inputs).reusingRows(lastBoard).also {
+                        lastBoard = it
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
                         }
@@ -632,6 +679,11 @@ class SportsLiveViewModel internal constructor(
 
     init {
         fullLoadJob = launchFullLoad(force = false)
+        // J1: Live now waits behind its loading rows for this visit's load, at most HOLD_MS.
+        viewModelScope.launch {
+            delay(SportsLiveCalmOpen.HOLD_MS)
+            selectionState.update { it.copy(holdOver = true) }
+        }
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
         viewModelScope.launch {
             combine(hoverPreviewEnabled, miniPlayerActive) { enabled, mini -> enabled && !mini }
@@ -639,6 +691,7 @@ class SportsLiveViewModel internal constructor(
         }
         viewModelScope.launch { miniPlayingId.collect { miniPlayingNow = it } }
         viewModelScope.launch { dataSaver.collect { dataSaverActive = it } }
+        viewModelScope.launch { addSportMemory.catch { }.collect { addSportMemoryNow = it } }
         viewModelScope.launch { runCatching { dropRetiredPrefs() } }
     }
 
@@ -698,8 +751,17 @@ class SportsLiveViewModel internal constructor(
         // F23: focus coming back to the tab already selected changes nothing (it used to clear the selection, and the
         // stage jumped to the addon's first item).
         if (!changed) return
+        // J1: back on Live now, it is built afresh once, then calm again.
+        liveNowShown = false
+        // The add-sport card shows on Live now only: leaving it unanswered counts; coming back to Live now shows it.
+        if (tab != SportsLiveTab.LIVE_NOW) leaveAddSportCard()
         if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
-        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false) }
+        selectionState.update {
+            it.copy(
+                tab = tab, filter = remembered, itemId = null, browsing = false, moreLiveOpen = false,
+                addSportShown = it.addSport != null && tab == SportsLiveTab.LIVE_NOW
+            )
+        }
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()
@@ -733,6 +795,44 @@ class SportsLiveViewModel internal constructor(
         if (selectionState.value.browsing != focused) selectionState.update { it.copy(browsing = focused) }
     }
 
+    /** Add on the "Add ‹sport› to My sports?" card: the sport goes into My sports; the card goes. */
+    fun acceptAddSport() {
+        val sport = selectionState.value.addSport ?: return
+        selectionState.update { it.copy(addSport = null, addSportShown = false) }
+        viewModelScope.launch { runCatching { addMySport(sport) } }
+    }
+
+    /** Not now on the card: that sport is not asked about again. */
+    fun declineAddSport() {
+        val sport = selectionState.value.addSport ?: return
+        selectionState.update { it.copy(addSport = null, addSportShown = false) }
+        viewModelScope.launch { runCatching { saveAddSportMemory { it.decline(sport) } } }
+    }
+
+    /**
+     * The card left unanswered (another tab, the player, another screen): it shows again next time, until it was left
+     * [SportsLiveAddSportPrompt.MAX_IGNORES] times; then that sport is not asked about again.
+     */
+    private fun leaveAddSportCard() {
+        val selection = selectionState.value
+        val sport = selection.addSport ?: return
+        if (!selection.addSportShown) return
+        val next = addSportMemoryNow.ignore(sport)
+        addSportMemoryNow = next
+        selectionState.update { it.copy(addSport = sport.takeIf { next.asks(it) }, addSportShown = false) }
+        viewModelScope.launch { runCatching { saveAddSportMemory { it.ignore(sport) } } }
+    }
+
+    /** OK on Live now's "More live" row: its view, the games My sports leaves out by sport. */
+    fun openMoreLive() {
+        selectionState.update { it.copy(moreLiveOpen = true, itemId = null) }
+    }
+
+    /** Back from the "More live" view: Live now's own list again. */
+    fun closeMoreLive() {
+        selectionState.update { it.copy(moreLiveOpen = false, itemId = null) }
+    }
+
     /** "N new" on Refresh (TV QA Q5): Live now as it is now, the waiting rows in their places; then frozen again. */
     fun showNewRows() {
         selectionState.update { it.copy(thaw = it.thaw + 1) }
@@ -763,8 +863,16 @@ class SportsLiveViewModel internal constructor(
      */
     fun startZapSession(item: SportsLiveItem) {
         val state = uiState.value
+        // More live's games are zapped only among themselves, when one of them is played (user 2026-11-21).
+        val moreLive = state.moreLive.flatMap { it.items }
+        // A More live game played: the next Live now offers adding its sport to My sports, once per sport.
+        if (moreLive.any { it.streamKey == item.streamKey }) {
+            SportsLiveMoreLive.promptFor(item, lastMySports, addSportMemoryNow.notAsked)?.let { sport ->
+                selectionState.update { it.copy(addSport = sport, addSportShown = false) }
+            }
+        }
         val session = SportsLiveZapSession.of(
-            items = state.zapItems,
+            items = if (moreLive.any { it.streamKey == item.streamKey }) moreLive else state.zapItems,
             itemKey = item.streamKey,
             tab = state.selectedTab,
             filter = state.selectedFilter,
@@ -801,7 +909,14 @@ class SportsLiveViewModel internal constructor(
         previewController.onVisible(visible)
         if (!visible) prefetcher?.stop()
         // Leaving the screen ends browsing (TV QA BUG7): Live now is as built when it comes back.
-        if (!visible) setBrowsing(false)
+        if (!visible) {
+            liveNowShown = false
+            setBrowsing(false)
+            leaveAddSportCard()
+        } else {
+            // Back on the section after a More live game: its card shows on Live now.
+            selectionState.update { it.copy(addSportShown = it.addSport != null && it.tab == SportsLiveTab.LIVE_NOW) }
+        }
         if (visible == screenVisible) return
         screenVisible = visible
         if (visible) takeChannelOrder()
@@ -918,11 +1033,8 @@ class SportsLiveViewModel internal constructor(
         if (built != null) {
             val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
             // Same rule as the full build below (BUG7 freeze); any difference falls back to the full build.
-            val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW) {
-                sportsLiveFreeze(shownLiveNow, built).items
-            } else {
-                sportsLiveKeepFocused(shownLiveNow, built, focusedId)
-            }.let { listed -> sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow) }
+            val kept = keptLiveNow(selection, built, focusedId, thawed = false).items
+                .let { listed -> sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow) }
             val shown = SportsLiveHiddenTitles.filter(kept, hiddenNow)
             val shownBefore = shownLiveNow
             if (shown.size != shownBefore.size || shown.indices.any { shown[it] !== shownBefore[it] }) return null
@@ -930,6 +1042,22 @@ class SportsLiveViewModel internal constructor(
         val visible = last.state.visibleItems
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } } ?: visible.firstOrNull()?.id
         return last.state.copy(selectedItemId = selectedId)
+    }
+
+    /**
+     * Live now as shown after a build of [built] (F6, TV QA BUG7; J1): while it holds focus nothing moves at all
+     * ([sportsLiveFreeze]); once it has been shown this visit, it stays calm ([sportsLiveCalm]: rows keep their order, a
+     * row a load dropped goes, new rows wait for "N new"); otherwise as built. The focused card is never taken away.
+     */
+    private fun keptLiveNow(selection: Selection, built: List<SportsLiveItem>, focusedId: String?, thawed: Boolean): SportsLiveFrozenList {
+        if (selection.tab == SportsLiveTab.LIVE_NOW && !thawed) {
+            if (selection.browsing) return sportsLiveFreeze(shownLiveNow, built)
+            if (liveNowShown) {
+                val calm = sportsLiveCalm(shownLiveNow, built)
+                return calm.copy(items = sportsLiveKeepFocused(shownLiveNow, calm.items, focusedId))
+            }
+        }
+        return SportsLiveFrozenList(sportsLiveKeepFocused(shownLiveNow, built, focusedId), emptyList())
     }
 
     private fun buildState(
@@ -958,8 +1086,18 @@ class SportsLiveViewModel internal constructor(
         var finals = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
-        val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
-            if (tab == SportsLiveTab.LIVE_NOW) {
+        var otherEvents = emptyList<SportsLiveItem>()
+        // J1 (live.23): Live now shows its loading rows, not the saved list of an earlier visit, until this visit's load
+        // (most addons answered) lands or HOLD_MS passed; then the whole list at once.
+        val holdLiveNow = !bucketed.fromLoad && !selection.holdOver
+        val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
+            if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
+                emptyList<SportsLiveItem>()
+            } else if (tab == SportsLiveTab.LIVE_NOW) {
+                // H (live.23): listings that are no game and no event of their own leave the list for More live's Other.
+                // With nothing picked in My sports there is no More live: they stay in the list, as before.
+                val (tabItems, others) = if (mySports.isDefault) allItems to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(allItems)
+                otherEvents = SportsLiveHiddenTitles.filter(others, hiddenNow)
                 val scores = inputs.scores
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
@@ -1009,7 +1147,10 @@ class SportsLiveViewModel internal constructor(
                         }
                     }
                 }
-                val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                // J2 (live.23): by importance (followed, My sports by tier, other leagues, unplaced); a close or late game
+                // leads its tier only with the scores shown (the badges exist only then), so no hidden score moves a row.
+                val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys)
+                val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
                 // The focused card is never taken from under the user: kept in place until focus moves on. While Live now
                 // is browsed nothing moves at all (F6, TV QA BUG7): no row leaves, none re-orders, new ones wait for
@@ -1017,23 +1158,25 @@ class SportsLiveViewModel internal constructor(
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
                 val thawed = selection.thaw != thawApplied
                 thawApplied = selection.thaw
-                val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW && !thawed) {
-                    sportsLiveFreeze(shownLiveNow, built).also { heldBack = it.heldBack }.items
-                } else {
-                    sportsLiveKeepFocused(shownLiveNow, built, focusedId)
-                }.let { listed ->
+                val kept = keptLiveNow(selection, built, focusedId, thawed).also { heldBack = it.heldBack }.items.let { listed ->
                     // The game playing in the mini player stays listed while it plays (BUG7: its row vanished).
                     sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow)
                 }
                 // A title just hidden (#134) leaves at once, even with focus on it: the keep step must not bring it back.
-                SportsLiveHiddenTitles.filter(kept, hiddenNow).also { shownLiveNow = it }
+                SportsLiveHiddenTitles.filter(kept, hiddenNow).also {
+                    shownLiveNow = it
+                    // J1: shown once this visit, Live now keeps its rows in place from now on; new ones wait for "N new".
+                    if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) liveNowShown = true
+                }
             } else {
-                tabItems
+                allItems
             }
         }
         // #146: My sports scopes Live now, Upcoming and Replays (never Channels): followed teams' games stay, games of
         // no identifiable sport go (#167). All sports lifts it on the tab it is picked on; the chips and counts follow My sports.
-        val allSports = selection.filter == SportsLiveUiState.ALL_SPORTS_FILTER
+        // More live (user 2026-11-21) replaces All sports on Live now: a stored All sports there reads as My sports.
+        val onLiveNow = selection.tab == SportsLiveTab.LIVE_NOW
+        val allSports = selection.filter == SportsLiveUiState.ALL_SPORTS_FILTER && !onLiveNow
         val scopedTabs = tabs.mapValues { (tab, items) ->
             if (tab in SCOPED_TABS) SportsLiveMySportsScope.scope(items, mySports) else items
         }
@@ -1059,16 +1202,25 @@ class SportsLiveViewModel internal constructor(
             items
         }
         val counts = sportsLiveFilterCounts(counted(scopedItems), filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
-            .let { if (mySportsScoped) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size) else it }
+            .let { if (mySportsScoped && !onLiveNow) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size) else it }
         // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no
         // games hide, except the selected one, kept with 0 until the user moves (onUserMoved). All sports
         // follows it while My sports hides any of the tab's games (#146).
-        val filter = selection.filter
+        val filter = selection.filter.takeUnless { onLiveNow && it == SportsLiveUiState.ALL_SPORTS_FILTER }
         val filters = sportsLiveShownFilters(values, counts, filter.takeIf { !allSports })
             .let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
-            .let { shown -> if (mySportsScoped || allSports) withAllSports(shown) else shown }
+            .let { shown -> if ((mySportsScoped || allSports) && !onLiveNow) withAllSports(shown) else shown }
+        // More live (user 2026-11-21): under My sports, Live now ends with one row holding the live games it leaves out
+        // (other sports, J3's unplaced games) and the listings that are no game (H), by sport; OK opens them.
+        val moreLiveGroups = if (onLiveNow && filter == null && !mySports.isDefault) {
+            val scopedKeys = scopedItems.mapTo(HashSet()) { it.streamKey }
+            SportsLiveMoreLive.groups(counted(fullItems).filter { it.streamKey !in scopedKeys }, otherEvents)
+        } else {
+            emptyList()
+        }
+        val moreLiveOpen = selection.moreLiveOpen && moreLiveGroups.isNotEmpty()
         val visible = when (filter) {
-            null, SportsLiveUiState.ALL_SPORTS_FILTER -> tabItems
+            null, SportsLiveUiState.ALL_SPORTS_FILTER -> if (moreLiveOpen) moreLiveGroups.flatMap { it.items } else tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
             else -> tabItems.filter { filterOf(it) == filter }
         }
@@ -1097,12 +1249,8 @@ class SportsLiveViewModel internal constructor(
             filters = filters,
             selectedFilter = filter,
             mySportsScoped = selection.tab in SCOPED_TABS && !mySports.isDefault,
-            // #167: under My sports (All picked), Live now ends with the games it hides, one press from All sports.
-            hiddenByMySports = if (selection.tab == SportsLiveTab.LIVE_NOW && filter == null) {
-                (counted(fullItems).size - counted(scopedItems).size).coerceAtLeast(0)
-            } else {
-                0
-            },
+            // #167's "hidden by My sports" line is More live's row now (user 2026-11-21).
+            hiddenByMySports = 0,
             filterCounts = counts,
             visibleItems = visible,
             selectedItemId = selectedId,
@@ -1115,7 +1263,14 @@ class SportsLiveViewModel internal constructor(
             whyTags = whyTags,
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.
             staleListAtMs = bucketed.listAtMs?.takeIf { selection.isRefreshing && now - it >= STALE_MARK_MS },
-            newLiveRows = newRows
+            newLiveRows = newRows,
+            moreLive = moreLiveGroups,
+            moreLiveOpen = moreLiveOpen,
+            moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
+            // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
+            addSportPrompt = selection.addSport?.takeIf {
+                selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
+            }
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

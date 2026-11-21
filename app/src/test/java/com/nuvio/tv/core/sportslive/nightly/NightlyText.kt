@@ -108,6 +108,34 @@ internal object NightlyText {
         text.map { if (it.isLetterOrDigit() || it == ' ' || it == '-') it else ' ' }.joinToString("")
             .replace(Regex(" +"), " ").trim().take(MAX_TEST_NAME)
 
+    /** A listed-live row the app shows with no score: ESPN has no game for it, no feed, no sport or no two teams. */
+    fun isUnscored(verdict: Verdict): Boolean = verdict in UNSCORED
+
+    private val UNSCORED = setOf(Verdict.NOT_FOUND, Verdict.NO_FEED, Verdict.UNPLACED, Verdict.NO_TEAMS)
+
+    /** One listed-live row for [unscoredByLeague]: the [group] it is counted under, its addon's hashed [label]. */
+    class LiveRow(val group: String, val label: String, val unscored: Boolean)
+
+    /**
+     * The "unscored live games by league" table (live.23, backlog #8): per group (the ESPN feed a row routes to, or why
+     * it routes nowhere), the listed-live rows with no score, all listed-live rows, and the addons' hashed labels with
+     * their counts, most unscored first. Groups with every row scored are left out. No titles, no links.
+     */
+    fun unscoredByLeague(rows: List<LiveRow>): List<String> {
+        val groups = rows.groupBy { it.group }
+            .map { (group, all) -> Triple(group, all.count { it.unscored }, all) }
+            .filter { it.second > 0 }
+            .sortedWith(compareByDescending<Triple<String, Int, List<LiveRow>>> { it.second }.thenBy { it.first })
+        if (groups.isEmpty()) return emptyList()
+        return listOf("| league or reason | unscored | listed live | addons (unscored) |", "|---|---|---|---|") +
+            groups.map { (group, unscored, all) ->
+                val addons = all.filter { it.unscored }.groupingBy { it.label }.eachCount().entries
+                    .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+                    .joinToString(", ") { "${it.key} ×${it.value}" }
+                "| $group | $unscored | ${all.size} | $addons |"
+            }
+    }
+
     /** Share of [agreed] in [verified] as a whole percent, or "-" when nothing was verified. */
     fun percent(agreed: Int, verified: Int): String = if (verified == 0) "-" else "${(agreed * 100 + verified / 2) / verified}%"
 

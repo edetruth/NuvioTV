@@ -165,9 +165,12 @@ class SportsLiveClassifyTest {
     }
 
     @Test
-    fun `two plain nations with nothing else stay untagged`() {
-        // Cricket, football and hockey all play them: precision first, the unidentified log records it.
-        assertNull(SportsLiveSportKind.tagOf(item("UAE vs Bangladesh")))
+    fun `two plain nations with nothing else stay untagged unless one is a mainly-cricket nation`() {
+        // Coordinator decision 2026-11-21: a pair of cricket nations with a mainly-cricket one (Bangladesh) is cricket,
+        // unless ESPN's soccer or field-hockey feeds list that pairing that day (SportsLiveOtherSportPairs).
+        assertEquals(SportsLiveSportKind.CRICKET, SportsLiveSportKind.tagOf(item("UAE vs Bangladesh")))
+        // Cricket, football and hockey all play these: precision first, the unidentified log records it.
+        assertNull(SportsLiveSportKind.tagOf(item("Australia vs England")))
     }
 
     @Test
