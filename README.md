@@ -23,11 +23,15 @@ already use. It installs next to the official app (`io.github.edetruth.nuviotv`)
   pages with a pre-game Preview; followed teams, reminders and actionable alerts; channel zapping with an in-player
   games panel; dual screen (side by side or big + small) and a mini player; stream health with automatic failover
   and fast starts (about 4 s on an onn 4K Pro); "▶ Ready" for your teams' games; a Your teams strip; Report a
-  problem (Hold OK → More…) with privacy-safe reports and crash capture; first-run setup; settings synced with your
-  Nuvio account.
-- **Planned:** a new in-player games guide (a table with the video in a corner), a Results redesign, a Channels batch
-  (logos, naming, guide), stream language tags and more —
-  see the [issues](https://github.com/edetruth/NuvioTV/issues).
+  problem (hold OK on any screen) with privacy-safe reports and crash capture; first-run setup; settings synced with
+  your Nuvio account.
+- **New in live.23:** faster tabs and calmer loading; Live Now ranked by importance with a single "More live" row
+  instead of All sports; scores shown about a second after the games; the in-player games table is the default (opens
+  on Now playing, with Just watched); Results keeps your teams' results hidden until you reveal them, with Jump to;
+  Channels favorites and browse; dual screen keeps the game you hear on Back without a reload; video decoder safety.
+- **Planned:** live.24 — speed on low-end boxes, one consistent game view everywhere (college ranks in the table),
+  Channels from IPTV lists; live.25 — grouped "watch with another game" picker, pinned corner score, replay labels,
+  league channels, Results standings and stats — see the [issues](https://github.com/edetruth/NuvioTV/issues).
 
 ## Get Nuvio TV
 
