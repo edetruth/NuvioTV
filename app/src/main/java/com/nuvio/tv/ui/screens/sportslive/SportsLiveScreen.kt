@@ -1733,6 +1733,7 @@ private fun SportsLiveContent(
                     row = stageRow,
                     title = replayTitleOf(selectedRow),
                     nowMs = uiState.nowMs,
+                    day = agenda.dayOf(selectedRow.item),
                     onWatch = { watchReplay(selected) },
                     onMore = { menuCardKey = selected.listKey },
                     modifier = Modifier
