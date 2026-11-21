@@ -25,6 +25,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import com.nuvio.tv.core.profile.ProfileManager
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -122,14 +126,17 @@ class LiveScoresRepository internal constructor(
     /** Where the scores last shown are kept (live.23, [KeptScores]); null: not kept. */
     private val keptFile: TeamLogoFile? = null,
     /** Fetch followed teams' and My sports' feeds when scores are first collected (live.23, [prewarmFeeds]). */
-    private val prewarm: Boolean = false
+    private val prewarm: Boolean = false,
+    /** The active profile's id: kept scores belong to it, and its spoiler settings are read again on a switch (live.23). */
+    private val profile: Flow<Int?> = flowOf(null)
 ) : LiveScoreTracking {
     @Inject
     constructor(
         provider: ScoreProvider,
         prefs: SportsLivePreferencesDataStore,
         @ApplicationContext context: Context,
-        health: EspnFeedHealth
+        health: EspnFeedHealth,
+        profiles: ProfileManager
     ) : this(
         provider = provider,
         settings = prefs.scoreSettings,
@@ -155,7 +162,8 @@ class LiveScoresRepository internal constructor(
         watching = WatchingNow.shared,
         nudges = prefs.scoreNudges,
         keptFile = TeamLogoFile(File(context.filesDir, "sportslive/last_scores.json")),
-        prewarm = true
+        prewarm = true,
+        profile = profiles.activeProfileId
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -309,8 +317,13 @@ class LiveScoresRepository internal constructor(
     private var keptShown: Map<String, KeptCard> = emptyMap()
     /** The delayed scores last published, by card key: what an untracked card keeps. */
     private var lastDelayed: Map<String, ScoreSnapshot> = emptyMap()
-    /** The scores to write to [keptFile] next, and when they were shown. */
-    private var keptPending: Pair<Map<String, ScoreSnapshot>, Long>? = null
+    /** The active profile's spoiler protection has been read since it became active: until then no score is served. */
+    private var protectionLoaded = false
+    /** The profile the [kept] scores (and the file's next copy) belong to. */
+    private var keptProfile: Int? = null
+    /** The scores to write to [keptFile] next: when they were shown, and to which profile. */
+    private class KeptWrite(val games: Map<String, ScoreSnapshot>, val at: Long, val profile: Int?)
+    private var keptPending: KeptWrite? = null
     private var keptWrite: Job? = null
     /** [prewarmFeeds] ran this app session. */
     private var prewarmed = false
@@ -327,16 +340,6 @@ class LiveScoresRepository internal constructor(
         }
         // Reading the kept lists is no request: they show once Scores is known not to be Off.
         scope.launch(io) { directorySync.load() }
-        // The scores last shown (live.23): drawn on the cards until their feeds answer; never while Scores is Off.
-        keptFile?.let { file ->
-            scope.launch(io) {
-                val read = file.read()?.let { KeptScores.decode(it, now()) } ?: return@launch
-                lock.withLock {
-                    read.games.forEach { (key, snapshot) -> kept.putIfAbsent(key, KeptCard(snapshot, read.savedAt)) }
-                    activePollerScope?.let { refreshLocked(it, restartStopped = false) }
-                }
-            }
-        }
         // No learned logo is drawn before the Scores setting is known, nor while it is Off.
         scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }
         // A player starting or stopping, its distance behind live, or a nudge: served again at once (Q18, #85).
@@ -351,15 +354,42 @@ class LiveScoresRepository internal constructor(
                     }
                 }
         }
+        // Spoilers first (live.23): no score is served until the active profile's spoiler protection has been read, on
+        // start and after a profile switch, so a protected game (my teams', Watch later) never flashes. Kept scores
+        // belong to the profile that saw them: a switch drops them, and the file's copy is read for its own profile only.
         // A game saved for later (or revealed) is stamped again at once, not at the next fetch.
         scope.launch {
-            protectionSource.collect { latest ->
-                lock.withLock {
-                    protectionState.value = latest
-                    if (output.value.isNotEmpty()) output.value = latest.stampAll(output.value)
-                    if (watchedOutput.value.isNotEmpty()) watchedOutput.value = latest.stampAll(watchedOutput.value)
+            profile.distinctUntilChanged()
+                .flatMapLatest { pid -> protectionSource.map<SpoilerProtection, SpoilerProtection?> { it }.onStart { emit(null) }.map { pid to it } }
+                .collect { (pid, latest) ->
+                    if (latest == null) {
+                        val read = keptFile?.let { file -> withContext(io) { file.read() }?.let { KeptScores.decode(it, now()) } }
+                        lock.withLock {
+                            protectionLoaded = false
+                            keptProfile = pid
+                            kept.clear()
+                            keptShown = emptyMap()
+                            lastDelayed = emptyMap()
+                            keptPending = null
+                            read?.takeIf { it.profile == pid }?.let { copy ->
+                                copy.games.forEach { (key, snapshot) -> kept[key] = KeptCard(snapshot, copy.savedAt) }
+                            }
+                            output.value = emptyMap()
+                            watchedOutput.value = emptyMap()
+                        }
+                        return@collect
+                    }
+                    lock.withLock {
+                        protectionState.value = latest
+                        if (!protectionLoaded) {
+                            protectionLoaded = true
+                            activePollerScope?.let { refreshLocked(it, restartStopped = false) }
+                        } else {
+                            if (output.value.isNotEmpty()) output.value = latest.stampAll(output.value)
+                            if (watchedOutput.value.isNotEmpty()) watchedOutput.value = latest.stampAll(watchedOutput.value)
+                        }
+                    }
                 }
-            }
         }
         scope.launch {
             output.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { active ->
@@ -1085,6 +1115,12 @@ class LiveScoresRepository internal constructor(
             watchedOutput.value = emptyMap()
             return
         }
+        // Nothing before the profile's spoiler settings are known (live.23): a protected score must never flash.
+        if (!protectionLoaded) {
+            output.value = emptyMap()
+            watchedOutput.value = emptyMap()
+            return
+        }
         // Read against the clock now, so a protection's 7 days run out without a settings change.
         val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
@@ -1129,13 +1165,13 @@ class LiveScoresRepository internal constructor(
     private fun saveKept(shown: Map<String, ScoreSnapshot>) {
         val file = keptFile ?: return
         if (shown.isEmpty()) return
-        keptPending = shown to now()
+        keptPending = KeptWrite(shown, now(), keptProfile)
         if (keptWrite?.isActive == true) return
         keptWrite = scope.launch(io) {
             while (true) {
                 delay(KEPT_WRITE_DELAY_MS)
-                val (games, at) = lock.withLock { keptPending.also { keptPending = null } } ?: break
-                file.write(KeptScores.encode(games, at))
+                val pending = lock.withLock { keptPending.also { keptPending = null } } ?: break
+                file.write(KeptScores.encode(pending.games, pending.at, pending.profile))
             }
         }
     }

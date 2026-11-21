@@ -16,12 +16,13 @@ internal object KeptScores {
 
     const val MAX_GAMES = 200
 
-    /** [shown] (card key to game, as shown at [savedAt]) as the file's text. */
-    fun encode(shown: Map<String, ScoreSnapshot>, savedAt: Long): String {
+    /** [shown] (card key to game, as shown at [savedAt] to [profile]) as the file's text. */
+    fun encode(shown: Map<String, ScoreSnapshot>, savedAt: Long, profile: Int? = null): String {
         val buffer = Buffer()
         JsonWriter.of(buffer).use { w ->
             w.beginObject()
             w.name("at").value(savedAt)
+            profile?.let { w.name("p").value(it.toLong()) }
             w.name("games").beginArray()
             for ((key, s) in shown.entries.filter { it.value.individual == null }.take(MAX_GAMES)) {
                 w.beginObject()
@@ -46,18 +47,20 @@ internal object KeptScores {
         return buffer.readUtf8()
     }
 
-    /** A copy read back: when it was shown, and its games by card key. */
-    class Kept(val savedAt: Long, val games: Map<String, ScoreSnapshot>)
+    /** A copy read back: when it was shown, to which profile (null: not known), and its games by card key. */
+    class Kept(val savedAt: Long, val games: Map<String, ScoreSnapshot>, val profile: Int? = null)
 
     /** The copy in [text]; null when it is older than [MAX_AGE_MS] at [nowMs], empty or unreadable. */
     fun decode(text: String, nowMs: Long): Kept? = try {
         val r = JsonReader.of(Buffer().writeUtf8(text))
         var at: Long? = null
+        var profile: Int? = null
         val games = LinkedHashMap<String, ScoreSnapshot>()
         r.beginObject()
         while (r.hasNext()) {
             when (r.nextName()) {
                 "at" -> at = r.nextLong()
+                "p" -> profile = r.nextInt()
                 "games" -> {
                     r.beginArray()
                     while (r.hasNext()) {
@@ -71,7 +74,7 @@ internal object KeptScores {
         }
         r.endObject()
         val savedAt = at
-        if (savedAt == null || savedAt > nowMs || nowMs - savedAt > MAX_AGE_MS || games.isEmpty()) null else Kept(savedAt, games)
+        if (savedAt == null || savedAt > nowMs || nowMs - savedAt > MAX_AGE_MS || games.isEmpty()) null else Kept(savedAt, games, profile)
     } catch (e: Exception) {
         null
     }

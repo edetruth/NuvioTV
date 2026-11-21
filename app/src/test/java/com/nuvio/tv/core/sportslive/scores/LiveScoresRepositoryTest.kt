@@ -119,7 +119,9 @@ class LiveScoresRepositoryTest {
         followedLeagues: kotlinx.coroutines.flow.Flow<List<EspnLeague>> = kotlinx.coroutines.flow.flowOf(emptyList()),
         espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts(),
         keptFile: TeamLogoFile? = null,
-        prewarm: Boolean = false
+        prewarm: Boolean = false,
+        protection: kotlinx.coroutines.flow.Flow<SpoilerProtection> = kotlinx.coroutines.flow.flowOf(SpoilerProtection()),
+        profile: kotlinx.coroutines.flow.Flow<Int?> = kotlinx.coroutines.flow.flowOf(null)
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -140,7 +142,9 @@ class LiveScoresRepositoryTest {
             watching = watching,
             espnStarts = espnStarts,
             keptFile = keptFile,
-            prewarm = prewarm
+            prewarm = prewarm,
+            protectionSource = protection,
+            profile = profile
         )
     }
 
@@ -1420,6 +1424,54 @@ class LiveScoresRepositoryTest {
         repo.track(SECTION, listOf(lakers, pacersCard))
         runCurrent()
         assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `no kept score shows before the profile's spoiler settings are read, and my teams' stays hidden after`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        val lakersGame = nbaFixture.first { it.eventId == "401909986" }.let {
+            it.copy(state = ScoreState.IN, isFinal = false, clockText = "Q1 2:00", home = it.home.copy(score = 20), away = it.away.copy(score = 18))
+        }
+        val shown = mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48), lakers.streamKey to lakersGame)
+        val file = keptFile().apply { write(KeptScores.encode(shown, base - 60_000L, profile = 1)) }
+        provider.gate = CompletableDeferred()
+        val protection = kotlinx.coroutines.flow.MutableSharedFlow<SpoilerProtection>()
+        val repo = repository("2026-11-15T19:00:00Z", keptFile = file, protection = protection, profile = MutableStateFlow(1))
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        // Settings not read yet: nothing at all.
+        assertTrue(repo.scores.value.isEmpty())
+        // Read with "hide my teams' scores" and the 76ers followed: their game stays hidden, the other one shows.
+        val followed = listOf(com.nuvio.tv.domain.model.FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
+        protection.emit(SpoilerProtection(myTeams = true, followed = followed))
+        runCurrent()
+        assertTrue(repo.scores.value.getValue(pacersCard.streamKey).spoilerProtected)
+        repo.scores.value.getValue(lakers.streamKey).let {
+            assertFalse(it.spoilerProtected)
+            assertEquals(20, it.homeScore)
+        }
+    }
+
+    @Test
+    fun `kept scores belong to their profile`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val file = keptFile().apply { write(KeptScores.encode(mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48)), base - 60_000L, profile = 2)) }
+        provider.gate = CompletableDeferred()
+        val profile = MutableStateFlow<Int?>(1)
+        val repo = repository("2026-11-15T19:00:00Z", keptFile = file, profile = profile)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        // Another profile's copy: not shown.
+        assertTrue(repo.scores.value.isEmpty())
+        // Switched to the profile that saw it: shown once its settings are read.
+        profile.value = 2
+        runCurrent()
+        repo.track(SECTION, listOf(pacersCard, item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")))
+        runCurrent()
         assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
