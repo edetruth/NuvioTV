@@ -206,6 +206,25 @@ class SportsLiveResultsTest {
     }
 
     @Test
+    fun `the next game is left out while the team's last result is still hidden`() {
+        // Review S4: after a knockout game, "next: Sat" means they won and no next game means they lost.
+        val last = nba.first().copy(state = ScoreState.POST, isFinal = true)
+        val line = ResultsNotPlayed("Chicago Bears", 1_000L, lastFinal = last)
+        val ended = SpoilerProtection(games = listOf(SpoilerProtection.of(last, 0L).copy(endedAtMs = 1L)))
+        assertNull(resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, SpoilerProtection()).single().nextStartMs)
+        assertNull(resultsNotPlayedShown(listOf(line), ScoresMode.OFF, ended).single().nextStartMs)
+        // Revealed or watched: the next game shows.
+        assertEquals(1_000L, resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, ended).single().nextStartMs)
+        // No final within Results' days: as it was.
+        val noFinal = ResultsNotPlayed("Chicago Bears", 1_000L)
+        assertEquals(1_000L, resultsNotPlayedShown(listOf(noFinal), ScoresMode.SHOW, SpoilerProtection()).single().nextStartMs)
+        // Only a final within the last 8 days counts.
+        val startMs = last.startMs!!
+        assertEquals(last, ResultsNextGames.lastFinalOf(listOf(last), startMs + 60_000L))
+        assertNull(ResultsNextGames.lastFinalOf(listOf(last), startMs + ResultsNextGames.LAST_FINAL_MS))
+    }
+
+    @Test
     fun `other sports are fetched when asked, for a jump that needs them, or on a past day with nothing from My sports`() {
         val nbaRows = SportsResults.rows(nba, emptyList())
         val nbaKey = SportsResults.groupKey(nbaRows.first().event)

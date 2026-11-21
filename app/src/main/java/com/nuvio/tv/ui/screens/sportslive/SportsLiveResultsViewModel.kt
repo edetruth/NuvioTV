@@ -113,8 +113,22 @@ sealed interface ResultListItem {
     }
 }
 
-/** A followed team with no game on the day shown, and its next game's start when known. */
-data class ResultsNotPlayed(val team: String, val nextStartMs: Long?)
+/**
+ * A followed team with no game on the day shown, and its next game's start when known. [lastFinal]: the team's last
+ * final ([ResultsNextGames.TeamNext.lastFinal]); while it is hidden the next start is left out ([resultsNotPlayedShown]).
+ */
+data class ResultsNotPlayed(val team: String, val nextStartMs: Long?, val lastFinal: ScoreSnapshot? = null)
+
+/**
+ * [notPlayed] as Results shows it (live.23 review S4): a team whose last final is still hidden for the profile (Scores
+ * Off, or a followed team's result not revealed or watched, as [SportsLiveResultsUiState.hiddenReason]) loses its
+ * "next" part, which could tell a knockout result (a next game: they won; none: they lost).
+ */
+internal fun resultsNotPlayedShown(notPlayed: List<ResultsNotPlayed>, mode: ScoresMode, protection: SpoilerProtection): List<ResultsNotPlayed> =
+    notPlayed.map { line ->
+        val last = line.lastFinal ?: return@map line
+        if (mode == ScoresMode.OFF || !protection.revealed(last.eventId)) line.copy(nextStartMs = null) else line
+    }
 
 data class SportsLiveResultsUiState(
     /** 0 = today, 1 = yesterday … 6; null until the opening day is worked out ([defaultResultsDay]). */
@@ -184,15 +198,15 @@ class SportsLiveResultsViewModel internal constructor(
     private val prefs: SportsLivePreferencesDataStore,
     // Where the replays and the list are built; tests pass their dispatcher, so it runs in virtual time.
     computeDispatcher: CoroutineDispatcher,
-    /** A followed team's next game start ([ResultsNextGames]); null when not known. */
-    private val nextGame: suspend (FollowedTeam) -> Long? = { null }
+    /** A followed team's next game start and last final ([ResultsNextGames]); null when not known. */
+    private val nextGame: suspend (FollowedTeam) -> ResultsNextGames.TeamNext? = { null }
 ) : ViewModel(), ResultsActions {
 
     @Inject constructor(
         results: ResultsRepository,
         prefs: SportsLivePreferencesDataStore,
         nextGames: ResultsNextGames
-    ) : this(results, prefs, Dispatchers.Default, nextGames::nextStartMs)
+    ) : this(results, prefs, Dispatchers.Default, nextGames::next)
 
     /** Results is on screen, showing [days] (null: the opening day is still to be worked out). */
     private data class Shown(val days: Int?)
@@ -248,8 +262,12 @@ class SportsLiveResultsViewModel internal constructor(
         (load as? ResultsLoad.Loaded)?.let { resultsNotPlayedTeams(followed, it.events) }.orEmpty()
     }
         .distinctUntilChanged()
-        .mapLatest { teams -> teams.map { ResultsNotPlayed(it.name, runCatching { nextGame(it) }.getOrNull()) } }
+        .mapLatest { teams ->
+            teams.map { team -> runCatching { nextGame(team) }.getOrNull().let { ResultsNotPlayed(team.name, it?.startMs, it?.lastFinal) } }
+        }
         .onStart { emit(emptyList()) }
+        .let { lines -> combine(lines, mode, prefs.spoilerProtection, ::resultsNotPlayedShown) }
+        .distinctUntilChanged()
         .flowOn(computeDispatcher)
 
     /** Jump to ▾ and the list: built off the main thread, and only when the day, selection or replays change. */
