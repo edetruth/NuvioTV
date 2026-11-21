@@ -27,7 +27,6 @@ import com.nuvio.tv.core.sportslive.scores.TennisColumns
 import com.nuvio.tv.core.sportslive.scores.TennisMatch
 import com.nuvio.tv.core.sportslive.scores.TennisSets
 import com.nuvio.tv.core.sportslive.scores.GameArt
-import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -324,14 +323,6 @@ internal fun ScoreboardRow.dimmed(focused: Boolean): Boolean =
     (group == ScoreboardGroup.JUST_ENDED || noStreams) && !focused
 
 /**
- * The names a Scoreboard row may give [team], longest first (N1): the full name, ESPN's short name,
- * then the abbreviation. The row shows the first that fits both team lines; blanks and repeats are dropped.
- */
-internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
-    listOf(team.name, team.shortName, team.short).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-        .ifEmpty { listOf(team.name) }
-
-/**
  * The names level after a team line at level [from] did not fit: one step down, once per level, never past [max].
  * Both lines of a row can overflow in one layout pass ("Pittsburgh Panthers" over "Central Michigan Chippewas"); a
  * plain `level++` from each skipped the short names and read "PITT" over "CMU" (TV QA live.20).
@@ -377,7 +368,7 @@ internal data class ScoreboardStatusLines(
     val secondary: String? = null,
     val live: Boolean = false,
     val urgent: Boolean = false,
-    /** "Listed live" (#215): drawn muted, with no dot. */
+    /** A live game with no score of ours (#215, live.24): [secondary] is the muted "No score yet", never a period. */
     val listed: Boolean = false
 )
 
@@ -417,7 +408,8 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
-            if (row.listedOnly) ScoreboardStatusLines(strings.listedLive, listed = true) else ScoreboardStatusLines(strings.live, live = true)
+            // The game grammar's one scoreless form (live.24, audit A6): LIVE with its dot, then the muted "No score yet".
+            if (row.listedOnly) ScoreboardStatusLines(strings.live, strings.listedLive, live = true, listed = true) else ScoreboardStatusLines(strings.live, live = true)
         row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.CHANNELS -> ScoreboardStatusLines(null)
         else -> {

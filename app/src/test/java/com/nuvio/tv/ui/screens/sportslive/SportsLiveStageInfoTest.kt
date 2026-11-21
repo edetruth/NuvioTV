@@ -137,7 +137,9 @@ class SportsLiveStageInfoTest {
 
     @Test
     fun `a live row with nothing playable says No stream yet, unless a verified link is held`() {
-        assertEquals(RowBadge.NO_STREAM, rowBadgeOf(ready = false, excitement = true, closeGame = true, noStream = true))
+        // live.24 grammar: Ready > excitement / close > No stream yet (the dimmed row already says it is not playable).
+        assertEquals(RowBadge.EXCITEMENT, rowBadgeOf(ready = false, excitement = true, closeGame = true, noStream = true))
+        assertEquals(RowBadge.NO_STREAM, rowBadgeOf(ready = false, excitement = false, closeGame = false, noStream = true))
         assertEquals(RowBadge.READY, rowBadgeOf(ready = true, excitement = false, closeGame = false, noStream = true))
     }
 

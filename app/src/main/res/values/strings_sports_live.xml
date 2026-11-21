@@ -430,7 +430,7 @@
     <string name="sports_live_updated_at">Updated %1$s</string>
     <string name="sports_live_live_pill">LIVE</string>
     <!-- #215: a game its addon lists live that ESPN could not place (no LIVE, no red dot). -->
-    <string name="sports_live_listed_live">Listed live</string>
+    <string name="sports_live_listed_live">No score yet</string>
     <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
     <string name="sports_live_probably_ended">Probably ended</string>
     <!-- Live Now, Scoreboard + Stage (V2, #132): group headings, channel rows and the stage. -->
@@ -771,8 +771,8 @@
     <string name="sports_live_stage_stream_ready">▶ Stream ready</string>
     <string name="sports_live_agenda_earlier">‹ Earlier</string>
     <plurals name="sports_live_new_rows">
-        <item quantity="one">%1$d new</item>
-        <item quantity="other">%1$d new</item>
+        <item quantity="one">%1$d new game</item>
+        <item quantity="other">%1$d new games</item>
     </plurals>
     <string name="sports_live_agenda_later">Later ›</string>
     <string name="sports_live_no_stream_yet_mark">No stream yet</string>

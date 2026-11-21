@@ -77,7 +77,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
-import com.nuvio.tv.core.sportslive.scores.ScoreDetailsStrings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.ui.screens.sportslive.GameInfoKeyAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoKeys
@@ -88,8 +87,9 @@ import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
 import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
-import com.nuvio.tv.ui.screens.sportslive.rememberScoreDetailsStrings
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
+import com.nuvio.tv.ui.screens.sportslive.rankedName
+import com.nuvio.tv.ui.screens.sportslive.rememberSportWord
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveBold
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -476,7 +476,7 @@ fun SportsLiveDualScreen(
             // Toasts and alert cards (live.20): one corner, over video, the left (big) tile's bottom left.
             SportsLiveToastsAt(DualGeometry.corner(Side.LEFT, dual.layout, maxWidth, maxHeight))
             val chipStrings = rememberScoreChipStrings()
-            val detailsStrings = rememberScoreDetailsStrings()
+            val sportWord = rememberSportWord()
             // Not before the layout is known: a pane view is first laid out at its real tile (see layoutReady).
             if (layoutReady) Side.entries.forEach { side ->
                 val tile = DualGeometry.tile(side, dual.layout, maxWidth, maxHeight)
@@ -490,9 +490,15 @@ fun SportsLiveDualScreen(
                     startingSelection = startingSelection,
                     endSelection = endSelection,
                     sound = dual.paneSound(side, players?.isPlaying(side) == true),
-                    strip = DualScoreStrip.of(pane.item, scores[pane.item.streamKey], scoresMode, pane.item.streamKey in revealed),
+                    // The one game identity (live.24): logos, codes, rank, score and tag, kept until one of them changes.
+                    strip = run {
+                        val snapshot = scores[pane.item.streamKey]
+                        val paneRevealed = pane.item.streamKey in revealed
+                        remember(pane.item, snapshot, scoresMode, paneRevealed, sportWord) {
+                            DualScoreStrip.of(pane.item, snapshot, scoresMode, paneRevealed, sportWord)
+                        }
+                    },
                     chipStrings = chipStrings,
-                    detailsStrings = detailsStrings,
                     onViewCreated = { view ->
                         views[side] = view
                         view.player = players?.player(side)
@@ -595,7 +601,6 @@ private fun DualPaneView(
     /** The score strip (#124); null: the pane's clean name. */
     strip: DualScoreStrip?,
     chipStrings: ScoreChipStrings,
-    detailsStrings: ScoreDetailsStrings,
     onViewCreated: (PlayerView) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -659,35 +664,42 @@ private fun DualPaneView(
                         .padding(start = 8.dp)
                 )
             } else {
-                PaneScoreStrip(strip, small, textColor, chipStrings, detailsStrings, Modifier.weight(1f).padding(start = 8.dp))
+                PaneScoreStrip(strip, small, textColor, chipStrings, Modifier.weight(1f).padding(start = 8.dp))
             }
         }
     }
 }
 
-/** "[logo] BOS 91–88 NYK [logo]  ● 4:12 Q4": the logos only once both have loaded, the dot only while live. */
+/**
+ * "[logo] BOS 91–88 NYK [logo]  ● 4:12 Q4 · NBA" (live.24: the game identity): both codes, never cut, with a ranked
+ * college team's small "#12"; the score only when the chip shows one ("–" between the codes otherwise); the clock or
+ * status, with the dot only while live; the league tag on the big pane (the small one stays short). The logos only once
+ * both have loaded.
+ */
 @Composable
 private fun PaneScoreStrip(
     strip: DualScoreStrip,
     small: Boolean,
     textColor: Color,
     chipStrings: ScoreChipStrings,
-    detailsStrings: ScoreDetailsStrings,
     modifier: Modifier = Modifier
 ) {
     val logos = rememberTeamLogoPair(strip.first.logo, strip.second.logo)?.takeUnless { it.failed }
     val logoSize = if (small) 12.dp else 16.dp
     val style = SportsLiveTokens.style(if (small) SportsLiveTokens.Type.PanelScore else SportsLiveTokens.Type.DualStrip)
+    val rankSize = SportsLiveTokens.Type.Pill.fontSize
+    val score = strip.score
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
         logos?.let { TeamLogoSlot(it.first, it.shown, logoSize) }
+        Text(text = rankedName(strip.first.code, strip.first.rank, rankSize), style = style.sportsLiveBold(), color = textColor, maxLines = 1, softWrap = false)
         Text(
-            text = strip.scoreline(detailsStrings),
+            text = if (score != null) String.format(chipStrings.score, score.first, score.second) else DUAL_SIDES_GAP,
             style = style.sportsLiveBold(),
             color = textColor,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
+            softWrap = false
         )
+        Text(text = rankedName(strip.second.code, strip.second.rank, rankSize), style = style.sportsLiveBold(), color = textColor, maxLines = 1, softWrap = false)
         logos?.let { TeamLogoSlot(it.second, it.shown, logoSize) }
         strip.status(chipStrings)?.let { status ->
             if (strip.live) Box(Modifier.size(6.dp).background(SportsLiveTokens.Colors.LiveRed, CircleShape))
@@ -695,11 +707,26 @@ private fun PaneScoreStrip(
                 text = status,
                 style = style,
                 color = if (strip.live) SportsLiveTokens.Colors.LiveText else SportsLiveTokens.Colors.TextMuted,
-                maxLines = 1
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+        // The tag last, the first thing to give way (only it may be cut): the big pane only.
+        if (!small && strip.tag.isNotEmpty()) {
+            Text(
+                text = strip.tag,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.LeagueTag),
+                color = SportsLiveTokens.Colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
         }
     }
 }
+
+/** Between two codes with no score shown ("BYU – KU"). */
+private const val DUAL_SIDES_GAP = "–"
 
 /** A speaker on the pane with sound (with moving bars while it plays), a faint muted one on the other. */
 @Composable

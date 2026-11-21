@@ -214,15 +214,17 @@ class SportsLiveScoreboardTest {
     fun `a row names each team by the longest of full name, short name and abbreviation`() {
         // N1: ESPN's names for a matched game, longest first.
         val pacersRow = rows().first { it.item == pacers }
-        assertEquals(listOf("Indiana Pacers", "Pacers", "IND"), scoreboardNameChoices(pacersRow.art!!.first))
-        assertEquals(listOf("Philadelphia 76ers", "76ers", "PHI"), scoreboardNameChoices(pacersRow.art!!.second))
-        // An unmatched card has its own name only once; blanks never show.
-        assertEquals(listOf("Celtics"), scoreboardNameChoices(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Celtics", "Celtics", null)))
+        // The one game identity's names (live.24): full, short, then a code that is never cut.
+        fun names(team: com.nuvio.tv.core.sportslive.scores.GameArtTeam) = GameIdentities.side(team, ranks = false, codeOf = { null }).names
+        assertEquals(listOf("Indiana Pacers", "Pacers", "IND"), names(pacersRow.art!!.first))
+        assertEquals(listOf("Philadelphia 76ers", "76ers", "PHI"), names(pacersRow.art!!.second))
+        // An unmatched card has its own name once, then a code made from it (never a cut name); blanks never show.
+        assertEquals(listOf("Celtics", "CEL"), names(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Celtics", "Celtics", null)))
         assertEquals(
             listOf("Auburn Tigers", "Auburn", "AUB"),
-            scoreboardNameChoices(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Auburn Tigers", " AUB ", null, shortName = "Auburn"))
+            names(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Auburn Tigers", " AUB ", null, shortName = "Auburn"))
         )
-        assertEquals(listOf("Navy"), scoreboardNameChoices(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Navy", "", null, shortName = " ")))
+        assertEquals(listOf("Navy", "NAV"), names(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Navy", "", null, shortName = " ")))
     }
 
     @Test

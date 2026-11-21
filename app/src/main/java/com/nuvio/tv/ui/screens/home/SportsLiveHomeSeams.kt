@@ -221,7 +221,10 @@ private fun SportsLiveHomeScores(
     val labels = remember(items, current, mode, scoreChipStrings, liveScoreFormat) {
         SportsLiveHomeRow.scoreLabels(items, current, mode, scoreChipStrings, liveScoreFormat)
     }
-    LaunchedEffect(labels) { viewModel.setLiveNowScoreLabels(labels) }
+    // The hero's eyebrow tag as the focused card reads it (live.24, one game identity).
+    val sportWord = com.nuvio.tv.ui.screens.sportslive.rememberSportWord()
+    val tags = remember(items, current, sportWord) { SportsLiveHomeRow.tags(items, current, sportWord) }
+    LaunchedEffect(labels, tags) { viewModel.setLiveNowScoreLabels(labels, tags) }
     // Games ESPN confirmed final (#60, past the grace) leave the row; an estimate never drops one.
     val clockMs by rememberSportsLiveClockMs()
     val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.confirmedEndedKeys(items, current, clockMs) }

@@ -61,7 +61,10 @@ internal fun rememberLiveNowCardArt(
                 val footer = remember(snapshot, confirmedUnmatched) {
                     // #215: listed live by its addon, not found by ESPN ([listedLiveOnly]).
                     val listed = item.isLive && !item.isChannel && SportsLiveHomeMeta.listedLiveOnly(mode, confirmedUnmatched, ScoreChips.matchedEvent(item, snapshot) != null)
-                    SportsLiveHomeMeta.cardFooter(ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed })
+                    SportsLiveHomeMeta.cardFooter(
+                        ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed },
+                        halves = com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves(snapshot?.league)
+                    )
                 }
                 val art = remember(snapshot) { GameArt.of(item, snapshot) }
                 val tag = remember(snapshot) { liveNowItemTag(item, snapshot, sportWord).ifEmpty { null } }

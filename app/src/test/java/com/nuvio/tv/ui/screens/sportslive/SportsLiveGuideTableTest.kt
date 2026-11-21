@@ -109,11 +109,11 @@ class SportsLiveGuideTableTest {
     @Test
     fun `an unmatched side keeps its full name first, then ESPN's code or a derived one, never a cut name`() {
         val side = GameArtTeam("Maryland Eastern Shore", "Maryland Eastern Shore", null)
-        assertEquals(listOf("Maryland Eastern Shore", "MES"), guideNameChoices(side, individual = false))
-        assertEquals(listOf("Maryland Eastern Shore", "UMES"), guideNameChoices(side, individual = false) { "UMES" })
+        assertEquals(listOf("Maryland Eastern Shore", "MES"), GameIdentities.side(side, ranks = false, codeOf = { null }).names)
+        assertEquals(listOf("Maryland Eastern Shore", "UMES"), GameIdentities.side(side, ranks = false, codeOf = { "UMES" }).names)
         // A player steps down to the last name.
         val player = GameArtTeam("Novak Djokovic", "Novak Djokovic", null)
-        assertEquals(listOf("Novak Djokovic", "Djokovic"), guideNameChoices(player, individual = true))
+        assertEquals(listOf("Novak Djokovic", "Djokovic"), GameIdentities.side(player, ranks = false, individual = true, codeOf = { null }).names)
     }
 
     @Test

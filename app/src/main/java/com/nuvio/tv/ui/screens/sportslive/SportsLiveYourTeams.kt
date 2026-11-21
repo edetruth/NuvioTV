@@ -53,7 +53,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
-import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
@@ -349,7 +348,10 @@ internal fun SportsLiveYourTeamsStrip(
                     }
                     val face = when (entry) {
                         is YourTeamsEntry.Live -> {
-                            val footer = SportsLiveHomeMeta.cardFooter(entry.row.chip, scoresMode, strings, liveWord)
+                            val footer = SportsLiveHomeMeta.cardFooter(
+                                entry.row.chip, scoresMode, strings, liveWord,
+                                halves = panelPlaysHalves((entry.row.status as? com.nuvio.tv.core.sportslive.GameStatus.Live)?.event?.league)
+                            )
                             SlimFace(
                                 status = SlimStatus.Live(footer.lead),
                                 corner = if (ready) SlimCorner.Ready else null,
@@ -525,7 +527,11 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
                     SlimText(status.clock, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
                     Spacer(modifier = Modifier.weight(1f))
                 }
-                is SlimStatus.Time -> SlimText(status.text, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary, Modifier.weight(1f))
+                is SlimStatus.Time -> {
+                    // live.24 (audit B1, "2… ▶ Ready"): the time is kept whole, as a live clock is; "▶ Ready" steps down to ▶.
+                    SlimText(status.text, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
+                    Spacer(modifier = Modifier.weight(1f))
+                }
                 SlimStatus.Replay -> {
                     Text(
                         text = stringResource(R.string.sports_live_results_replay),
@@ -607,23 +613,15 @@ private fun SlimNames(art: GameArt, style: TextStyle, color: Color) {
 
 /**
  * A team's name on a slim strip card (J4, user TV report 2026-11-21: "Da… Lo…" for Mavericks vs Clippers with no ESPN
- * match): ESPN's (or a learned) abbreviation; else the abbreviation our own team lists give the name, its city
- * written short or in full ([abbreviationOf]: "Los Angeles Clippers" is the NBA's "LAC"); else a code made from the
- * name ([panelShortCode]: "DAL"). Never the full name, which a card ~100 dp wide can only cut.
+ * match): the game identity's code ([GameIdentities.code], live.24): ESPN's (or a learned) abbreviation; else the
+ * abbreviation our own team lists give the name, its city written short or in full ([abbreviationOf]: "Los Angeles
+ * Clippers" is the NBA's "LAC"); else a code made from the name ([panelShortCode]: "DAL"). Never the full name, which a
+ * card ~100 dp wide can only cut.
  */
 internal fun yourTeamsShortName(
     team: GameArtTeam,
-    abbreviationOf: (String) -> String? = { name ->
-        TeamDirectory.cityVariants(name).firstNotNullOfOrNull { TeamDirectory.shared.abbreviationAnywhere(it) }
-    }
-): String {
-    val short = team.short.trim()
-    if (short.isNotEmpty() && short.length <= SLIM_CODE_MAX && !short.equals(team.name.trim(), ignoreCase = true)) return short
-    return abbreviationOf(team.name)?.trim()?.takeIf { it.isNotEmpty() } ?: panelShortCode(team.name)
-}
-
-/** The longest name a slim card sets whole beside the other ("UCONN"). */
-private const val SLIM_CODE_MAX = 5
+    abbreviationOf: (String) -> String? = GameIdentities::knownCode
+): String = GameIdentities.code(team, abbreviationOf)
 
 @Composable
 private fun SlimText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {

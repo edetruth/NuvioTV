@@ -1440,7 +1440,11 @@ class SportsLiveViewModel internal constructor(
                 }
                 // J2 (live.23): by importance (followed, My sports by tier, other leagues, unplaced); a close or late game
                 // leads its tier only with the scores shown (the badges exist only then), so no hidden score moves a row.
+                // live.24 (audit A6): live games with a score of ours before the scoreless ones, each part in importance
+                // order. Here, before the calm step (J1), not on the board: a score landing later never moves a shown row;
+                // the order is applied on the first build, a thaw ("N new") and a re-rank. Under Off nothing has a score.
                 val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys)
+                    .sortedBy { item -> if (ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) == null) 1 else 0 }
                 val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
                 lastBuiltLiveCount = ranked.size

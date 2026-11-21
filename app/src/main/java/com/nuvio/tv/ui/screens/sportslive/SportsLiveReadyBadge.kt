@@ -44,7 +44,7 @@ fun SportsLiveReadyPill(modifier: Modifier = Modifier, stage: Boolean = false) {
     val shape = SportsLiveTokens.Radius.PillShape
     Text(
         text = stringResource(if (stage) R.string.sports_live_stage_stream_ready else R.string.sports_live_ready_pill),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).sportsLiveBold(),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).sportsLiveBold(),
         color = Colors.ReplayGreen,
         maxLines = 1,
         softWrap = false,
@@ -61,7 +61,7 @@ fun SportsLiveReadyPill(modifier: Modifier = Modifier, stage: Boolean = false) {
 fun SportsLiveNoStreamYet(modifier: Modifier = Modifier) {
     Text(
         text = stringResource(R.string.sports_live_no_stream_yet_mark),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
         color = Colors.TextMuted,
         maxLines = 1,
         softWrap = false,

@@ -774,7 +774,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 ))
             }
             if (liveNowItems.isNotEmpty()) {
-                add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle, liveNowScoreLabels, sportsLiveHomeWords())))
+                add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle, liveNowScoreLabels, sportsLiveHomeWords(), liveNowTags)))
             }
             collectionsCache.forEach { collection ->
                 val key = "collection_${collection.id}"

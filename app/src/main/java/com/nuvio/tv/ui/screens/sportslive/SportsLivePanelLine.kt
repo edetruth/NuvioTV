@@ -100,7 +100,10 @@ internal data class PanelLine(
     val live: Boolean = false,
     val tag: String = "",
     /** What tells this event or channel from another row of the same title ("Onboard", "UK"); null for none (live.20). */
-    val suffix: String? = null
+    val suffix: String? = null,
+    /** A ranked college team's rank (#137, live.24): "#5" before its name, as on every row ([GameIdentities.rankOf]). */
+    val firstRank: Int? = null,
+    val secondRank: Int? = null
 ) {
     /** Always one line: the row is [Size.PanelLine] tall. */
     val lines: Int get() = 1
@@ -124,9 +127,17 @@ internal fun panelLineOf(
     val status = scoreboardStatusLines(row, strings, kickoff)
     // Short beside the clock (TV QA BUG-C): "1H" for men's college basketball's halves, "Q2", "OT".
     val halves = panelPlaysHalves((row.status as? GameStatus.Live)?.event?.league)
-    val period = status.secondary.takeIf { status.live }?.let { panelPeriodShort(it, halves) }
+    val livePeriod = status.secondary.takeIf { status.live && !status.listed }?.let { panelPeriodShort(it, halves) }
+    // The game grammar (live.24): "End of" + "2nd" reads "End 2H" / "End 2nd" as one clock, never "2H End of".
+    val endOfPeriod = livePeriod != null && status.primary?.trim()?.equals("End of", ignoreCase = true) == true
+    val period = livePeriod.takeUnless { endOfPeriod }
     // live.20 F5: a live row with no real clock shows the red dot alone; "LIVE" on every row repeats the section header.
-    val clock = status.primary.takeUnless { status.live && period == null && it == strings.live }
+    // A live game with no score of ours says so ("No score yet", the grammar's one scoreless word).
+    val clock = when {
+        endOfPeriod -> gameClockLine(status.primary, status.secondary, halves)
+        status.listed -> status.secondary
+        else -> status.primary.takeUnless { status.live && period == null && it == strings.live }
+    }
     val art = row.art
     return when {
         row.group == ScoreboardGroup.CHANNELS -> PanelLine(
@@ -145,7 +156,9 @@ internal fun panelLineOf(
             clock = clock.takeUnless { row.chip is ScoreChip.Hidden },
             period = period,
             live = status.live,
-            tag = tag
+            tag = tag,
+            firstRank = GameIdentities.rankOf(art.first, art),
+            secondRank = GameIdentities.rankOf(art.second, art)
         )
         else -> PanelLine(
             PanelLineKind.EVENT, title = panelTitleOf(row.item), clock = clock, period = period, live = status.live,
@@ -406,9 +419,10 @@ internal fun SportsLivePanelLine(
     val endedShort = stringResource(R.string.sports_live_panel_probably_ended_short)
     val kickoff = row.art?.let { kickoffText(it) }
     // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "RACING").
-    val sport = rememberRowPlainTag(row)
-    val tag = SportsLiveTags.short(rowTagText(row), sport)
-    val individual = sport in PANEL_INDIVIDUAL_SPORTS
+    // The one game identity (live.24): Live Now's tag and sport.
+    val identity = rememberGameIdentity(row)
+    val tag = identity.tag
+    val individual = identity.sport in PANEL_INDIVIDUAL_SPORTS
     val line = remember(row, strings, kickoff, tag, individual, titleSuffix) {
         panelLineOf(row, strings, kickoff, tag, titleSuffix) { side ->
             panelSideName(
@@ -575,6 +589,8 @@ private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: B
     PanelNames(
         firstChoices = firstChoices,
         secondChoices = secondChoices,
+        firstRank = line.firstRank,
+        secondRank = line.secondRank,
         firstLogo = { if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo) },
         middle = { LineMiddle(line.scores) },
         secondLogo = { if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo) },
@@ -675,7 +691,10 @@ private fun PanelNames(
     firstLogo: @Composable () -> Unit,
     middle: @Composable () -> Unit,
     secondLogo: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Ranked college teams' ranks (live.24): "#5" before every form, so the rank is never what is cut. */
+    firstRank: Int? = null,
+    secondRank: Int? = null
 ) {
     val firstForms = firstChoices.ifEmpty { listOf("") }
     val secondForms = secondChoices.ifEmpty { listOf("") }
@@ -683,9 +702,9 @@ private fun PanelNames(
     Layout(
         content = {
             Box { firstLogo() }
-            firstForms.forEach { LineText(it) }
+            firstForms.forEach { LineText(it, rank = firstRank) }
             Box { middle() }
-            secondForms.forEach { LineText(it) }
+            secondForms.forEach { LineText(it, rank = secondRank) }
             Box { secondLogo() }
         },
         modifier = modifier,
@@ -916,8 +935,9 @@ private fun LineTag(tag: String, live: Boolean) {
         if (tag.isNotEmpty()) {
             Text(
                 text = tag,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                color = if (live) Colors.LiveText else Colors.TextSecondary,
+                // live.24 (audit B2): one grey at 26 px on every surface; red is for live itself.
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.LeagueTag),
+                color = Colors.TextSecondary,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
@@ -951,8 +971,21 @@ private fun RowScope.EventLine(line: PanelLine, favorite: Boolean = false) {
 private fun LineText(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = Colors.TextPrimary
+    color: Color = Colors.TextPrimary,
+    /** A ranked college team (live.24): a small muted "#5" before the name ([rankedName]). */
+    rank: Int? = null
 ) {
+    if (rank != null) {
+        Text(
+            text = rankedName(text, rank, SportsLiveTokens.Type.Pill.fontSize),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier
+        )
+        return
+    }
     Text(
         text = text,
         style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
@@ -981,11 +1014,20 @@ private fun StatusText(line: PanelLine, compactClock: String? = null) {
     }
 }
 
-/** One form of a row's status ([StatusText]): the live dot, the [clock] and, smaller, its [period]. */
+/** One form of a row's status ([StatusText]): the live dot, the [period] then its [clock] (the game grammar: "Q4 11:22"). */
 @Composable
 private fun StatusForm(live: Boolean, clock: String?, period: String?) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (live) Box(modifier = Modifier.size(LIVE_DOT).clip(CircleShape).background(Colors.LiveRed))
+        if (period != null) {
+            Text(
+                text = period,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelScore),
+                color = Colors.TextSecondary,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
         if (clock != null) {
             Text(
                 text = clock,
@@ -994,15 +1036,6 @@ private fun StatusForm(live: Boolean, clock: String?, period: String?) {
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (period != null) {
-            Text(
-                text = period,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                color = Colors.TextSecondary,
-                maxLines = 1,
-                softWrap = false
             )
         }
     }
@@ -1111,8 +1144,8 @@ internal fun SportsLivePanelHeader(group: ScoreboardGroup, count: Int) {
 
 private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
-/** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("BASKETBALL" is about 72 dp, #217), never cut (live.20 F5). */
-private val PANEL_TAG_COLUMN = 76.dp
+/** Fits [SportsLiveTags.MAX_CHARS] capitals at the league tag's 26 px ("BASKETBALL" is about 86 dp, #217), never cut (live.20 F5). */
+private val PANEL_TAG_COLUMN = 90.dp
 
 /**
  * The panel rows' tag column (TV QA BUG-C follow-up, coordinator decision): as wide as the widest tag the panel shows
@@ -1127,7 +1160,7 @@ internal val LocalPanelTagColumn = staticCompositionLocalOf { PANEL_TAG_COLUMN }
 @Composable
 internal fun rememberPanelTagColumn(rows: List<ScoreboardRow>): Dp {
     val tags = rows.map { boardTagText(it) }.filter { it.isNotEmpty() }.distinct()
-    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag)
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.LeagueTag)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     return remember(tags, style, density) {

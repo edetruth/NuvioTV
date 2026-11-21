@@ -3,9 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.scores.TennisColumns
 import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import com.nuvio.tv.core.sportslive.scores.GameArt
-import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
-import com.nuvio.tv.core.sportslive.scores.TennisMatch
 import com.nuvio.tv.domain.model.SportsLiveItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +23,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import com.nuvio.tv.core.sportslive.GameStatus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.Notifications
@@ -109,7 +109,8 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, count: Int, modi
     Text(
         text = text,
         style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
-        color = if (group == ScoreboardGroup.LIVE) Colors.LiveRed else Colors.TextPrimary.copy(alpha = 0.6f),
+        // Red only for live itself (the dot, the clock line, the progress bar; live.24 audit B2): headers are all one grey.
+        color = Colors.TextPrimary.copy(alpha = 0.6f),
         maxLines = 1,
         modifier = modifier.padding(top = 8.dp, bottom = 4.dp)
     )
@@ -255,26 +256,29 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
     val scores = scoreboardScoresOf(row.chip)
     // Just ended rows are 40 dp: their names sit a little closer.
     val compact = row.group == ScoreboardGroup.JUST_ENDED
+    val identity = rememberGameIdentity(row)
     Row(
         modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LeagueTag(boardTagText(row), live)
+        LeagueTag(identity.tag, live)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
-            if (art != null) {
-                // Both lines step down together (full name, short name, abbreviation), so the two teams read alike.
-                val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
-                val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
+            // The one game identity (live.24): the same names, codes and ranks as every other surface.
+            val first = identity.first
+            val second = identity.second
+            if (art != null && first != null && second != null) {
+                // Both lines step down together (full name, short name, code), so the two teams read alike.
+                val firstChoices = first.names
+                val secondChoices = second.names
                 var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                 val tooLong: (Int) -> Unit = { from -> level = nextNameLevel(level, from, maxLevel) }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
                 val leader = row.tennis?.leader ?: (scores as? ScoreboardScores.Shown)?.leader
-                val ranks = art.takeIf { it.ranksOnRows }
-                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, leader == 0, compact, tooLong, ranks?.first?.rank)
-                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, leader == 1, compact, tooLong, ranks?.second?.rank)
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, first.followed, leader == 0, compact, tooLong, first.rank)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, second.followed, leader == 1, compact, tooLong, second.rank)
             } else {
                 // An unmatched title with no two sides: its clean name, in the same column.
                 NameText(item.displayName, bold = false, compact = compact, maxLines = 2)
@@ -287,29 +291,18 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 }
 
 /**
- * The sport [row]'s text tells ([SportsLiveSportKind.plainTagOf]) when it has no sport tag of its own, read again when
- * the team directory's lists change (a bare "Football" waits for the NFL list, release review).
- */
-@Composable
-internal fun rememberRowPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
-    val plain = rememberTextPlainTag(row)
-    return row.sportTag ?: plain
-}
-
-/**
  * The sport [row]'s text alone tells ([SportsLiveSportKind.plainTagOf]), kept per item and directory revision: a row
  * recomposes often, and a bare "Football" asks the team directory each time (release review, TV performance).
  */
 @Composable
-private fun rememberTextPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
+internal fun rememberTextPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
     val revision by TeamDirectory.shared.revision.collectAsState()
     return remember(row.item, revision) { SportsLiveSportKind.plainTagOf(row.item) }
 }
 
-/** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual). */
+/** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual): the game identity's. */
 @Composable
-internal fun boardTagText(row: ScoreboardRow): String =
-    com.nuvio.tv.core.sportslive.SportsLiveTags.short(rowTagText(row), rememberRowPlainTag(row))
+internal fun boardTagText(row: ScoreboardRow): String = rememberGameIdentity(row).tag
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
@@ -355,20 +348,15 @@ internal fun itemTagOf(
  * Live Now row ([itemTagOf], then [com.nuvio.tv.core.sportslive.SportsLiveTags.short]) with [snapshot]'s ESPN league when
  * known; [label] words a sport ("SOCCER"). Never an addon's or catalog's name.
  */
-internal fun liveNowItemTag(item: SportsLiveItem, snapshot: ScoreSnapshot?, label: (SportsLiveSportKind) -> String): String {
-    val sportTag = SportsLiveSportKind.tagOf(item)
-    val plain = SportsLiveSportKind.plainTagOf(item)
-    val tag = itemTagOf(
+internal fun liveNowItemTag(item: SportsLiveItem, snapshot: ScoreSnapshot?, label: (SportsLiveSportKind) -> String): String =
+    GameIdentities.tag(
         item = item,
         art = GameArt.of(item, snapshot),
-        sportTag = sportTag,
-        leagueTag = (ScoreChips.matchedEvent(item, snapshot)?.individual as? TennisMatch)?.takeIf { it.live }
-            ?.let { snapshot?.league?.league?.uppercase() },
-        sportLabel = sportTag?.let(label),
-        plainLabel = plain?.let(label)
+        sportTag = SportsLiveSportKind.tagOf(item),
+        leagueTag = GameIdentities.leagueTagOf(item, snapshot),
+        plain = SportsLiveSportKind.plainTagOf(item),
+        label = label
     )
-    return com.nuvio.tv.core.sportslive.SportsLiveTags.short(tag, sportTag ?: plain)
-}
 
 /**
  * A single-line row (V2 P3): not a two-sided match ("ATP 250 - Stockholm Open", "Tennis"): the sport tag, the
@@ -411,19 +399,21 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
         verticalAlignment = Alignment.CenterVertically
     ) {
         // No score column here: the tag gets the room to read at its full size, as on every other row.
-        LeagueTag(boardTagText(row), live = false)
+        val identity = rememberGameIdentity(row)
+        LeagueTag(identity.tag, live = false)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
-            if (art != null && row.twoSided) {
-                val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
-                val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
+            val first = identity.first
+            val second = identity.second
+            if (art != null && first != null && second != null) {
+                val firstChoices = first.names
+                val secondChoices = second.names
                 var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                 val tooLong: (Int) -> Unit = { from -> level = nextNameLevel(level, from, maxLevel) }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
-                val ranks = art.takeIf { it.ranksOnRows }
-                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, false, false, tooLong, ranks?.first?.rank)
-                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, false, false, tooLong, ranks?.second?.rank)
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, first.followed, false, false, tooLong, first.rank)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, second.followed, false, false, tooLong, second.rank)
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     // The event's mark in the logo slot (live.20 item 4), never an empty space.
@@ -563,17 +553,23 @@ private fun ChannelCells(row: ScoreboardRow, watching: Boolean) {
  * ten-letter sport word ("BASKETBALL"), so a tag is never shrunk; anything longer is already initials ([scoreboardTag]).
  */
 @Composable
-private fun LeagueTag(tag: String, live: Boolean) {
+private fun LeagueTag(tag: String, @Suppress("UNUSED_PARAMETER") live: Boolean) {
     Box(modifier = Modifier.width(Size.ColumnLeague), contentAlignment = Alignment.CenterEnd) {
+        // live.24 (audit B2): one grey on every row, live or not (red is for the dot and the clock), at 26 px; only a
+        // ten-letter sport word ("BASKETBALL") steps down to fit the column, never cut.
         BasicText(
             text = tag,
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(
-                color = if (live) Colors.LiveText else Colors.TextSecondary,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.LeagueTag).copy(
+                color = Colors.TextSecondary,
                 textAlign = TextAlign.End
             ),
             maxLines = 1,
             softWrap = false,
-            overflow = TextOverflow.Ellipsis
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = SportsLiveTokens.Type.Tag.fontSize,
+                maxFontSize = SportsLiveTokens.Type.LeagueTag.fontSize,
+                stepSize = 1.sp
+            )
         )
     }
 }
@@ -603,7 +599,7 @@ private fun TeamLine(
             rank?.let {
                 Text(
                     text = RankDisplay.label(it),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
                     color = Colors.TextMuted,
                     maxLines = 1
                 )
@@ -687,8 +683,16 @@ private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean, compact: Boo
 private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boolean = false, ready: Boolean = false, watching: Boolean = false) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
-    val lines = scoreboardStatusLines(row, strings, kickoff)
-    // A one-line live event with no clock: the red dot and LIVE at the tag's size (#134).
+    val raw = scoreboardStatusLines(row, strings, kickoff)
+    // The game grammar (live.24, audit A2): a live clock and its period on ONE line, period first ("4th 3:40", "End 2H"),
+    // which leaves the second line to the row's one pill. A scoreless live game keeps its muted "No score yet" there.
+    val halves = panelPlaysHalves((row.status as? GameStatus.Live)?.event?.league)
+    val lines = if (raw.live && !raw.listed && raw.secondary != null) {
+        raw.copy(primary = gameClockLine(raw.primary, raw.secondary, halves), secondary = null)
+    } else {
+        raw
+    }
+    // A one-line live event with no clock: the red dot and LIVE (#134).
     val liveMark = singleLine && lines.live && lines.secondary == null && lines.primary == strings.live
     Column(modifier = Modifier.width(Size.ColumnStatus), verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically)) {
         lines.primary?.let { primary ->
@@ -696,36 +700,45 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
                 if (lines.live) Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.LiveRed))
                 Text(
                     text = primary,
-                    style = if (liveMark) SportsLiveTokens.style(SportsLiveTokens.Type.Tag) else SportsLiveTokens.style(STATUS_STYLE),
-                    // #215: "Listed live" is quieter than a confirmed LIVE.
-                    color = if (liveMark) Colors.LiveText else if (lines.listed) Colors.TextSecondary else Colors.TextPrimary,
+                    style = if (liveMark) SportsLiveTokens.style(SportsLiveTokens.Type.Pill) else SportsLiveTokens.style(STATUS_STYLE),
+                    color = Colors.TextPrimary,
                     maxLines = if (lines.secondary == null && !lines.live) 2 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
         lines.secondary?.let { secondary ->
-            val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium)
+            // 26 px at the least (live.24 floor), never grey-on-grey for the period or countdown.
+            val style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).copy(fontWeight = FontWeight.Medium)
             if (lines.urgent) {
+                // Red is for live only (audit B2): the last hour's countdown is outlined in the neutral strong outline.
                 Text(
                     text = secondary,
                     style = style,
-                    color = Colors.LiveText,
+                    color = Colors.TextPrimary,
                     maxLines = 1,
                     modifier = Modifier
-                        .border(1.dp, Colors.LiveRed, SportsLiveTokens.Radius.PillShape)
+                        .border(1.dp, Colors.OutlineStrong, SportsLiveTokens.Radius.PillShape)
                         .padding(horizontal = 5.dp)
                 )
             } else {
-                Text(text = secondary, style = style, color = Colors.TextPrimary.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = secondary,
+                    style = style,
+                    // "No score yet" is quieter than the clock it stands in for.
+                    color = if (lines.listed) Colors.TextSecondary else Colors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
-        // One badge fits (live.20): "▶ Ready" on my game, else the excitement badge (Scores shown), else "Close game" in
-        // crunch time (#137, under Hide too: it tells no score).
+        // ONE pill per row (live.24 grammar): "▶ Ready" on my game, else the excitement badge (Scores shown), else "Close
+        // game" in crunch time (#137, under Hide too: it tells no score), else "No stream yet"; a Just ended row's Replay
+        // pill stands in for all of them.
         val excitement = row.excitement
         // A live row whose last lookup found nothing playable (#145, BUG2) says so in words, beside its dimming.
         val noStream = row.noStreams && row.group == ScoreboardGroup.LIVE
-        when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
+        if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill() else when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
             // BUG-D: the mini player's game says so in the badge's place (after its excitement or close badge), never on "LIVE".
             RowBadge.WATCHING -> SportsLiveWatchingPill()
             RowBadge.READY -> SportsLiveReadyPill()
@@ -735,7 +748,6 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
             // A link check running (live.20), with no other badge to show: the faint mark in the badge's place.
             RowBadge.NONE -> if (rememberSportsLiveChecking(row.item)) SportsLiveCheckingMark()
         }
-        if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill()
     }
 }
 
@@ -772,7 +784,7 @@ private fun TennisSetsCell(columns: TennisColumns, live: Boolean, compact: Boole
 private fun SportsLiveWatchingPill() {
     Text(
         text = stringResource(R.string.sports_live_row_watching),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
         color = Colors.OnPrimary,
         maxLines = 1,
         softWrap = false,
@@ -800,7 +812,8 @@ private fun BigGameBadge() {
 /** The excitement badge (#43, F2): small and blue, so it never reads as live (red) or followed (gold). */
 @Composable
 private fun ExcitementBadge(texts: List<String>) {
-    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp)
+    // 26 px (live.24 floor): the longest wording that fits, else the shortest ("Close").
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill)
     val measurer = rememberTextMeasurer()
     // The first of [texts] (longest first) whose one line fits the column beside the badge's padding (live.20: never
     // "Close · 8 m…"); the last, the shortest, otherwise.

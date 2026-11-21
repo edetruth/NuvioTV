@@ -15,6 +15,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -59,19 +60,19 @@ class DualScoreStripTest {
     )
 
     private fun strip(item: SportsLiveItem, event: ScoreSnapshot?, mode: ScoresMode? = ScoresMode.SHOW, revealed: Boolean = false) =
-        DualScoreStrip.of(item, event, mode, revealed)
+        DualScoreStrip.of(item, event, mode, revealed, codeOf = { null })
 
     private fun texts(strip: DualScoreStrip?) = strip?.let { it.scoreline(detailsStrings) to it.status(chipStrings) }
 
     @Test
     fun `live basketball shows both teams, the score in the title's order and the clock with the live dot`() {
         val strip = strip(item("Indiana Pacers at Philadelphia 76ers"), live(pacers, "4:12 - 4th", home = 88, away = 91))
-        assertEquals("IND 91–88 PHI" to "4:12 - 4th", texts(strip))
+        assertEquals("IND 91–88 PHI" to "4th 4:12", texts(strip))
         assertTrue(strip!!.live)
         assertEquals(pacers.away.logo, strip.first.logo)
         assertEquals(pacers.home.logo, strip.second.logo)
         // The other way round, the other order.
-        assertEquals("PHI 88–91 IND" to "4:12 - 4th", texts(strip(item("76ers vs Pacers"), live(pacers, "4:12 - 4th", home = 88, away = 91))))
+        assertEquals("PHI 88–91 IND" to "4th 4:12", texts(strip(item("76ers vs Pacers"), live(pacers, "4:12 - 4th", home = 88, away = 91))))
     }
 
     @Test
@@ -85,12 +86,12 @@ class DualScoreStripTest {
     fun `live football shows the quarter clock`() {
         val event = live(seahawks, "8:41 - 3rd", home = 17, away = 20)
         val text = texts(strip(item("Seahawks at Raiders", "American Football"), event))
-        assertEquals("${seahawks.away.abbreviation} 20–17 ${seahawks.home.abbreviation}" to "8:41 - 3rd", text)
+        assertEquals("${seahawks.away.abbreviation} 20–17 ${seahawks.home.abbreviation}" to "3rd 8:41", text)
     }
 
     @Test
     fun `a live game before its first score shows the sides and the clock`() {
-        assertEquals("PHI – IND" to "12:00 - 1st", texts(strip(item("76ers vs Pacers"), live(pacers, "12:00 - 1st", null, null))))
+        assertEquals("PHI – IND" to "1st 12:00", texts(strip(item("76ers vs Pacers"), live(pacers, "12:00 - 1st", null, null))))
     }
 
     @Test
@@ -117,17 +118,40 @@ class DualScoreStripTest {
         val hidden = strip(item("76ers vs Pacers"), event, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false)
         assertEquals("PHI – IND" to "Score hidden", texts(hidden))
         assertFalse(hidden!!.live)
-        assertEquals("PHI 88–91 IND" to "4:12 - 4th", texts(strip(item("76ers vs Pacers"), event, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true)))
+        assertEquals("PHI 88–91 IND" to "4th 4:12", texts(strip(item("76ers vs Pacers"), event, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true)))
     }
 
     @Test
-    fun `no strip when Scores is Off or not read yet, unmatched, or not started`() {
+    fun `no score when Scores is Off or not read yet, unmatched, or not started - the teams alone (live 24)`() {
         val event = live(pacers, "4:12 - 4th", home = 88, away = 91)
-        assertNull(strip(item("76ers vs Pacers"), event, ScoresMode.OFF))
-        assertNull(strip(item("76ers vs Pacers"), event, mode = null))
-        assertNull(strip(item("76ers vs Pacers"), null))
-        // Only one side named on the event: never a score against the wrong team.
-        assertNull(strip(item("Celtics vs 76ers"), event))
-        assertNull(strip(item("76ers vs Pacers"), pacers.copy(state = ScoreState.PRE, isFinal = false)))
+        listOf(
+            strip(item("76ers vs Pacers"), event, ScoresMode.OFF),
+            strip(item("76ers vs Pacers"), event, mode = null),
+            strip(item("76ers vs Pacers"), null),
+            // Only one side named on the event: never a score against the wrong team.
+            strip(item("Celtics vs 76ers"), event),
+            strip(item("76ers vs Pacers"), pacers.copy(state = ScoreState.PRE, isFinal = false))
+        ).forEach { strip ->
+            assertNotNull(strip)
+            assertNull(strip!!.chip)
+            assertNull(strip.score)
+            assertNull(strip.status(chipStrings))
+            assertFalse(strip.live)
+        }
+        // Before the start: ESPN's codes and logos, no score ("PHI – IND").
+        val before = strip(item("76ers vs Pacers"), pacers.copy(state = ScoreState.PRE, isFinal = false))!!
+        assertEquals("PHI – IND", before.scoreline(detailsStrings))
+        assertEquals(pacers.home.logo, before.first.logo)
+    }
+
+    @Test
+    fun `a ranked college team keeps its rank, and a title that names no two teams gets no strip`() {
+        val college = live(pacers, "4:12 - 2nd", home = 40, away = 38).copy(
+            league = EspnLeagueMap.COLLEGE_BASKETBALL, home = pacers.home.copy(rank = 12, score = 40)
+        )
+        val strip = strip(item("76ers vs Pacers"), college)!!
+        assertEquals(12, strip.first.rank)
+        assertNull(strip.second.rank)
+        assertNull(strip(item("ATP 250 - Stockholm Open", "Tennis"), null))
     }
 }

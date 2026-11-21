@@ -41,7 +41,9 @@ data class GameArt(
     /** ESPN's season type of the matched game (1 preseason, 2 regular season, 3 postseason); null otherwise. */
     val seasonType: Int? = null,
     /** Rows show the teams' ranks too (#137: college only); the stage and Game page always do. */
-    val ranksOnRows: Boolean = false
+    val ranksOnRows: Boolean = false,
+    /** ESPN says [first] is the home side (true) or the away side (false); null when no ESPN game is matched (live.24 grammar: "at" / "vs"). */
+    val firstIsHome: Boolean? = null
 ) {
     /** Logos are drawn only when both teams have one (#130); otherwise the names are set in large type. */
     val hasLogos: Boolean get() = TeamMarks.pair(first.logo, second.logo) != null
@@ -73,7 +75,8 @@ data class GameArt(
                 startMs = eventStart ?: item.startMs,
                 hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay,
                 seasonType = event?.seasonType,
-                ranksOnRows = event != null && RankDisplay.onRows(event.league)
+                ranksOnRows = event != null && RankDisplay.onRows(event.league),
+                firstIsHome = firstIsHome.takeIf { event != null }
             )
         }
 
@@ -115,7 +118,8 @@ data class GameArt(
             league = event.leagueName?.takeIf { it.isNotBlank() },
             startMs = null,
             hasTimeOfDay = false,
-            ranksOnRows = RankDisplay.onRows(event.league)
+            ranksOnRows = RankDisplay.onRows(event.league),
+            firstIsHome = false
         )
 
         private fun espnTeam(team: ScoreTeam, league: EspnLeague, records: Boolean): GameArtTeam {

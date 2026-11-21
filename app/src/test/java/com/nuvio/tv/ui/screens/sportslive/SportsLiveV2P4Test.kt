@@ -157,12 +157,23 @@ class SportsLiveV2P4Test {
             id = "1", abbreviation = "UMES", displayName = "Maryland Eastern Shore Hawks", shortDisplayName = "MD Eastern",
             name = "Hawks", location = "Maryland Eastern Shore", logo = null, score = 60, linescores = emptyList()
         )
-        assertEquals(listOf("Maryland Eastern Shore Hawks", "MD Eastern", "UMES"), resultNameChoices(umes))
-        // Blanks and repeats drop; a team with no names keeps one line.
+        // The one game identity's names (live.24): a code that is never cut comes last.
+        fun names(team: ScoreTeam) = GameIdentities.side(
+            com.nuvio.tv.core.sportslive.scores.GameArt.ofEvent(
+                com.nuvio.tv.core.sportslive.scores.ScoreSnapshot(
+                    eventId = "e", league = com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.NBA, startMs = null,
+                    state = com.nuvio.tv.core.sportslive.scores.ScoreState.POST, clockText = null, isFinal = true, home = team, away = team
+                )
+            ).second,
+            ranks = false,
+            codeOf = { null }
+        ).names
+        assertEquals(listOf("Maryland Eastern Shore Hawks", "MD Eastern", "UMES"), names(umes))
+        // Blanks and repeats drop; a team with no short form gets a code made from its name.
         val plain = umes.copy(abbreviation = " ", shortDisplayName = "Maryland Eastern Shore Hawks")
-        assertEquals(listOf("Maryland Eastern Shore Hawks"), resultNameChoices(plain))
+        assertEquals(listOf("Maryland Eastern Shore Hawks", "MES"), names(plain))
         val bare = umes.copy(abbreviation = null, displayName = null, shortDisplayName = null)
-        assertEquals(listOf("Hawks"), resultNameChoices(bare))
+        assertEquals(listOf("Hawks", "HAW"), names(bare))
     }
 
     @Test

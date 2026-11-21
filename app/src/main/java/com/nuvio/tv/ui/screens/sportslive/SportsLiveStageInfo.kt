@@ -237,9 +237,9 @@ internal fun SportsLiveStageFactsLine(facts: StageFacts, modifier: Modifier = Mo
 /**
  * The one badge a row's status column has room for (live.20). The mini player's game (BUG-D): its excitement or
  * close-game badge (new information; the mini player already says what is watching), else "▶ Watching". Any other
- * row: "▶ Ready" (my game, one press to play), then
- * "No stream yet" (BUG2: its last lookup found nothing playable, only notices or nothing, so the LIVE row must not
- * read as playable), then excitement, then close game.
+ * row, one pill by the game grammar's priority (live.24, audit A2): "▶ Ready" (my game, one press to play), then
+ * excitement, then close game, then "No stream yet" (BUG2: its last lookup found nothing playable; the row is dimmed
+ * too, so it never reads as playable).
  */
 internal enum class RowBadge { WATCHING, READY, NO_STREAM, EXCITEMENT, CLOSE_GAME, NONE }
 
@@ -256,9 +256,9 @@ internal fun rowBadgeOf(
         else -> RowBadge.WATCHING
     }
     ready -> RowBadge.READY
-    noStream -> RowBadge.NO_STREAM
     excitement -> RowBadge.EXCITEMENT
     closeGame -> RowBadge.CLOSE_GAME
+    noStream -> RowBadge.NO_STREAM
     else -> RowBadge.NONE
 }
 

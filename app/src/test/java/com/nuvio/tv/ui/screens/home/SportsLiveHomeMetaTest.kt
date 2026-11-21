@@ -37,21 +37,13 @@ class SportsLiveHomeMetaTest {
     )
 
     @Test
-    fun `ESPN's clock reads clock first then the period`() {
-        assertEquals("4:12" to "Q4", SportsLiveHomeMeta.clockParts("Q4 4:12"))
-        assertEquals("9:51" to "2nd half", SportsLiveHomeMeta.clockParts("9:51 - 2nd Half"))
-        assertEquals("78'" to null, SportsLiveHomeMeta.clockParts("78'"))
-        assertEquals("Halftime" to null, SportsLiveHomeMeta.clockParts("Halftime"))
-    }
-
-    @Test
     fun `the hero's status line is dot, clock, period and the score between the abbreviations`() {
         val chip = ScoreChip.Live("Q4 4:12", ChipScore(91, 88))
-        assertEquals("● 4:12 · Q4 · BOS 91–88 NYK", SportsLiveHomeMeta.statusLine(chip, art, strings, "● %1\$s"))
+        assertEquals("● Q4 4:12 · BOS 91–88 NYK", SportsLiveHomeMeta.statusLine(chip, art, strings, "● %1\$s"))
         // No drawn art: the score alone.
-        assertEquals("● 4:12 · Q4 · 91–88", SportsLiveHomeMeta.statusLine(chip, null, strings, "● %1\$s"))
+        assertEquals("● Q4 4:12 · 91–88", SportsLiveHomeMeta.statusLine(chip, null, strings, "● %1\$s"))
         // A clock with no score yet.
-        assertEquals("● 4:12 · Q4", SportsLiveHomeMeta.statusLine(ScoreChip.Live("Q4 4:12", null), art, strings, "● %1\$s"))
+        assertEquals("● Q4 4:12", SportsLiveHomeMeta.statusLine(ScoreChip.Live("Q4 4:12", null), art, strings, "● %1\$s"))
         // A final reads as its chip.
         assertEquals("Final 91–88", SportsLiveHomeMeta.statusLine(ScoreChip.Final(null, ChipScore(91, 88)), art, strings, "● %1\$s"))
     }
@@ -60,13 +52,13 @@ class SportsLiveHomeMetaTest {
     fun `long names never stand in for abbreviations in the status line`() {
         val named = art.copy(first = art.first.copy(short = "Boston Celtics"))
         val chip = ScoreChip.Live("Q4 4:12", ChipScore(91, 88))
-        assertEquals("● 4:12 · Q4 · 91–88", SportsLiveHomeMeta.statusLine(chip, named, strings, "● %1\$s"))
+        assertEquals("● Q4 4:12 · 91–88", SportsLiveHomeMeta.statusLine(chip, named, strings, "● %1\$s"))
     }
 
     @Test
     fun `a live card shows the red dot, the clock, the period and the score under Show`() {
         val footer = SportsLiveHomeMeta.cardFooter(ScoreChip.Live("Q4 4:12", ChipScore(91, 88)), ScoresMode.SHOW, strings, "Live")
-        assertEquals(DrawnCardFooter(lead = "4:12", detail = "Q4", live = true, trailing = DrawnCardTrailing.Score("91–88")), footer)
+        assertEquals(DrawnCardFooter(lead = "Q4 4:12", live = true, trailing = DrawnCardTrailing.Score("91–88")), footer)
     }
 
     @Test
@@ -117,7 +109,7 @@ class SportsLiveHomeMetaTest {
             it.copy(meta = it.meta.copy(poster = "https://img.example/live.png", description = "Watch the big game live"))
         }
         val words = SportsLiveHomeRow.Words(liveNow = "Live now", yourTeam = "★ Your team", streams = { "$it streams" })
-        val row = SportsLiveHomeRow.build(listOf(game), "Live now", mapOf(game.streamKey to "● 4:12 · Q4 · BOS 91–88 NYK"), words)
+        val row = SportsLiveHomeRow.build(listOf(game), "Live now", mapOf(game.streamKey to "● Q4 4:12 · BOS 91–88 NYK"), words)
         val card = row.items.single()
         // Drawn by Home: no addon art with LIVE baked in.
         assertNull(card.poster)
@@ -125,7 +117,7 @@ class SportsLiveHomeMetaTest {
         val hero = sportsLiveHeroPreview(card, row)!!
         assertEquals("Celtics vs Knicks", hero.title)
         assertEquals("NBA · Live now", hero.contentTypeText)
-        assertEquals("● 4:12 · Q4 · BOS 91–88 NYK", hero.secondaryHighlightText)
+        assertEquals("● Q4 4:12 · BOS 91–88 NYK", hero.secondaryHighlightText)
         assertEquals("★ Your team", hero.description)
         assertNull(hero.yearText)
         assertNull(hero.imdbText)

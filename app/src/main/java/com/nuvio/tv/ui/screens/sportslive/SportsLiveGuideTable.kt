@@ -6,7 +6,6 @@ import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveGuideStyle
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
-import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGuideKey.CONSUMED
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -38,7 +37,7 @@ internal enum class GuideRowKind { GAME, TITLE }
 
 /**
  * One row of the guide's table (B2): the dimmed league [tag]; a game's two teams, each as its name forms longest first
- * ([guideNameChoices]: the row shows the longest that fits, a code at worst, never "…"), or a [title] with its
+ * ([GameSideIdentity.names]: the row shows the longest that fits, a code at worst, never "…"), or a [title] with its
  * [suffix]; the score ("97–92", null when none shows) and the [time] ("Q4 2:31") in one column; the [marks]. A row
  * [dimmedAtRest] (just ended, gone, no stream found) is dimmed unless selected.
  */
@@ -49,6 +48,9 @@ internal data class GuideRow(
     val tag: String,
     val firstNames: List<String> = emptyList(),
     val secondNames: List<String> = emptyList(),
+    /** A ranked college team's rank (#137, live.24): a small muted "#5" before its name, as on Live Now and Upcoming. */
+    val firstRank: Int? = null,
+    val secondRank: Int? = null,
     val title: String? = null,
     val suffix: String? = null,
     val score: String? = null,
@@ -90,12 +92,17 @@ internal fun guideRowOf(
     val halves = panelPlaysHalves((board.status as? GameStatus.Live)?.event?.league)
     val art = board.art
     val game = board.group != ScoreboardGroup.CHANNELS && board.twoSided && art != null
+    // The one game identity's sides (live.24): the same names, codes and ranks as Live Now's rows.
+    val first = if (game) GameIdentities.side(art!!.first, art.ranksOnRows, board.firstFollowed, individual, codeOf) else null
+    val second = if (game) GameIdentities.side(art!!.second, art.ranksOnRows, board.secondFollowed, individual, codeOf) else null
     return GuideRow(
         key = board.item.streamKey,
         kind = if (game) GuideRowKind.GAME else GuideRowKind.TITLE,
         tag = tag,
-        firstNames = if (game) guideNameChoices(art!!.first, individual, codeOf) else emptyList(),
-        secondNames = if (game) guideNameChoices(art!!.second, individual, codeOf) else emptyList(),
+        firstNames = first?.names.orEmpty(),
+        secondNames = second?.names.orEmpty(),
+        firstRank = first?.rank,
+        secondRank = second?.rank,
         title = if (game) null else panelTitleOf(board.item),
         suffix = if (game) null else suffix,
         score = shown?.let { scoreText(it.first, it.second) },
@@ -118,10 +125,8 @@ internal fun guideRowOf(
  * "Score hidden"). Null when there is nothing to say (a channel).
  */
 internal fun guideTimeText(status: ScoreboardStatusLines, halves: Boolean = false): String? {
-    if (status.live) {
-        val period = status.secondary?.let { panelPeriodShort(it, halves) }
-        return listOfNotNull(period, status.primary).joinToString(" ").ifEmpty { null }
-    }
+    // The game grammar's clock (live.24): "Q4 2:31", "End 2H", never "2H End of"; a scoreless live game "LIVE · No score yet".
+    if (status.live && !status.listed) return gameClockLine(status.primary, status.secondary, halves)
     return listOfNotNull(status.primary, status.secondary).joinToString(GUIDE_TIME_SEPARATOR).ifEmpty { null }
 }
 
@@ -144,22 +149,6 @@ internal fun guideNowPlayingMarks(row: GuideRow): Pair<List<GuideMark>, List<Gui
     val onFirst = row.firstMyTeam || !row.secondMyTeam
     val first = if (onFirst) row.marks else row.marks.filter { it != GuideMark.MY_TEAM }
     return first to if (row.secondMyTeam) listOf(GuideMark.MY_TEAM) else emptyList()
-}
-
-/**
- * A team's names on a guide row, longest first (B2, ~480 px per team): its full name ("Maryland Eastern Shore"),
- * ESPN's short name, then its code (ESPN's, else [codeOf] by name, else one derived, [panelShortCode]), so the row
- * shows the longest that fits and never cuts a name. A player in a one-on-one sport ([individual]) steps down to last
- * names instead ([panelSideChoices]).
- */
-internal fun guideNameChoices(team: GameArtTeam, individual: Boolean, codeOf: (String) -> String? = { null }): List<String> {
-    val name = panelCleanText(team.name)
-    if (individual) return panelSideChoices(name, individual = true)
-    val short = panelCleanText(team.shortName)
-    val code = team.short.trim().takeIf { it.isNotEmpty() && it != team.name.trim() }
-        ?: codeOf(name)?.trim()?.takeIf { it.isNotEmpty() }
-        ?: panelShortCode(name)
-    return listOf(name, short, code).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 }
 
 // ---- One reading per row ----

@@ -52,15 +52,16 @@ internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
  * identity), so a clock tick never rebuilds Home or moves its focus and scroll; the next full rebuild
  * reads [HomeViewModel.liveNowScoreLabels] too.
  */
-internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>) {
-    if (labels == liveNowScoreLabels) return
+internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>, tags: Map<String, String> = liveNowTags) {
+    if (labels == liveNowScoreLabels && tags == liveNowTags) return
     liveNowScoreLabels = labels
+    liveNowTags = tags
     _uiState.update { state ->
         val index = state.homeRows.indexOfFirst { it is HomeRow.Catalog && SportsLiveHomeRow.isLiveNowRow(it.row.addonBaseUrl) }
         if (index < 0 || state.liveNowShown.isEmpty()) return@update state
         val old = (state.homeRows[index] as HomeRow.Catalog).row
         val rows = state.homeRows.toMutableList()
-        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, labels, sportsLiveHomeWords()))
+        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, labels, sportsLiveHomeWords(), tags))
         state.copy(homeRows = rows)
     }
 }
@@ -109,7 +110,9 @@ internal fun HomeViewModel.observeLiveNowPipeline() {
 internal fun HomeViewModel.sportsLiveHomeWords(): SportsLiveHomeRow.Words = SportsLiveHomeRow.Words(
     liveNow = appContext.getString(R.string.sports_live_home_row_title),
     yourTeam = appContext.getString(R.string.sports_live_home_your_team),
-    streams = { count -> appContext.resources.getQuantityString(R.plurals.sports_live_home_streams, count, count) }
+    streams = { count -> appContext.resources.getQuantityString(R.plurals.sports_live_home_streams, count, count) },
+    // The app's sport words (live.24), as the cards and Live Now's rows word them.
+    sportWord = { kind -> appContext.getString(com.nuvio.tv.ui.screens.sportslive.sportKindLabelRes(kind)) }
 )
 
 /** How many games the Home Live now row shows. */
