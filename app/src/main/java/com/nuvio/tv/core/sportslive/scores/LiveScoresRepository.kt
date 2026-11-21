@@ -25,6 +25,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onEach
 import com.nuvio.tv.core.profile.ProfileManager
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.onStart
@@ -260,6 +262,12 @@ class LiveScoresRepository internal constructor(
     private val feeds = HashMap<ScoreFeed, FeedState>()
     private val pollers = HashMap<ScoreFeed, Job>()
     private val inFlight = HashMap<ScoreFeed, Deferred<ScoreboardResult>>()
+    /**
+     * Failures (and ESPN's Retry-After) of feeds fetched before any poller had them ([prewarmFeeds]), by feed: the feed's
+     * state starts from it, so its poller waits out the backoff instead of asking again at once (L7, live.23 review).
+     */
+    private val earlyFailures = HashMap<ScoreFeed, ScoreboardResult>()
+    private val earlyFailureAt = HashMap<ScoreFeed, Long>()
     /** A soccer/all card's own league, learned from its match, polled instead next time (by card key). */
     private val remembered = HashMap<String, EspnLeague>()
     private var raw: Map<String, ScoreSnapshot> = emptyMap()
@@ -360,7 +368,7 @@ class LiveScoresRepository internal constructor(
         // A game saved for later (or revealed) is stamped again at once, not at the next fetch.
         scope.launch {
             profile.distinctUntilChanged()
-                .flatMapLatest { pid -> protectionSource.map<SpoilerProtection, SpoilerProtection?> { it }.onStart { emit(null) }.map { pid to it } }
+                .flatMapLatest { pid -> protectionOrDefaults(protectionSource).map<SpoilerProtection, SpoilerProtection?> { it }.onStart { emit(null) }.map { pid to it } }
                 .collect { (pid, latest) ->
                     if (latest == null) {
                         val read = keptFile?.let { file -> withContext(io) { file.read() }?.let { KeptScores.decode(it, now()) } }
@@ -525,12 +533,22 @@ class LiveScoresRepository internal constructor(
      * recent copy ([warmStart]) instead of waiting on the network. Shared with any request in flight for the feed.
      */
     private suspend fun prewarmFeeds(picked: MySports) {
+        try {
+            prewarmFeedsUnguarded(picked)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // A settings read or a record() error never stops the poller this runs beside (L7).
+        }
+    }
+
+    private suspend fun prewarmFeedsUnguarded(picked: MySports) {
         val date = Instant.ofEpochMilli(now()).atZone(EASTERN).toLocalDate()
         val leagues = (followedLeagues.first() + picked.feeds())
             .filter { it != EspnLeagueMap.SOCCER_ALL && !EspnIndividualResults.covers(it) }
             .distinct()
         val requests = lock.withLock {
-            leagues.map { ScoreFeed(it, date) }.filter { it !in feeds }.take(PREWARM_FEEDS).map { fetchLocked(it) }
+            leagues.map { ScoreFeed(it, date) }.filter { it !in feeds && it !in earlyFailures }.take(PREWARM_FEEDS).map { fetchLocked(it) }
         }
         if (requests.isEmpty()) return
         requests.awaitAll()
@@ -609,7 +627,18 @@ class LiveScoresRepository internal constructor(
             val result = provider.scoreboard(feed.league, feed.date)
             lock.withLock {
                 inFlight.remove(feed)
-                if (!retry || !result.failed) feeds[feed]?.let { record(it, result) }
+                if (!retry || !result.failed) {
+                    val state = feeds[feed]
+                    if (state != null) {
+                        record(state, result)
+                    } else if (result.failed && !retry) {
+                        earlyFailures[feed] = result
+                        earlyFailureAt[feed] = now()
+                    } else {
+                        earlyFailures.remove(feed)
+                        earlyFailureAt.remove(feed)
+                    }
+                }
                 if (result.failed) checkOutageLocked()
             }
             result
@@ -711,6 +740,17 @@ class LiveScoresRepository internal constructor(
             state.events = warm.events
             refreshLocked(pollerScope, restartStopped = false)
         }
+    }
+
+    /** A new [state] for [feed] picks up a failure of an early fetch ([earlyFailures]) still inside its backoff window. */
+    private fun seedEarlyFailureLocked(feed: ScoreFeed, state: FeedState) {
+        val result = earlyFailures.remove(feed) ?: return
+        val at = earlyFailureAt.remove(feed) ?: return
+        if (now() - at > RETAIN_RETIRED_MS) return
+        state.lastAttemptAt = at
+        state.jitterMs = jitter()
+        state.failures = 1
+        state.retryAfterMs = result.retryAfterMs
     }
 
     private fun record(state: FeedState, result: ScoreboardResult) {
@@ -952,7 +992,7 @@ class LiveScoresRepository internal constructor(
         for (feed in needed) {
             val state = feeds[feed]
             val revived = state?.retiredAt != null
-            if (state == null) feeds[feed] = FeedState() else state.retiredAt = null
+            if (state == null) feeds[feed] = FeedState().also { fresh -> seedEarlyFailureLocked(feed, fresh) } else state.retiredAt = null
             if (pollers[feed]?.isActive == true) continue
             if (state == null || revived || restartStopped) pollers[feed] = pollerScope.launch { poll(feed, pollerScope) }
         }
@@ -1258,6 +1298,18 @@ class LiveScoresRepository internal constructor(
          */
         internal fun directoryLeagueOrder(others: List<EspnLeague>): List<EspnLeague> =
             (SportsLiveSportInference.leagues + others).filter(TeamDirectory::covers).distinct()
+
+        /**
+         * [source], kept alive by a settings read error (L8, live.23 review): an error before the first value gives the
+         * profile defaults (protective: "hide my teams' results" on), so scores still show; a later error keeps the last value.
+         */
+        internal fun protectionOrDefaults(source: Flow<SpoilerProtection>): Flow<SpoilerProtection> {
+            var last: SpoilerProtection? = null
+            return source.onEach { last = it }.catch { error ->
+                if (error is CancellationException) throw error
+                emit(last ?: SpoilerProtection(myTeams = SportsLivePreferencesDataStore.MY_TEAMS_SPOILERS_DEFAULT))
+            }
+        }
 
         /** A followed team's stored "sport/league", as a league; null when it has none. */
         internal fun leagueOfPath(path: String?): EspnLeague? =

@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -378,6 +379,32 @@ class LiveScoresRepositoryTest {
         assertEquals(listOf(nba15), provider.calls)
         assertEquals(setOf("a|Indiana Pacers at Philadelphia 76ers", "a|Los Angeles Lakers at Phoenix Suns"), repo.scores.value.keys)
         assertEquals("401909986", repo.scores.value.getValue("a|Los Angeles Lakers at Phoenix Suns").eventId)
+    }
+
+    @Test
+    fun `a spoiler settings read error falls back to the profile defaults and scores still show (L8)`() = runTest {
+        provider.respond = { ScoreboardResult(nbaFixture) }
+        val failing = kotlinx.coroutines.flow.flow<SpoilerProtection> { throw java.io.IOException("prefs") }
+        val repo = repository("2026-11-16T12:00:00Z", protection = failing)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+    }
+
+    @Test
+    fun `a later settings read error keeps the last protection read`() = runTest {
+        val saved = SpoilerProtection(myTeams = false, nowMs = 1L)
+        val source = kotlinx.coroutines.flow.flow {
+            emit(saved)
+            throw java.io.IOException("prefs")
+        }
+        assertEquals(listOf(saved, saved), LiveScoresRepository.protectionOrDefaults(source).toList())
+        val failing = kotlinx.coroutines.flow.flow<SpoilerProtection> { throw java.io.IOException("prefs") }
+        assertEquals(
+            listOf(SpoilerProtection(myTeams = com.nuvio.tv.data.local.SportsLivePreferencesDataStore.MY_TEAMS_SPOILERS_DEFAULT)),
+            LiveScoresRepository.protectionOrDefaults(failing).toList()
+        )
     }
 
     @Test
@@ -1534,6 +1561,40 @@ class LiveScoresRepositoryTest {
         assertEquals(1, provider.calls.count { it == nba15 })
         provider.gate = null
         gate.complete(Unit)
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `a 429 on the warm start is waited out by the card's poller, not asked again at once (L7)`() = runTest {
+        provider.respond = { feed ->
+            if (feed == nba15) ScoreboardResult(emptyList(), failed = true, retryAfterMs = 120_000L) else ScoreboardResult(emptyList())
+        }
+        val repo = repository("2026-11-15T19:00:00Z", prewarm = true)
+        collect(repo)
+        runCurrent()
+        assertEquals(1, provider.calls.count { it == nba15 })
+        provider.respond = { feed -> ScoreboardResult(if (feed == nba15) listOf(game(ScoreState.IN, 50, 48)) else emptyList()) }
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(60_000L)
+        runCurrent()
+        // Inside ESPN's Retry-After: still the one request.
+        assertEquals(1, provider.calls.count { it == nba15 })
+        advanceTimeBy(70_000L)
+        runCurrent()
+        assertEquals(2, provider.calls.count { it == nba15 })
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `an error in the warm start never stops score polling (L7)`() = runTest {
+        provider.respond = { feed -> ScoreboardResult(if (feed == nba15) listOf(game(ScoreState.IN, 50, 48)) else emptyList()) }
+        val failing = kotlinx.coroutines.flow.flow<List<EspnLeague>> { throw java.io.IOException("prefs") }
+        val repo = repository("2026-11-15T19:00:00Z", followedLeagues = failing, prewarm = true)
+        collect(repo)
+        runCurrent()
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
