@@ -1025,11 +1025,15 @@ private fun SportsLiveContent(
     val resultsFilterShown = showingResults && results.status == ResultsStatus.READY && results.sports.isNotEmpty()
     // #146: while My sports hides games, All sports is offered (on Live now too, as its only option).
     val allSportsOffered = SportsLiveUiState.ALL_SPORTS_FILTER in uiState.filters
+    // Live now (More live replaced All sports there): "My sports ▾" while My sports scopes it, with ★ My teams when a
+    // followed team plays.
+    val liveNowChoice = uiState.selectedTab == SportsLiveTab.LIVE_NOW &&
+        (uiState.mySportsScoped || SportsLiveUiState.MY_TEAMS_FILTER in uiState.filters)
     // Channels phase 2: no region dropdown; the browse view's Countries panel filters instead.
     val filterShown = if (showingResults) {
         resultsFilterShown
     } else {
-        uiState.selectedTab != SportsLiveTab.CHANNELS && sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size, allSportsOffered)
+        uiState.selectedTab != SportsLiveTab.CHANNELS && sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size, allSportsOffered || liveNowChoice)
     }
     val filterFocusRequester = remember { FocusRequester() }
     // The columns (#170, [sportsLiveColumnTarget]): Up from the list column's top goes to the selected tab, on
@@ -1088,8 +1092,8 @@ private fun SportsLiveContent(
             else -> sportFilterLabel(value)
         }
     }
-    // Live now has no sport filter (V2): only My sports and All sports (#146).
-    val headerFilters = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.filters.filter { it == SportsLiveUiState.ALL_SPORTS_FILTER } else uiState.filters
+    // Live now has no sport filter (V2): ★ My teams and My sports (More live replaced All sports there).
+    val headerFilters = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.filters.filter { it == SportsLiveUiState.MY_TEAMS_FILTER } else uiState.filters
     val mySportsLabel = stringResource(R.string.sports_live_results_my_sports_star)
     val resultsSportLabels = results.sports.associateWith { mySportLabel(it) }
     val filterOptions = remember(filterShown, showingResults, headerFilters, myTeamsLabel, allLabel, filterLabels, results.sports, resultsSportLabels, mySportsLabel) {
@@ -1123,10 +1127,10 @@ private fun SportsLiveContent(
     } else {
         null
     }
-    // Live now has no sport filter (V2): a filter left from earlier falls back to All; All sports stays (#146).
+    // Live now has no sport filter (V2): a filter left from earlier falls back to All; ★ My teams stays.
     LaunchedEffect(uiState.selectedTab, uiState.selectedFilter) {
         val filter = uiState.selectedFilter
-        if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && filter != null && filter != SportsLiveUiState.ALL_SPORTS_FILTER) onSelectFilter(null)
+        if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && filter != null && filter != SportsLiveUiState.MY_TEAMS_FILTER) onSelectFilter(null)
     }
     // #170: a one-off miss says nothing; a source failing on shows a dot on Refresh, whose Hold OK opens the sheet.
     val sourcesNowMs = uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()
