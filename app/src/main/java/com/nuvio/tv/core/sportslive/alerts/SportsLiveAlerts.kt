@@ -479,6 +479,19 @@ class SportsLiveAlerts @Inject constructor(
     }
 
     /**
+     * The replay to play for [alert] (review M1: OK on "‹Team› game is over · result hidden"), from the newest load's
+     * Replays matched to its ESPN game; null when none is listed yet. It plays spoiler-safe, from the start.
+     */
+    suspend fun replayFor(alert: SportsLiveAlert.FullTime): SportsLiveItem? = withContext(compute) {
+        val load = repo.latest.value ?: return@withContext null
+        val claimed = repo.claimedCatalogs.first()
+        val keys = claimed.mapTo(HashSet()) { it.key }
+        val items = load.items.filter { it.catalogKey in keys }
+        val replays = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.REPLAYS, load.loadedAtMs, claimed.map { it.addon.id }.distinct())
+        com.nuvio.tv.core.sportslive.SportsLiveEndedGames.replayFor(alert.snapshot, replays, System.currentTimeMillis())
+    }
+
+    /**
      * Debug builds only (the #136 emulator check, when no followed team is scoring): [count] score toasts,
      * close together, for live games now listed and not playing, the second a lead change. Each game's
      * strict ESPN match is used when one is known, else a made-up 1–0. Nothing in a release build.

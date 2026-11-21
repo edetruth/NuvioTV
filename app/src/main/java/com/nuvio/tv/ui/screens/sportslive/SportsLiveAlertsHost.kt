@@ -300,9 +300,10 @@ fun SportsLiveAlertsHost(
     fun screenBusy(): Boolean =
         currentSurface?.busy() == true || !windowInfo.isWindowFocused || SportsLiveHoldOk.sheet.value != null
 
-    /** Watch both is offered on the countdown card: over a sports stream in the full player only (#136). */
+    /** Watch both is offered on the countdown card: over a sports stream in the full player only (#136), never for a replay. */
     fun canBoth(): Boolean =
-        currentWatching.inPlayer && currentWatching.sportsPlayback && currentSurface?.offersBoth() == true
+        currentWatching.inPlayer && currentWatching.sportsPlayback && currentSurface?.offersBoth() == true &&
+            (currentCard?.alert as? SportsLiveAlert.FullTime)?.resultHidden != true
 
     fun durationOf(alert: SportsLiveAlert): Long = SportsLiveAlertCards.durationMs(alert) { ms, actionable ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && accessibility != null) {
@@ -320,7 +321,20 @@ fun SportsLiveAlertsHost(
         val on = currentSurface
         val item = shown.alert.item
         val both = choice == AlertChoice.WATCH_BOTH
+        val alert = shown.alert
         when {
+            // A followed team's hidden result (review M1): its replay from the start, spoiler-safe; never a score.
+            alert is SportsLiveAlert.FullTime && alert.resultHidden -> scope.launch {
+                val replay = alerts.replayFor(alert)
+                if (replay == null) {
+                    SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_alert_no_replay_yet))
+                } else {
+                    val content = SportsLiveAlertContent.of(alert)
+                    val title = content?.let { context.getString(R.string.sports_live_alert_matchup, it.first.name, it.second.name) }
+                        ?: item.displayName
+                    playViewModel.playReplay(listOf(replay), title)
+                }
+            }
             // A kickoff plays its fresh card (the newest load's copy, live, with its live link, #162).
             shown.alert is SportsLiveAlert.Kickoff -> scope.launch {
                 if (both) sportsLiveKickoffBoth(item, alerts::cardToWatch, { on?.watchBoth(it) == true }) { playHere(it, on) }
@@ -503,6 +517,7 @@ fun SportsLiveAlertsHost(
                 }
                 AlertCountdownCard(
                     game = alert.item.displayName,
+                    replay = alert is SportsLiveAlert.FullTime && alert.resultHidden,
                     // Dual screen (user, live.24): the game goes into the pane without sound, the one heard plays on.
                     intoPane = panes?.let { if (it.bigSmall) DualInto.SMALL else DualInto.OTHER },
                     secondsLeft = countdown.secondsLeft(nowMs),
@@ -542,8 +557,12 @@ fun SportsLiveAlertsHost(
                 cardId = current.id,
                 content = content,
                 followed = alert.item.followed,
-                // "OK Watch · Back Close" on a card that takes OK; none on Full time (it only informs).
-                hint = if (actionable) stringResource(R.string.sports_live_alert_hint_ok_watch) else null,
+                // "OK Watch · Back Close" on a card that takes OK ("OK Watch replay" on a hidden result); none on Full time.
+                hint = when {
+                    !actionable -> null
+                    alert is SportsLiveAlert.FullTime -> stringResource(R.string.sports_live_alert_hint_ok_replay)
+                    else -> stringResource(R.string.sports_live_alert_hint_ok_watch)
+                },
                 modifier = placed
             )
         }
@@ -734,6 +753,8 @@ private fun KickoffToast(
 @Composable
 private fun AlertCountdownCard(
     game: String,
+    /** The replay of a hidden result (review M1): "Playing the replay of ‹game› in 3…", never into a pane. */
+    replay: Boolean,
     intoPane: DualInto?,
     secondsLeft: Int?,
     selected: AlertChoice,
@@ -754,10 +775,12 @@ private fun AlertCountdownCard(
     ) {
         Text(
             text = if (secondsLeft != null) {
-                when (intoPane) {
+                when (if (replay) null else intoPane) {
                     DualInto.SMALL -> stringResource(R.string.sports_live_alert_switching_into_small, game, secondsLeft)
                     DualInto.OTHER -> stringResource(R.string.sports_live_alert_switching_into_other, game, secondsLeft)
-                    null -> stringResource(R.string.sports_live_alert_switching_to, game, secondsLeft)
+                    null -> stringResource(
+                        if (replay) R.string.sports_live_alert_replay_in else R.string.sports_live_alert_switching_to, game, secondsLeft
+                    )
                 }
             } else {
                 stringResource(R.string.sports_live_alert_switch_to, game)
@@ -896,6 +919,14 @@ private fun AlertBody(content: AlertContent, followed: Boolean) {
                 )
             }
         }
+        // A followed team's hidden result (review M1): no score, no winner, nothing but that it is over.
+        is AlertContent.FullTimeHidden -> Text(
+            text = stringResource(R.string.sports_live_alert_result_hidden, content.team),
+            style = MaterialTheme.typography.titleSmall.sportsLiveBold(),
+            color = ArtColors.Text,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
         is AlertContent.FullTimeNamesOnly -> Text(
             text = stringResource(R.string.sports_live_alert_full_time_names, content.first.name, content.second.name),
             style = MaterialTheme.typography.titleSmall,

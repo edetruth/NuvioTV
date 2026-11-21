@@ -658,6 +658,10 @@
     <string name="sports_live_alert_hint_ok_remind">OK Remind me in 10 min · Back Close</string>
     <string name="sports_live_alert_switching_to">Switching to %1$s in %2$d…</string>
     <string name="sports_live_alert_switch_to">Switch to %1$s?</string>
+    <string name="sports_live_alert_replay_in">Playing the replay of %1$s in %2$d…</string>
+    <string name="sports_live_alert_hint_ok_replay">OK Watch replay · Back Close</string>
+    <string name="sports_live_alert_result_hidden">%1$s game is over · result hidden</string>
+    <string name="sports_live_alert_no_replay_yet">No replay yet. It shows in Replays once it is up</string>
     <string name="sports_live_alert_switching_into_small">Switching %1$s into the small side · %2$d</string>
     <string name="sports_live_alert_switching_into_other">Switching %1$s into the other side · %2$d</string>
     <string name="sports_live_alert_choice_watch_now">Watch now</string>

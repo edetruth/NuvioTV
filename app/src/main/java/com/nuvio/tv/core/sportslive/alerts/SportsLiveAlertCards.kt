@@ -45,10 +45,11 @@ object SportsLiveAlertCards {
     const val STALE_MS = 30_000L
 
     /**
-     * Whether [alert]'s card shows "OK": everything but Full time (the game is over, there is nothing to switch to). A
-     * kickoff watches (the no-stream note reminds in 10 min); a score, a lead change and a close finish watch.
+     * Whether [alert]'s card shows "OK": everything but Full time with its result shown (the game is over, nothing to
+     * switch to). A kickoff watches (the no-stream note reminds in 10 min); a score, a lead change and a close finish
+     * watch; Full time with the result hidden (review M1) plays the replay from the start.
      */
-    fun actionable(alert: SportsLiveAlert): Boolean = alert !is SportsLiveAlert.FullTime
+    fun actionable(alert: SportsLiveAlert): Boolean = alert !is SportsLiveAlert.FullTime || alert.resultHidden
 
     /**
      * Which alert wins when several wait (lower first): my team's kickoff, then my team's score or lead change, then

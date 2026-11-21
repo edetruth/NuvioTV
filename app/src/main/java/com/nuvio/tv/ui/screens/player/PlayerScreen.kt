@@ -2455,7 +2455,12 @@ fun PlayerScreen(
             onBackToLiveNow = { exitPlayerFromError() },
             endCardCovered = SportsLivePlayerLayers.covered(SportsLivePlayerLayer.END_CARD, sportsLayers),
             paused = { viewModel.uiState.value.let { !it.isPlaying && !it.isBuffering && it.error == null } },
-            streamHealthy = { viewModel.uiState.value.let { it.isPlaying && !it.isBuffering && it.error == null } }
+            // Review L1 (live.24): a user pause is healthy too; OK on the paused game closes the panel, keeps its place.
+            streamHealthy = {
+                viewModel.uiState.value.let {
+                    com.nuvio.tv.ui.screens.sportslive.panelStreamHealthy(it.isBuffering, it.error != null)
+                }
+            }
         )
 
         // Sports & Live game info (#139): a slim card at the bottom, on demand only.

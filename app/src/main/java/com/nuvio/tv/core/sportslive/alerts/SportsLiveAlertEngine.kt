@@ -106,8 +106,18 @@ sealed interface SportsLiveAlert {
         val leadChange: Boolean = false
     ) : SportsLiveAlert
 
-    /** A followed team's game ended (#42). [namesOnly]: Hide until focused, no score. */
-    data class FullTime(override val item: SportsLiveItem, val snapshot: ScoreSnapshot, val namesOnly: Boolean) : SportsLiveAlert
+    /**
+     * A followed team's game ended (#42). [namesOnly]: Hide until focused, no score. [resultHidden] (user, live.24, review
+     * M1): the result is protected ("Hide my teams' results", on by default), so the card says only "‹[team]› game is
+     * over · result hidden" and OK plays the replay from the start; never a score, a winner or OT.
+     */
+    data class FullTime(
+        override val item: SportsLiveItem,
+        val snapshot: ScoreSnapshot,
+        val namesOnly: Boolean,
+        val resultHidden: Boolean = false,
+        val team: String? = null
+    ) : SportsLiveAlert
 
     /**
      * Crunch time (#137): a close game late, in My sports, whoever plays ([CrunchTime]). [namesOnly]: Hide until
@@ -268,8 +278,13 @@ class SportsLiveAlertEngine {
     ): SportsLiveAlert.FullTime? {
         if (before.state != ScoreState.IN || event.state != ScoreState.POST || !event.isFinal) return null
         if (!finals.add(event.eventId)) return null
-        // Muted for a spoiler-protected game (#151), as for Scores Off.
-        if (!settings.fullTimeAlerts || mode == ScoresMode.OFF || event.spoilerProtected) return null
+        if (!settings.fullTimeAlerts || mode == ScoresMode.OFF) return null
+        // A spoiler-protected result (#151, the default for my teams): the spoiler-free card (review M1), never silence.
+        if (event.spoilerProtected) {
+            val side = game.followedSides.firstOrNull()?.let { if (it == ScoreSide.HOME) event.home else event.away }
+            val team = side?.let { listOf(it.shortDisplayName, it.displayName, it.name).firstOrNull { name -> !name.isNullOrBlank() } }
+            return SportsLiveAlert.FullTime(game.item, event, namesOnly = true, resultHidden = true, team = team)
+        }
         return SportsLiveAlert.FullTime(game.item, event, namesOnly = mode == ScoresMode.HIDE_UNTIL_FOCUSED)
     }
 
@@ -326,6 +341,7 @@ class SportsLiveAlertEngine {
             is SportsLiveAlert.ScoreChange -> alert.takeIf { settings.scoreAlerts && mode == ScoresMode.SHOW }
             is SportsLiveAlert.FullTime -> when {
                 !settings.fullTimeAlerts || mode == ScoresMode.OFF -> null
+                alert.resultHidden -> alert
                 mode == ScoresMode.HIDE_UNTIL_FOCUSED -> alert.copy(namesOnly = true)
                 else -> alert
             }

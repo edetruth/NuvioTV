@@ -1515,6 +1515,13 @@ private data class PanelList(
  * OK on [item] in the panel or guide only closes it (J5) when [item] is the game [playing] (or another addon's copy of
  * it) and the stream is healthy: playing, not buffering, stalled or failed. Otherwise the pick restarts or switches (M1).
  */
+/**
+ * The stream playing is healthy for a panel pick of its own game (M1; review L1, live.24): playing, or paused by the
+ * viewer (not buffering), with no error. Only a buffering, stalled or failed stream is started again; a pause is kept,
+ * with its place.
+ */
+internal fun panelStreamHealthy(isBuffering: Boolean, hasError: Boolean): Boolean = !isBuffering && !hasError
+
 internal fun panelPickKeepsPlaying(item: SportsLiveItem, playing: SportsLiveItem?, streamHealthy: Boolean): Boolean =
     streamHealthy && playing != null && SportsLivePlayingGame.isSameGame(item, playing)
 

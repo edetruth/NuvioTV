@@ -34,6 +34,9 @@ sealed interface AlertContent {
     /** Full time under Hide until focused: "‹A› vs ‹B› · Full time", no score, no OT, no winner. */
     data class FullTimeNamesOnly(override val first: AlertSide, override val second: AlertSide) : AlertContent
 
+    /** A followed team's result hidden (review M1): "‹[team]› game is over · result hidden", the sides with no score. */
+    data class FullTimeHidden(override val first: AlertSide, override val second: AlertSide, val team: String) : AlertContent
+
     /**
      * Crunch time (#137): "Close finish" with both sides, the score under Show ([AlertSide.score]; none under Hide
      * until focused), and where the game stands ([moment]: overtime, the minutes left, ESPN's clock).
@@ -62,7 +65,11 @@ object SportsLiveAlertContent {
         is SportsLiveAlert.Crunch -> sides(alert.item, alert.snapshot, withScore = !alert.namesOnly)?.let { (first, second, art) ->
             AlertContent.Crunch(first, second, alert.moment, withScore = !alert.namesOnly, league = art.league)
         }
-        is SportsLiveAlert.FullTime -> if (alert.namesOnly) {
+        is SportsLiveAlert.FullTime -> if (alert.resultHidden) {
+            sides(alert.item, alert.snapshot, withScore = false)?.let { (first, second, _) ->
+                AlertContent.FullTimeHidden(first, second, alert.team ?: first.name)
+            }
+        } else if (alert.namesOnly) {
             sides(alert.item, alert.snapshot, withScore = false)?.let { (first, second, _) -> AlertContent.FullTimeNamesOnly(first, second) }
         } else {
             sides(alert.item, alert.snapshot, withScore = true)?.let { (first, second, art) ->
