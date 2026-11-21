@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
+import org.junit.Assert.assertSame
 import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -382,6 +383,39 @@ class SportsLiveViewModelTest {
         advanceTimeBy(30 * MINUTE)
         runCurrent()
         assertEquals(7, kindsAsked.size)
+    }
+
+    @Test
+    fun `a tab opened again shows its last board and builds nothing when nothing it reads changed`() = runTest {
+        nextLoad = load(
+            listOf(
+                item("live", isLive = true, sport = "Soccer", name = "A vs B"),
+                item("soon", isLive = false, sport = "Soccer", startMs = NOW + HOUR, name = "C vs D")
+            )
+        )
+        val viewModel = SportsLiveViewModel(repo, computeDispatcher = StandardTestDispatcher(testScheduler, name = "compute"))
+        viewModel.nowMs = { NOW }
+        var builds = 0
+        viewModel.buildBoard = { inputs ->
+            builds++
+            SportsLiveBoard.build(inputs)
+        }
+        backgroundScope.launch { viewModel.board.collect {} }
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        advanceUntilIdle()
+        val upcoming = viewModel.board.value!!
+        assertEquals(SportsLiveTab.UPCOMING, upcoming.tab)
+        assertEquals(listOf("soon"), upcoming.items.map { it.id })
+
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        advanceUntilIdle()
+        assertEquals(SportsLiveTab.LIVE_NOW, viewModel.board.value!!.tab)
+        val built = builds
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        advanceUntilIdle()
+        assertSame(upcoming, viewModel.board.value)
+        assertEquals("nothing changed: no build", built, builds)
     }
 
     @Test

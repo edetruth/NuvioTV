@@ -257,3 +257,77 @@ internal fun SportsLiveBoard.reusingRows(previous: SportsLiveBoard?): SportsLive
     val sameList = rows.size == before.size && rows.indices.all { rows[it] === before[it] }
     return copy(rows = if (sameList) before else rows)
 }
+
+/**
+ * The boards last built for each view (#143: tab, filter and Channels' browse view), with the inputs each was built
+ * from. A tab opened again shows its last board at once ([shownFor]) while the fresh one is built, and builds nothing
+ * when its inputs did not change ([reusable]). Bounded to the [maxViews] views used last; thread-safe.
+ */
+internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
+    private val entries = object : LinkedHashMap<String, Pair<SportsLiveBoardInputs, SportsLiveBoard>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<SportsLiveBoardInputs, SportsLiveBoard>>?): Boolean =
+            size > maxViews
+    }
+
+    /** The board last built for [inputs]' view, whatever it was built from; null when none. */
+    @Synchronized
+    fun shownFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.second
+
+    /** The board last built for [inputs]' view when it was built from these very inputs; null otherwise. */
+    @Synchronized
+    fun reusable(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.takeIf { it.first == inputs }?.second
+
+    @Synchronized
+    fun put(inputs: SportsLiveBoardInputs, board: SportsLiveBoard) {
+        entries[viewOf(inputs)] = inputs to board
+    }
+
+    private var scope: Any? = null
+
+    /** Bumped each time the boards are dropped: a board built before it is never put back ([putIfCurrent]). */
+    @get:Synchronized
+    var generation = 0
+        private set
+
+    /**
+     * The profile and settings every board was built for (#143): a profile switch, or a change of My sports, the followed
+     * teams, the Scores setting or the hidden titles, drops every board, so another profile's or setting's list never
+     * shows, not even for a moment.
+     */
+    @Synchronized
+    fun scopeTo(next: Any) {
+        if (scope != null && scope != next) clear()
+        scope = next
+    }
+
+    @Synchronized
+    fun clear() {
+        entries.clear()
+        generation++
+    }
+
+    /** [put], unless the boards were dropped since [builtIn] (a board built ahead for a profile no longer shown). */
+    @Synchronized
+    fun putIfCurrent(builtIn: Int, inputs: SportsLiveBoardInputs, board: SportsLiveBoard) {
+        if (builtIn == generation) put(inputs, board)
+    }
+
+    /** True when a board is held for [tab] with [filter] and no Channels browse view. */
+    @Synchronized
+    fun has(tab: SportsLiveTab, filter: String?): Boolean = entries.containsKey(viewOf(tab, filter, null))
+
+    companion object {
+        const val MAX_VIEWS = 8
+
+        // Live now's More live view is a view of its own: its board never shows (or lends rows) for the main list.
+        fun viewOf(inputs: SportsLiveBoardInputs): String = viewOf(
+            inputs.tab,
+            inputs.filter,
+            inputs.channelLists.browse?.kind?.name ?: MORE_LIVE_VIEW.takeIf { inputs.moreLive.isNotEmpty() || inputs.otherEvents.isNotEmpty() }
+        )
+
+        private const val MORE_LIVE_VIEW = "moreLive"
+
+        private fun viewOf(tab: SportsLiveTab, filter: String?, browse: String?): String = "${tab.name}|${filter.orEmpty()}|${browse.orEmpty()}"
+    }
+}
