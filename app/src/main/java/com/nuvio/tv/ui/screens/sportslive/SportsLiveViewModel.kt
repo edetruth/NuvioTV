@@ -168,7 +168,9 @@ class SportsLiveViewModel internal constructor(
     /** Saves the countries chosen (null: back to the viewer's own). */
     private val saveChannelCountries: suspend (Set<String>?) -> Unit = {},
     /** This TV's region, a viewer's own country (phase 2); null in tests. */
-    tvRegion: String? = null
+    tvRegion: String? = null,
+    /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
+    unmatchedScores: Flow<Set<String>> = flowOf(emptySet())
 ) : ViewModel() {
 
     @Inject
@@ -239,7 +241,8 @@ class SportsLiveViewModel internal constructor(
         updateChannelPicks = prefs::updateChannelPicks,
         channelCountries = prefs.channelCountries,
         saveChannelCountries = prefs::setChannelCountries,
-        tvRegion = SportsLiveChannelCountries.tvRegion()
+        tvRegion = SportsLiveChannelCountries.tvRegion(),
+        unmatchedScores = liveScores.unmatched
     )
 
     private data class Selection(
@@ -597,7 +600,7 @@ class SportsLiveViewModel internal constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val board: StateFlow<SportsLiveBoard?> =
-        combine(uiState, boardScores, repo.followedTeams, logoRevision, combine(standings, channelLists, ::Pair)) { state, scores, followed, revision, (books, lists) ->
+        combine(uiState, boardScores, repo.followedTeams, logoRevision, combine(standings, channelLists, unmatchedScores, ::Triple)) { state, scores, followed, revision, (books, lists, unmatched) ->
             val tab = state.selectedTab
             val live = tab == SportsLiveTab.LIVE_NOW
             SportsLiveBoardInputs(
@@ -607,6 +610,7 @@ class SportsLiveViewModel internal constructor(
                 scores = scores,
                 ended = if (live) state.justEnded else emptyMap(),
                 noStreams = if (live) state.noStreams else emptySet(),
+                unmatched = if (live) unmatched else emptySet(),
                 excitement = if (live) state.whyTags else emptyMap(),
                 followed = followed,
                 clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,

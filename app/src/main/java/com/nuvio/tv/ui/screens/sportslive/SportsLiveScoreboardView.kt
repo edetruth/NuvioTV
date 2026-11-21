@@ -658,7 +658,8 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
                 Text(
                     text = primary,
                     style = if (liveMark) SportsLiveTokens.style(SportsLiveTokens.Type.Tag) else SportsLiveTokens.style(STATUS_STYLE),
-                    color = if (liveMark) Colors.LiveText else Colors.TextPrimary,
+                    // #215: "Listed live" is quieter than a confirmed LIVE.
+                    color = if (liveMark) Colors.LiveText else if (lines.listed) Colors.TextSecondary else Colors.TextPrimary,
                     maxLines = if (lines.secondary == null && !lines.live) 2 else 1,
                     overflow = TextOverflow.Ellipsis
                 )

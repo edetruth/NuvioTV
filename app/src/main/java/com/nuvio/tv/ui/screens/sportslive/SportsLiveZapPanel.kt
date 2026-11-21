@@ -524,7 +524,9 @@ internal fun panelBoards(
     revealed: Set<String>,
     nowMs: Long,
     ended: Map<String, EndedGame> = emptyMap(),
-    followed: List<FollowedTeam> = emptyList()
+    followed: List<FollowedTeam> = emptyList(),
+    /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
+    unmatched: Set<String> = emptySet()
 ): List<ZapPanelBoard> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
     // #212: with the card's strict ESPN game, ESPN ids decide which side a followed team is (the star sits on that side).
@@ -536,7 +538,9 @@ internal fun panelBoards(
         val item = row.item
         val endedGame = ended[item.streamKey]
         val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
-        val board = scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, row.teams)
+        val board = scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, row.teams).let { built ->
+            if (listedLiveOnly(built.status, scoresOn, item.streamKey in unmatched)) built.copy(listedOnly = true) else built
+        }
         val situation = if (board.chip is ScoreChip.Live) {
             GameSituations.of(item, snapshot, mode, item.streamKey in revealed)
         } else {

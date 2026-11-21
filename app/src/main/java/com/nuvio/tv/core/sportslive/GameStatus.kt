@@ -112,7 +112,9 @@ data class GameStatusStrings(
     val fullTime: String,
     val probablyEnded: String,
     val postponed: String,
-    val chip: ScoreChipStrings
+    val chip: ScoreChipStrings,
+    /** "Listed live" (#215): a game its addon lists live that ESPN could not place, so no LIVE and no red dot. */
+    val listedLive: String = "Listed live"
 )
 
 /**

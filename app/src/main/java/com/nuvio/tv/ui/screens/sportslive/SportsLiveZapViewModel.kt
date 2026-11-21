@@ -509,7 +509,7 @@ class SportsLiveZapViewModel internal constructor(
                     current.list.scoped.filterNot { it.streamKey in current.finished }
                 ),
                 // #83: each row drawn as the Scoreboard draws it.
-                boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
+                boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed, liveScores.unmatched.value)
                     .associateBy { it.board.item.streamKey },
                 boxScores = current.rows
                     .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }

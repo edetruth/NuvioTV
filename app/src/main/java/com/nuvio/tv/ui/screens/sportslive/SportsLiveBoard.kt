@@ -52,6 +52,8 @@ data class SportsLiveBoardInputs(
     val ended: Map<String, EndedGame>,
     /** Live now's "no streams yet" cards by card key (#145): drawn dimmed; empty on other tabs. */
     val noStreams: Set<String> = emptySet(),
+    /** Live now's cards the score feeds confirmed they do not have (#215, [listedLiveOnly]); empty on other tabs. */
+    val unmatched: Set<String> = emptySet(),
     /** Live now's excitement badges by card key (#43, Scores shown); empty otherwise. */
     val excitement: Map<String, WhyTag>,
     val followed: List<FollowedTeam>,
@@ -156,6 +158,7 @@ data class SportsLiveBoard(
                     },
                     excitement = inputs.excitement
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
+                    .let { built -> withListedLive(built, scoresOn = scores.mode != null && scores.mode != ScoresMode.OFF, unmatched = inputs.unmatched) }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
             } else {
                 when (tab) {
