@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
@@ -68,11 +69,21 @@ data class SportsLiveUiState(
     val staleListAtMs: Long? = null,
     /** Live now's new rows waiting while it is browsed (TV QA BUG7 / Q5): "N new" on Refresh shows them. */
     val newLiveRows: Int = 0,
-    /** Live now's "Other events" (H): listings that are no game nor an event of their own, behind one bottom row. */
-    val otherEvents: List<SportsLiveItem> = emptyList(),
-    /** That row is open: [otherEvents] follow the games in [visibleItems]. */
-    val otherEventsOpen: Boolean = false
+    /**
+     * More live (user 2026-11-21): under My sports, the live games Live now leaves out and the listings that are no game
+     * (H), by sport, largest first, Other last ([SportsLiveMoreLive]); empty with nothing picked, or on a chip.
+     */
+    val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
+    /** Its view is open: [visibleItems] are [moreLive]'s games, group by group. */
+    val moreLiveOpen: Boolean = false,
+    /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
+    val moreLiveOther: Set<String> = emptySet()
 ) {
+    /** Each More live game's group key, by card key. */
+    val moreLiveGroupOf: Map<String, String> by lazy {
+        moreLive.flatMap { group -> group.items.map { it.streamKey to group.key } }.toMap()
+    }
+
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
     val selectedFilterEmpty: Boolean get() = selectedFilter != null && (filterCounts[selectedFilter] ?: 0) == 0
 

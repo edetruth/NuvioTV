@@ -7,6 +7,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowseKind
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
 import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
@@ -412,16 +414,21 @@ fun SportsLiveScreen(
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = { item ->
-                viewModel.onChannelPlayed(item)
-                // A saved game's replay played to its end ends its protection (#151).
-                if (item.kind == SportsLiveKind.REPLAY) scoresViewModel.onReplayStarted(listOf(item) + item.alternates, replayMatches[item.streamKey])
-                // OK on a playing preview: its stream plays full screen at once (unless the stored
-                // setting lets the user choose); otherwise the best stream is looked up.
-                playViewModel.playCard(item) {
-                    viewModel.takeOverPreview(item)?.let { previewed ->
-                        // Freed before the full player starts, so the two never hold decoders together.
-                        previewPlayer.release()
-                        previewed.stream
+                // J5: the mini player's game (or another addon's copy of it) goes back full screen, never a new stream.
+                val mini = SportsLiveMiniPlayers.controller.state.value as? SportsLiveMiniState.Playing
+                val backToGame = mini != null && SportsLivePlayingGame.isSameGame(item, mini.item) && SportsLiveMiniPlayers.controller.requestExpand()
+                if (!backToGame) {
+                    viewModel.onChannelPlayed(item)
+                    // A saved game's replay played to its end ends its protection (#151).
+                    if (item.kind == SportsLiveKind.REPLAY) scoresViewModel.onReplayStarted(listOf(item) + item.alternates, replayMatches[item.streamKey])
+                    // OK on a playing preview: its stream plays full screen at once (unless the stored
+                    // setting lets the user choose); otherwise the best stream is looked up.
+                    playViewModel.playCard(item) {
+                        viewModel.takeOverPreview(item)?.let { previewed ->
+                            // Freed before the full player starts, so the two never hold decoders together.
+                            previewPlayer.release()
+                            previewed.stream
+                        }
                     }
                 }
             },
@@ -512,7 +519,8 @@ fun SportsLiveScreen(
             onRevealResult = scoresViewModel::revealResult,
             onBrowsing = viewModel::setBrowsing,
             onShowNewRows = viewModel::showNewRows,
-            onToggleOtherEvents = viewModel::toggleOtherEvents,
+            onOpenMoreLive = viewModel::openMoreLive,
+            onCloseMoreLive = viewModel::closeMoreLive,
             onToggleChannelFavorite = viewModel::toggleChannelFavorite,
             channelBrowse = channelBrowse,
             channelActions = remember(viewModel) {
@@ -647,8 +655,9 @@ private fun SportsLiveContent(
     onBrowsing: (Boolean) -> Unit = {},
     /** "N new" on Refresh (TV QA Q5): the rows that waited while Live now was browsed. */
     onShowNewRows: () -> Unit = {},
-    /** H: OK on Live now's "Other events (N) ›" row. */
-    onToggleOtherEvents: () -> Unit = {},
+    /** OK on Live now's "More live" row, and Back from its view (user 2026-11-21). */
+    onOpenMoreLive: () -> Unit = {},
+    onCloseMoreLive: () -> Unit = {},
     /** Hold OK → Add to / Remove from favorites on a Channels row (phase 1): the channel, and whether it is one now. */
     onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> },
     /** Channels' browse view (phase 2); null while the tab shows its own sections. */
@@ -678,13 +687,19 @@ private fun SportsLiveContent(
     // holding the main thread.
     // Channels (phase 2): a board of the view shown, the tab's sections or a browse kind.
     val channelViewKey = SportsLiveChannelSummary.viewKey(channelBrowse).takeIf { uiState.selectedTab == SportsLiveTab.CHANNELS }
-    val shownBoard = board?.takeIf { it.shows(uiState.selectedTab, uiState.selectedFilter) && (channelViewKey == null || it.channels?.view == channelViewKey) }
+    val shownBoard = board?.takeIf {
+        it.shows(uiState.selectedTab, uiState.selectedFilter) && (channelViewKey == null || it.channels?.view == channelViewKey) &&
+            it.moreLive == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen)
+    }
+    // More live's view (user 2026-11-21) is its own list: it opens at its top, and Back returns to Live now's.
+    val moreLiveShown = shownBoard?.moreLive == true
     val boardPending = shownBoard == null
     // V2 (#132): Live now and Upcoming are the Scoreboard + stage; Channels and Replays list cards.
     val scoreboard = shownBoard?.rows != null
     // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.
     val agenda = shownBoard?.agenda
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}" + channelViewKey?.let { "|$it" }.orEmpty()
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}" + channelViewKey?.let { "|$it" }.orEmpty() +
+        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) "|more" else "")
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val liveLabel = stringResource(R.string.sports_live_live_pill)
@@ -1419,6 +1434,19 @@ private fun SportsLiveContent(
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
+    // More live: Back from its view goes back to Live now's list (composed later, so it wins over the list's own Back).
+    var moreLiveFocusPending by remember { mutableStateOf(false) }
+    BackHandler(enabled = uiState.moreLiveOpen && uiState.selectedTab == SportsLiveTab.LIVE_NOW && listHasFocus) {
+        moreLiveFocusPending = true
+        onCloseMoreLive()
+    }
+    LaunchedEffect(moreLiveFocusPending, shownBoard) {
+        if (!moreLiveFocusPending || shownBoard == null) return@LaunchedEffect
+        repeat(2) { withFrameNanos { } }
+        val first = items.firstOrNull()
+        runCatching { (if (first != null) cardFocusRequester(first) else activeTabFocusRequester).requestFocus() }
+        moreLiveFocusPending = false
+    }
     // Channels phase 2: Back from the browse view goes back to the tab's sections (composed later, so it wins).
     BackHandler(enabled = channelBarShown && (listHasFocus || channelBarHasFocus)) {
         channelFocusPending = true
@@ -1587,7 +1615,10 @@ private fun SportsLiveContent(
     }
     listActions.onOpenBrowse = openChannelBrowse
     listActions.onShowAllSports = { onSelectFilter(SportsLiveUiState.ALL_SPORTS_FILTER) }
-    listActions.onToggleOtherEvents = onToggleOtherEvents
+    listActions.onOpenMoreLive = {
+        moreLiveFocusPending = true
+        onOpenMoreLive()
+    }
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
     val currentOnPreviewKey by rememberUpdatedState(onPreviewKey)
     Column(
@@ -1793,7 +1824,13 @@ private fun SportsLiveContent(
                 reminders = reminders,
                 onSelectTab = onSelectTab,
                 onShowAll = {
-                    onSelectFilter(if (uiState.selectedFilter == null && uiState.mySportsScoped) SportsLiveUiState.ALL_SPORTS_FILTER else null)
+                    // Live now has no All sports (user 2026-11-21): its More live view instead.
+                    if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLive.isNotEmpty()) {
+                        moreLiveFocusPending = true
+                        onOpenMoreLive()
+                    } else {
+                        onSelectFilter(if (uiState.selectedFilter == null && uiState.mySportsScoped) SportsLiveUiState.ALL_SPORTS_FILTER else null)
+                    }
                 },
                 onRetry = onRefresh,
                 onOpenAddons = onOpenAddons,
@@ -2112,7 +2149,7 @@ private fun SportsLiveContent(
                     // What the list shows, once per board, tab and filter (#115).
                     val listModel = remember(
                         shownBoard, channelsTab, channelBrowse, uiState.selectedFilter, uiState.hiddenByMySports, otherRegionLabel, channelLetters,
-                        uiState.otherEvents.size, uiState.otherEventsOpen
+                        uiState.moreLive, moreLiveShown
                     ) {
                         val rows = shownBoard?.rows.orEmpty()
                         val sectionCounts = rows.mapNotNull { it.section }.groupingBy { it }.eachCount()
@@ -2129,10 +2166,8 @@ private fun SportsLiveContent(
                             channelEntries = channelSummary?.takeIf { channelsTab && channelBrowse == null && uiState.selectedFilter == null && !it.fallback },
                             hiddenByMySports = if (channelsTab) 0 else uiState.hiddenByMySports,
                             channelLetters = channelLetters,
-                            otherEvents = if (channelsTab) 0 else uiState.otherEvents.size,
-                            // Open only once the board lists them (the last rows), never before it is built.
-                            otherEventsOpen = !channelsTab && uiState.otherEventsOpen &&
-                                uiState.otherEvents.isNotEmpty() && items.takeLast(uiState.otherEvents.size).map { it.streamKey } == uiState.otherEvents.map { it.streamKey }
+                            moreLive = if (channelsTab) emptyList() else SportsLiveMoreLive.summary(uiState.moreLive),
+                            moreLiveOpen = moreLiveShown
                         )
                     }
                     // The rows' marks (#143): equal from one D-pad move to the next while the list holds focus.

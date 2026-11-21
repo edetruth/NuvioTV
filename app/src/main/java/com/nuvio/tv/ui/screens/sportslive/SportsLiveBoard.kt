@@ -64,8 +64,10 @@ data class SportsLiveBoardInputs(
     val standings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap(),
     /** Channels' favorites, recent plays, browse view and countries (phases 1 and 2); none on the other tabs. */
     val channelLists: SportsLiveChannelLists = SportsLiveChannelLists.NONE,
-    /** Live now's "Other events" (H) among [items], by card key: listed last, LIVE only when ESPN has them in play. */
-    val otherEvents: Set<String> = emptySet()
+    /** Live now's listings that are no game (H) among [items], by card key: LIVE only when ESPN has them in play. */
+    val otherEvents: Set<String> = emptySet(),
+    /** Live now's More live view is open: [items] are its games, each by its group key (the list's sections). */
+    val moreLive: Map<String, String> = emptyMap()
 )
 
 /**
@@ -86,7 +88,9 @@ data class SportsLiveBoard(
     /** Upcoming's Agenda (V2, P3) or Replays' days (P4): [rows] by day; null on the other tabs. */
     val agenda: SportsLiveAgenda? = null,
     /** Channels (phase 2): its view, counts and countries; null on the other tabs. */
-    val channels: SportsLiveChannelSummary? = null
+    val channels: SportsLiveChannelSummary? = null,
+    /** Live now's More live view: [rows] are its games, by sport ([ScoreboardRow.section]). */
+    val moreLive: Boolean = false
 ) {
     /** True when this board shows [tab] with [filter]. */
     fun shows(tab: SportsLiveTab, filter: String?): Boolean = this.tab == tab && this.filter == filter
@@ -143,16 +147,13 @@ data class SportsLiveBoard(
                 null
             }
             val scores = inputs.scores
-            // Live now (J2, H): its games come in importance order; its open "Other events" follow them, last.
+            // Live now (J2): its games come in importance order, kept inside each status group.
             val liveNow = tab == SportsLiveTab.LIVE_NOW
-            val (otherItems, gameItems) = if (liveNow && inputs.otherEvents.isNotEmpty()) {
-                inputs.items.partition { it.streamKey in inputs.otherEvents }
-            } else {
-                emptyList<SportsLiveItem>() to inputs.items
-            }
-            val rows = if (isScoreboard(tab)) {
+            val rows = if (liveNow && inputs.moreLive.isNotEmpty()) {
+                moreLiveRows(inputs.items, inputs.moreLive, inputs.otherEvents, scores, inputs.clockMs)
+            } else if (isScoreboard(tab)) {
                 scoreboardRows(
-                    items = gameItems,
+                    items = inputs.items,
                     tab = tab,
                     scores = scores.scores,
                     mode = scores.mode,
@@ -168,7 +169,6 @@ data class SportsLiveBoard(
                     keepOrder = liveNow
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
-                    .let { built -> if (otherItems.isEmpty()) built else built + otherEventRows(otherItems, scores, inputs.clockMs) }
             } else {
                 when (tab) {
                     // Channels (phases 1 and 2): Favorites, Recent and Popular now, or the browse view; Replays under
@@ -193,17 +193,28 @@ data class SportsLiveBoard(
             for (item in items) {
                 if (item.streamKey !in arts) arts[item.streamKey] = GameArt.of(item, scores.scores[item.streamKey])
             }
-            return SportsLiveBoard(tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda, channels = channelView?.summary)
+            return SportsLiveBoard(
+                tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda, channels = channelView?.summary,
+                moreLive = liveNow && inputs.moreLive.isNotEmpty()
+            )
         }
     }
 }
 
 /**
- * Live now's open "Other events" (H) as rows, in their order: LIVE only when ESPN has the event in play; otherwise no
- * status at all (the addon's own LIVE is not trusted for these).
+ * The More live view's rows (user 2026-11-21): [items] in their order (group by group), each under its sport
+ * ([ScoreboardRow.section] = its group key in [groupOf]). A listing that is no game ([otherEvents], H) says LIVE only when
+ * ESPN has it in play; otherwise it shows no status (the addon's own LIVE is not trusted for these).
  */
-internal fun otherEventRows(items: List<SportsLiveItem>, scores: SportsLiveBoardScores, nowMs: Long): List<ScoreboardRow> =
-    scoreboardRows(
+internal fun moreLiveRows(
+    items: List<SportsLiveItem>,
+    groupOf: Map<String, String>,
+    otherEvents: Set<String>,
+    scores: SportsLiveBoardScores,
+    nowMs: Long
+): List<ScoreboardRow> {
+    val index = items.withIndex().associate { (i, item) -> item.streamKey to i }
+    return scoreboardRows(
         items = items,
         tab = SportsLiveTab.LIVE_NOW,
         scores = scores.scores,
@@ -211,11 +222,18 @@ internal fun otherEventRows(items: List<SportsLiveItem>, scores: SportsLiveBoard
         revealed = scores.revealed,
         nowMs = nowMs,
         keepOrder = true
-    ).sortedBy { row -> items.indexOfFirst { it.streamKey == row.item.streamKey } }.map { row ->
+    ).sortedBy { index[it.item.streamKey] ?: Int.MAX_VALUE }.map { row ->
+        val key = row.item.streamKey
         val status = row.status
-        val confirmed = status is GameStatus.Live && status.event != null
-        if (confirmed) row else row.copy(status = GameStatus.Upcoming(null, hasTimeOfDay = false), group = ScoreboardGroup.STARTING_SOON, chip = null, progress = null)
+        val unconfirmed = key in otherEvents && !(status is GameStatus.Live && status.event != null)
+        val shown = if (unconfirmed) {
+            row.copy(status = GameStatus.Upcoming(null, hasTimeOfDay = false), group = ScoreboardGroup.STARTING_SOON, chip = null, progress = null)
+        } else {
+            row
+        }
+        shown.copy(section = groupOf[key])
     }
+}
 
 /**
  * This board with [previous]'s row instances wherever a row did not change (#143). A score poll builds every row of the

@@ -26,6 +26,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowseKind
 import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
@@ -52,10 +53,10 @@ internal data class SportsLiveListModel(
     val hiddenByMySports: Int,
     /** Channels phase 2: each browse row's letter (◂ ▸ jump between them); null elsewhere. */
     val channelLetters: List<String>?,
-    /** Live now's "Other events" (H): how many; 0: no such row. */
-    val otherEvents: Int = 0,
-    /** They are open: the last [otherEvents] of [items] are theirs, listed under the row. */
-    val otherEventsOpen: Boolean = false
+    /** Live now's More live row (user 2026-11-21): (group key, count) as the row names them; empty: no row. */
+    val moreLive: List<Pair<String, Int>> = emptyList(),
+    /** The More live view is shown: [items] are its games, headed by sport ([ScoreboardRow.section]). */
+    val moreLiveOpen: Boolean = false
 )
 
 /**
@@ -98,8 +99,8 @@ internal class SportsLiveListActions {
     /** #167: OK on the "hidden by My sports" line. */
     var onShowAllSports: () -> Unit = {}
 
-    /** H: OK on Live now's "Other events (N) ›" row. */
-    var onToggleOtherEvents: () -> Unit = {}
+    /** OK on Live now's "More live" row. */
+    var onOpenMoreLive: () -> Unit = {}
 }
 
 /**
@@ -146,21 +147,16 @@ internal fun SportsLiveBoardList(
             // Read here, not through [model] in each row's key handler: a score poll builds a new model, and the handler
             // (part of the row's modifier) must stay equal so an unchanged row skips (#143).
             val letters = model.channelLetters
-            // H: the open "Other events" are the list's last rows; their row rides on the first of them.
-            val firstOther = if (model.otherEventsOpen) items.size - model.otherEvents else Int.MAX_VALUE
             itemsIndexed(items, key = { _, item -> item.listKey }, contentType = { _, _ -> ROW_CONTENT }) { index, item ->
                 val boardRow = rowOf[item.listKey] ?: return@itemsIndexed
                 // The group's heading rides on its first row, so list indices stay the rows' own.
                 Column {
-                    if (index == firstOther) {
-                        SportsLiveChannelEntryLine(
-                            text = stringResource(R.string.sports_live_other_events_open, model.otherEvents),
-                            onClick = { actions.onToggleOtherEvents() },
-                            modifier = Modifier.focusProperties { right = stageFocusRequester }
-                        )
-                    }
-                    if (index >= firstOther) {
-                        // No group headings among the other events: they are one quiet list under their row.
+                    if (model.moreLiveOpen) {
+                        // More live: one heading per sport, with its count.
+                        val section = boardRow.section
+                        if (section != null && (index == 0 || rowOf[items[index - 1].listKey]?.section != section)) {
+                            SportsLiveSectionHeader(moreLiveGroupLabel(section), model.sectionCounts[section] ?: 0)
+                        }
                     } else if (model.channelsTab) {
                         val section = boardRow.section
                         if (index == 0 && model.favoritesHint) SportsLiveFavoritesHint()
@@ -234,12 +230,12 @@ internal fun SportsLiveBoardList(
                     )
                 }
             }
-            // H: listings that are no game, folded into one quiet row at the bottom (opened, it rides on the first of them).
-            if (model.otherEvents > 0 && !model.otherEventsOpen) {
-                item(key = OTHER_EVENTS_KEY, contentType = ENTRY_CONTENT) {
+            // More live (user 2026-11-21): the list's last row, the live games My sports leaves out, by sport.
+            if (model.moreLive.isNotEmpty() && !model.moreLiveOpen) {
+                item(key = MORE_LIVE_KEY, contentType = ENTRY_CONTENT) {
                     SportsLiveChannelEntryLine(
-                        text = stringResource(R.string.sports_live_other_events, model.otherEvents),
-                        onClick = { actions.onToggleOtherEvents() },
+                        text = moreLiveRowText(model.moreLive),
+                        onClick = { actions.onOpenMoreLive() },
                         modifier = Modifier.focusProperties { right = stageFocusRequester }
                     )
                 }
@@ -267,8 +263,23 @@ private const val CHANNEL_POPULAR_KEY = "\u0000channels:popular"
 private const val CHANNEL_SPORTS_KEY = "\u0000channels:sports"
 private const val CHANNEL_ALL_KEY = "\u0000channels:all"
 
-/** H: Live now's "Other events" row's list key. */
-private const val OTHER_EVENTS_KEY = "live:other_events"
+/** Live now's More live row's list key. */
+private const val MORE_LIVE_KEY = "live:more_live"
+
+/** A More live group's name: its sport, "Fights" or "Other". */
+@Composable
+internal fun moreLiveGroupLabel(key: String): String = when (key) {
+    SportsLiveMoreLive.FIGHTS -> stringResource(R.string.sports_live_more_live_fights)
+    SportsLiveMoreLive.OTHER -> stringResource(R.string.sports_live_more_live_other)
+    else -> SportsLiveMoreLive.kindOf(key)?.let { sportKindLabel(it) } ?: stringResource(R.string.sports_live_more_live_other)
+}
+
+/** "More live: 4 Racing · 3 Cricket · 2 Fights · 2 Other ›". */
+@Composable
+internal fun moreLiveRowText(summary: List<Pair<String, Int>>): String {
+    val parts = summary.map { (key, count) -> stringResource(R.string.sports_live_more_live_count, count, moreLiveGroupLabel(key)) }
+    return stringResource(R.string.sports_live_more_live_row, parts.joinToString(" · "))
+}
 
 /** The list's content types (#143): game rows, entry lines and the hidden-games line are reused only as their own kind. */
 private const val ROW_CONTENT = "row"

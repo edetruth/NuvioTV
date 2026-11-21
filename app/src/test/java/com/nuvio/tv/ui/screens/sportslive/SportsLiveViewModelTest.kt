@@ -17,6 +17,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -1205,7 +1206,7 @@ class SportsLiveViewModelTest {
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
 
     @Test
-    fun `My sports scopes Live now and Upcoming, keeps followed games, hides unknown ones, and All sports shows everything`() = runTest {
+    fun `My sports scopes Live now and Upcoming, keeps followed games, and More live holds the rest`() = runTest {
         val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
         val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
         val followedCricket = item("fc", isLive = true, sport = "Cricket", name = "England vs Pakistan", startMs = NOW - HOUR)
@@ -1227,20 +1228,28 @@ class SportsLiveViewModelTest {
         // #167: a game whose sport cannot be told is hidden under My sports.
         assertEquals(setOf("nba", "fc"), liveNow.visibleItems.map { it.id }.toSet())
         assertTrue(liveNow.mySportsScoped)
-        assertTrue(SportsLiveUiState.ALL_SPORTS_FILTER in liveNow.filters)
-        // The counts follow My sports; All sports counts every game.
+        // More live replaces All sports on Live now (user 2026-11-21): no such chip.
+        assertFalse(SportsLiveUiState.ALL_SPORTS_FILTER in liveNow.filters)
         assertEquals(2, liveNow.filterCounts[null])
-        assertEquals(4, liveNow.filterCounts[SportsLiveUiState.ALL_SPORTS_FILTER])
         assertEquals(2, liveNow.countOf(SportsLiveTab.LIVE_NOW))
-        // The list's last line: the cricket game and the unknown one.
-        assertEquals(2, liveNow.hiddenByMySports)
+        // The list's last row: the cricket game, and the unknown one under Other.
+        assertEquals(listOf("CRICKET" to 1, SportsLiveMoreLive.OTHER to 1), SportsLiveMoreLive.summary(liveNow.moreLive))
+        // CH± and ▼ skip them.
+        assertFalse(liveNow.zapItems.any { it.id == "cri" })
 
+        // A stored All sports on Live now reads as My sports.
         viewModel.selectFilter(SportsLiveUiState.ALL_SPORTS_FILTER)
         runCurrent()
-        assertEquals(setOf("nba", "cri", "fc", "unk"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
-        assertEquals(0, viewModel.uiState.value.hiddenByMySports)
-        // The session started here carries every game, so the player can reach them all.
-        assertTrue(viewModel.uiState.value.zapItems.any { it.id == "cri" })
+        assertEquals(setOf("nba", "fc"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        assertEquals(null, viewModel.uiState.value.selectedFilter)
+
+        viewModel.openMoreLive()
+        runCurrent()
+        assertEquals(listOf("cri", "unk"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertTrue(viewModel.uiState.value.moreLiveOpen)
+        viewModel.closeMoreLive()
+        runCurrent()
+        assertEquals(setOf("nba", "fc"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
 
         viewModel.selectTab(SportsLiveTab.UPCOMING)
         runCurrent()
@@ -1256,6 +1265,8 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("cri"), viewModel.uiState.value.visibleItems.map { it.id })
         assertFalse(viewModel.uiState.value.mySportsScoped)
         assertFalse(SportsLiveUiState.ALL_SPORTS_FILTER in viewModel.uiState.value.filters)
+        // No More live row either.
+        assertTrue(viewModel.uiState.value.moreLive.isEmpty())
     }
 
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =
@@ -1318,32 +1329,30 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `listings that are no game fold into Other events, which open after the games`() = runTest {
+    fun `listings that are no game go under More live, Other, copies collapsed, and stay listed with nothing picked`() = runTest {
         val game = item("g", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea")
         val tour = item("t1", isLive = true, sport = null, name = "ATP 250 vs Stockholm Open")
         val tourCopy = item("t2", isLive = true, sport = null, name = "ATP 250 vs Stockholm Open")
         val promotion = item("p", isLive = true, sport = null, name = "BKFC")
         nextLoad = load(listOf(tour, game, tourCopy, promotion))
-        val viewModel = newViewModel()
+        val viewModel = SportsLiveViewModel(repo, mySports = flowOf(MySports(mapOf(MySport.SOCCER to emptySet()))), computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
-        val folded = viewModel.uiState.value
-        assertEquals(listOf("g"), folded.visibleItems.map { it.id })
-        assertEquals(listOf("g"), folded.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
-        // The two copies of one entry are one row.
-        assertEquals(listOf("t1", "p"), folded.otherEvents.map { it.id })
-        assertFalse(folded.otherEventsOpen)
+        val state = viewModel.uiState.value
+        assertEquals(listOf("g"), state.visibleItems.map { it.id })
+        assertEquals(listOf(SportsLiveMoreLive.OTHER), state.moreLive.map { it.key })
+        assertEquals(listOf("t1", "p"), state.moreLive.single().items.map { it.id })
+        assertEquals(setOf(tour.streamKey, promotion.streamKey), state.moreLiveOther)
+        assertEquals(listOf("g"), state.zapItems.map { it.id })
 
-        viewModel.toggleOtherEvents()
+        // Nothing picked in My sports: everything is listed as before, no More live.
+        nextLoad = load(listOf(game, promotion))
+        val everything = newViewModel()
         advanceUntilIdle()
-        assertEquals(listOf("g", "t1", "p"), viewModel.uiState.value.visibleItems.map { it.id })
-        assertTrue(viewModel.uiState.value.otherEventsOpen)
-        // Never zapped through: CH± and the player's panel walk the games only.
-        assertEquals(listOf("g"), viewModel.uiState.value.zapItems.map { it.id })
-
-        viewModel.toggleOtherEvents()
-        advanceUntilIdle()
-        assertEquals(listOf("g"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(setOf("g", "p"), everything.uiState.value.visibleItems.map { it.id }.toSet())
+        assertTrue(everything.uiState.value.moreLive.isEmpty())
     }
 
     @Test
