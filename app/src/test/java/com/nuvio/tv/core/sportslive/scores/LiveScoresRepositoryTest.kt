@@ -978,7 +978,7 @@ class LiveScoresRepositoryTest {
         val repo = repository("2026-11-01T12:00:00Z")
         collect(repo)
         // One NBA game a day, each on its own feed (league + date); the followed one is listed last.
-        val days = (1..LiveScoresRepository.MAX_FEEDS + 2).map { LocalDate.of(2026, 11, it) }
+        val days = (1..LiveScoresRepository.MAX_FEEDS + 2).map { LocalDate.of(2026, 11, 1).plusDays(it - 1L) }
         val others = days.dropLast(1).map { item("Team$it A vs Team$it B", "Basketball", "${it}T18:00:00Z") }
         val followed = item("Indiana Pacers at Philadelphia 76ers", "Basketball", "${days.last()}T18:00:00Z", followed = true)
         repo.track(SECTION, others + followed)

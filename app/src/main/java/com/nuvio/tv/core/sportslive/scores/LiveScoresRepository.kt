@@ -1330,8 +1330,12 @@ class LiveScoresRepository internal constructor(
         /** The women's-league fallback's game is at most this far from the card's start (live.23 review B1). */
         private const val WOMEN_FALLBACK_NEAR_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000
-        /** Feeds polled at once, at most; followed teams' games claim theirs first (and poll faster while live). */
-        internal const val MAX_FEEDS = 16
+        /**
+         * Feeds polled at once, at most; followed teams' games claim theirs first (and poll faster while live). 32, not 16
+         * (live.23 TV, Saturday 2026-11-21: 82 live games across ~20 leagues; at 16, Serie A, Bundesliga, La Liga, Ligue 2
+         * and college football got no slot). Feeds without a live game poll every 5 min, so the extra load is mostly live.
+         */
+        internal const val MAX_FEEDS = 32
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private const val LOGO_WRITE_DELAY_MS = 2_000L
         /** The kept scores are written at most this often (live.23). */
