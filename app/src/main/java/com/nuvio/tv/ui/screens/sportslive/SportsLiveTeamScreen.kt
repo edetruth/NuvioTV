@@ -59,6 +59,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
+import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -253,10 +254,7 @@ fun SportsLiveTeamScreen(
                                     onClick = target?.let { open ->
                                         {
                                             opening(teamLeaderKey(leader.category))
-                                            // The page's results already show (Show, or revealed) and none is saved for later: the
-                                            // card inherits it (as BUG19).
-                                            val shown = state.showsResults && data.recent.none { state.protection.protects(it) }
-                                            SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(open, revealed = shown))
+                                            SportsLivePlayerCardRequests.open(teamPlayerCardRequest(open, state))
                                             onOpenPlayerCard()
                                         }
                                     }
@@ -268,6 +266,16 @@ fun SportsLiveTeamScreen(
             }
         }
     }
+}
+
+/**
+ * The Player card a Team page leader opens. The page's results already show (Show, or revealed) and none is
+ * protected: the card inherits it (as BUG19). One of the last results protected (G6): the card is spoiler-safe,
+ * so its last games stay behind Reveal even under Scores Show, as from a protected Game page.
+ */
+internal fun teamPlayerCardRequest(target: PlayerCardTarget, state: SportsLiveTeamUiState): SportsLivePlayerCardRequest {
+    val anyProtected = state.hasProtectedResult
+    return SportsLivePlayerCardRequest(target, spoilerSafe = anyProtected, revealed = state.showsResults && !anyProtected)
 }
 
 private fun teamGameKey(eventId: String) = "g|$eventId"
@@ -316,7 +324,8 @@ private fun TeamHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (header != null && state.showsRecord) {
+            // Not while a last result is protected (G5): the streak or record would tell it.
+            if (header != null && state.showsRecordLine) {
                 val streak = header.streak?.let { value ->
                     if (value > 0) stringResource(R.string.sports_live_team_streak_won, value)
                     else stringResource(R.string.sports_live_team_streak_lost, -value)

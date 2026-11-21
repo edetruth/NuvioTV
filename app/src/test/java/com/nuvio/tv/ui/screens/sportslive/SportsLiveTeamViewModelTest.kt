@@ -6,10 +6,13 @@ import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
+import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.TeamFixtures
 import com.nuvio.tv.core.sportslive.scores.TeamPageData
 import com.nuvio.tv.core.sportslive.scores.TeamPageLoad
@@ -185,5 +188,51 @@ class SportsLiveTeamViewModelTest {
     fun `a card naming only one of the teams is never the game's card`() {
         val wrong = TeamFixtures.replay("Philadelphia 76ers vs Boston Celtics", "2026-11-19T00:00:00Z", kind = SportsLiveKind.EVENTS)
         assertTrue(teamPageCards(page.upcoming, listOf(wrong), followed = false, nowMs = TeamFixtures.NOW).isEmpty())
+    }
+
+    // --- G5, G6: a protected last result is not given away by the header or a Player card ---
+
+    private fun pageWithLatestSaved(mode: ScoresMode, revealed: Boolean = false): SportsLiveTeamUiState {
+        val latest = page.recent.first()
+        val saved = ProtectedGame(latest.eventId, home = null, away = null, startMs = latest.startMs, savedAtMs = TeamFixtures.NOW)
+        return SportsLiveTeamUiState(
+            team = sixers, data = page, status = GameLoadStatus.READY, mode = mode, revealed = revealed,
+            protection = SpoilerProtection(games = listOf(saved), nowMs = TeamFixtures.NOW)
+        )
+    }
+
+    @Test
+    fun `the header record and streak hide while a last result is protected, whatever the mode or Reveal`() {
+        assertTrue(page.header.streak != null || page.header.record != null)
+        val open = SportsLiveTeamUiState(team = sixers, data = page, status = GameLoadStatus.READY, mode = ScoresMode.SHOW)
+        assertFalse(open.hasProtectedResult)
+        assertTrue(open.showsRecordLine)
+
+        for (mode in listOf(ScoresMode.SHOW, ScoresMode.HIDE_UNTIL_FOCUSED, ScoresMode.OFF)) {
+            for (revealed in listOf(false, true)) {
+                val state = pageWithLatestSaved(mode, revealed)
+                assertTrue(state.hasProtectedResult)
+                assertFalse("$mode revealed=$revealed", state.showsRecordLine)
+            }
+        }
+        // Upcoming games and leaders are not results: they still show.
+        assertTrue(pageWithLatestSaved(ScoresMode.SHOW).showsRecord)
+    }
+
+    @Test
+    fun `a Player card opened from a Team page with a protected result is spoiler-safe and not revealed`() {
+        val target = PlayerCardTarget(EspnLeagueMap.NBA, "3059318", "J. Embiid", sixers.name)
+
+        val protectedRequest = teamPlayerCardRequest(target, pageWithLatestSaved(ScoresMode.SHOW, revealed = true))
+        assertTrue(protectedRequest.spoilerSafe)
+        assertFalse(protectedRequest.revealed)
+        // The card then keeps its last games behind Reveal even under Scores Show.
+        val card = SportsLivePlayerCardUiState(target = target, mode = ScoresMode.SHOW, spoilerSafe = protectedRequest.spoilerSafe, revealed = protectedRequest.revealed)
+        assertFalse(card.showsGame(focused = true))
+        assertTrue(card.showsReveal)
+
+        // Nothing protected: the card inherits the page's shown results (BUG19).
+        val open = SportsLiveTeamUiState(team = sixers, data = page, status = GameLoadStatus.READY, mode = ScoresMode.SHOW)
+        assertEquals(SportsLivePlayerCardRequest(target, spoilerSafe = false, revealed = true), teamPlayerCardRequest(target, open))
     }
 }
