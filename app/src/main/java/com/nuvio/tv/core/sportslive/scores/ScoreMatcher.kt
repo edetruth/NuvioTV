@@ -155,6 +155,16 @@ class ScoreMatcher(
     }
 
     /**
+     * True when [card]'s two sides meet in any of [events], whatever its time (live.23: a men's league feed that has the
+     * pairing today keeps the card off its women's counterpart).
+     */
+    fun meets(card: ScoreCard, events: List<ScoreSnapshot>): Boolean {
+        val home = side(card.teams.home)
+        val away = side(card.teams.away)
+        return events.any { score(home, away, it) != null }
+    }
+
+    /**
      * The pair's meeting ESPN has not started yet and has scheduled more than [LATER_LEAD_MS] after [nowMs] (live.20: an
      * addon listed tomorrow's game live). Read for its start only, never as the card's score: it must be the pair's only
      * meeting among [events] (a series or a home-and-home gives none), within [LATER_MAX_MS], both sides STRONG, and a
@@ -306,7 +316,8 @@ class ScoreMatcher(
 
         /** [womenFeed]: the event is on a women's feed, where a card's women's marker is what the feed already says. */
         fun score(side: Side, womenFeed: Boolean = false): Int = when {
-            (if (womenFeed && side.qualifier == "w") null else side.qualifier) != qualifier -> 0
+            // On a women's feed every team is women's: a "W" on either name adds nothing (live.23: "Chelsea Women" in the WSL).
+            (if (womenFeed && side.qualifier == "w") null else side.qualifier) != (if (womenFeed && qualifier == "w") null else qualifier) -> 0
             side.keys.any { it in strongKeys } -> STRONG
             side.collegeKeys.any { it in strongKeys } -> STRONG
             side.keys.any { it in locationKeys } -> if (college) STRONG else WEAK
@@ -468,7 +479,14 @@ class ScoreMatcher(
          * A game on a women's feed (NCAAW, WNBA, NWSL; #163): its teams carry no women's marker, and a card's
          * "(W)" or none both fit it. On a mixed feed (soccer/all) the slug's qualifier still tells them apart.
          */
-        private fun isWomenFeed(event: ScoreSnapshot): Boolean = event.league in EspnLeagueMap.WOMEN_FEEDS
+        private fun isWomenFeed(event: ScoreSnapshot): Boolean =
+            event.league in EspnLeagueMap.WOMEN_FEEDS || EspnLeagueIndex.isWomen(event.league)
+
+        /**
+         * True when [event] is a women's game (live.23): on a women's feed (NCAAW, WNBA, NWSL, a women's competition of the
+         * league index such as the WSL), or a mixed-feed game whose league slug or competition says women's.
+         */
+        fun isWomenGame(event: ScoreSnapshot): Boolean = isWomenFeed(event) || leagueQualifier(event.leagueSlug, event.leagueName) == "w"
 
         private fun eventQualifier(event: ScoreSnapshot): String? =
             if (isWomenFeed(event)) null else leagueQualifier(event.leagueSlug, event.leagueName)

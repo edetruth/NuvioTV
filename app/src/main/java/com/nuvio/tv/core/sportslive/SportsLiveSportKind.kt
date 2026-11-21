@@ -33,22 +33,36 @@ enum class SportsLiveSportKind {
             HOCKEY to """hockey|\bnhl\b|\bkhl\b|\bshl\b|\bliiga\b|\bahl\b|\bechl\b|\bohl\b|\bwhl\b|\bqmjhl\b|\biihf\b""",
             BASEBALL to """baseball|\bmlb\b""",
             TENNIS to """tennis|\batp\b|\bwta\b|\bitf\b""",
-            CRICKET to """cricket|\bicc\b|\bt20i?\b|\bodi\b|\bipl\b|\bw?bbl\b|test match|big bash|\bilt20\b|\bsa20\b|\bbpl\b|""" +
+            CRICKET to """cricket|\bicc\b|\bt20i?\b|\bt10\b|the hundred|\bodi\b|\bipl\b|\bw?bbl\b|test match|big bash|\bilt20\b|\bsa20\b|\bbpl\b|""" +
                 """ranji|sheffield shield|super smash|county championship""",
             RUGBY to """rugby|\bnrlw?\b|six nations|\btop 14\b|\burc\b|state of origin""",
             GOLF to """golf|\bpga\b|\blpga\b|\bliv golf\b""",
-            MMA to """\bmma\b|\bufc\b|\bpfl\b|bellator""",
-            BOXING to """boxing""",
+            // Boxing first, so a boxing card's "Fight Night" is boxing; bare-knuckle boxing too (BKFC, Gromda). Not kickboxing.
+            BOXING to """\bboxing\b|\bbkfc\b|bare.?knuckle|\bgromda\b""",
+            // Fight promotions and their nights (live.23, TV report #9): "ONE Friday Fights", "UFC Fight Night", "Oktagon 98".
+            MMA to """\bmma\b|\bufc\b|\bpfl\b|bellator|fight night|friday fights|\bfights\b|combat sports|kickboxing|""" +
+                """muay thai|\bglory \d|\boktagon\b|\bksw\b|cage warriors|\bone championship\b""",
             MOTORSPORT to """motorsport|motor sport|formula 1|formula one|\bf1\b|motogp|nascar|indycar|(?<!\bisu )grand prix""",
             DARTS to """darts""",
             SNOOKER to """snooker""",
             WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
             CYCLING to """cycling|tour de france""",
-            SOCCER to """soccer|football|futbol|futebol|premier league|\bla ?liga|bundesliga|scottish premiership|\bspfl\b|\bbundes\b|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
+            SOCCER to """soccer|football|futbol|futebol|premier league|\bla ?liga|bundesliga|scottish premiership|\bspfl\b|\bwsl\b|women'?s super league|\bbundes\b|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
                 """champions league|libertadores|sudamericana|\bcopa\b|ligapro|liga pro\b|liga mx|eredivisie|primeira liga|""" +
                 """liga portugal|super lig|ekstraklasa|allsvenskan|\bconmebol\b|\bconcacaf\b|\befl\b|fa cup|carabao|a-league|""" +
                 """j1 league|k league|serie b\b|coppa italia|dfb pokal"""
         ).map { (kind, pattern) -> kind to Regex(pattern) }
+
+        /**
+         * True when [text] names a sport with no [SportsLiveSportKind] ("Volleyball", "Beach Volleyball", "Handball",
+         * "Netball"): a known sport all the same, so a card tagged so is never placed in another sport by its teams.
+         */
+        fun namesOtherSport(text: String?): Boolean = text != null && OTHER_SPORT.containsMatchIn(fold(text))
+
+        private val OTHER_SPORT = Regex(
+            """volley|handball|balonmano|handebol|pallamano|netball|lacrosse|water ?polo|futsal|badminton|table tennis|""" +
+                """squash|bowls|athletics|swimming"""
+        )
 
         /** The sport [text] names ("American Football" → FOOTBALL, "Football" → SOCCER); null when none. */
         fun of(text: String?): SportsLiveSportKind? = text?.let(sportOf::invoke)
@@ -87,8 +101,26 @@ enum class SportsLiveSportKind {
             val sport = of(item.sport)
             // A bare "Football" is soccer, unless the card's own text says American football ("NFL", F4).
             if (sport == SOCCER && isBareFootball(item.sport) && texts.any { of(it) == FOOTBALL }) return FOOTBALL
-            return sport ?: texts.firstNotNullOfOrNull(::of) ?: CRICKET.takeIf { SportsLiveCricket.isCricketGame(item.teams) }
+            return sport ?: texts.firstNotNullOfOrNull(::of) ?: fromTeamsOrTitle(item)
         }
+
+        /**
+         * The sport a card that names none is of by its teams or its whole title (live.23, TV report #9): two cricket
+         * franchises or A sides ([SportsLiveCricket]), two rugby clubs ([SportsLiveRugby]), or a wrestling show's name
+         * alone ("Raw", "Dynamite"). Null when none tells: the card's sport stays unknown (sport null or a non-sport tag
+         * like "OTHER"), which is the "unknown sport" signal the lists read ([SportsLiveUnidentified.isUntagged]).
+         */
+        fun fromTeamsOrTitle(item: SportsLiveItem): SportsLiveSportKind? = when {
+            SportsLiveCricket.isCricketGame(item.teams) -> CRICKET
+            SportsLiveRugby.isRugbyGame(item.teams) -> RUGBY
+            fold(SportsLiveDisplayText.name(item.meta.name)) in WRESTLING_TITLES -> WRESTLING
+            else -> null
+        }
+
+        // A weekly wrestling show's name as a whole title: never a word of another sport's title ("Raw" alone).
+        private val WRESTLING_TITLES = setOf(
+            "raw", "wwe raw", "monday night raw", "dynamite", "aew dynamite", "collision", "aew collision", "rampage", "aew rampage"
+        )
 
         /**
          * The sport whose one name a row's tag uses when [item]'s sport is a plain sport word ("Soccer", "Futbol",

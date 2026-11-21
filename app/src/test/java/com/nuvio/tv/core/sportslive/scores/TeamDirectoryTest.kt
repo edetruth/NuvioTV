@@ -116,16 +116,17 @@ class TeamDirectoryTest {
         try {
             val store = TeamDirectoryStore(dir)
             val directory = TeamDirectory(maxLeagues = 2)
-            // Leagues inference never reads (its lists are kept, live.20), answered with the NBA or NHL list here.
-            val ned = EspnLeague("soccer", "ned.1")
+            // Leagues inference and placement never read (their lists are kept, live.20; ned.1 is a placement list since
+            // live.23), answered with the NBA or NHL list here.
+            val ned = EspnLeague("soccer", "bel.1")
             val por = EspnLeague("soccer", "por.1")
             val sync = TeamDirectorySync(directory, { league -> if (league == ned) nbaTeams else nhlTeams }, store, { 0L })
             sync.refresh(listOf(ned, por))
-            // A third league: the oldest, ned.1, goes from memory and disk.
-            sync.refresh(listOf(EspnLeague("soccer", "sco.1")))
+            // A third league: the oldest, bel.1, goes from memory and disk.
+            sync.refresh(listOf(EspnLeague("soccer", "sui.1")))
             assertEquals(2, dir.listFiles()!!.count { it.name.endsWith(".tsv") })
             assertNull(directory.fetchedAt(ned))
-            assertFalse(File(dir, "soccer__ned.1.tsv").exists())
+            assertFalse(File(dir, "soccer__bel.1.tsv").exists())
         } finally {
             dir.deleteRecursively()
         }

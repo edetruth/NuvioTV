@@ -111,6 +111,8 @@ object TeamFollows {
             if (stored[0] != SOCCER && stored[1] != event.league.league) return false
             if (espnSide.id != null) return team.espnId == espnSide.id
         }
+        // A club's women's game (live.23): a men's team followed by name never stars it.
+        if (event != null && event.league.sport == SOCCER && ScoreMatcher.isWomenGame(event) && !SportsLiveTeams.followsWomen(team)) return false
         return SportsLiveTeams.followsSideOfAnySource(team, side, item)
     }
 

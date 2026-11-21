@@ -33,7 +33,8 @@ object SportsLiveTeamIdentity {
         else item.meta.genres + identity.league
         // A soccer game that names no competition (item 3: "FC Porto vs USC Paredes", tagged Soccer) takes its league.
         if (identity.sport == SOCCER && soccerLeagueUnknown(item)) return item.copy(meta = item.meta.copy(genres = genres))
-        if (!sportUnknown(item)) return item
+        // ESPN's live cricket list confirms a card only its teams suggested cricket for (2026-11-21): it takes the word.
+        if (!sportUnknown(item) && !(identity.sport == CRICKET && sportUnknownByText(item))) return item
         return item.copy(sport = TeamIdentityRules.sportWord(identity.sport), meta = item.meta.copy(genres = genres))
     }
 
@@ -56,9 +57,14 @@ object SportsLiveTeamIdentity {
         return if (a.isNullOrBlank() || b.isNullOrBlank()) null else a to b
     }
 
+    /** True when no text of [item] or its alternates names a sport (its teams may still suggest one). */
+    internal fun sportUnknownByText(item: SportsLiveItem): Boolean =
+        (listOf(item) + item.alternates).all { SportsLiveMySportsScope.textKindOf(it) == null && !SportsLiveSportKind.namesOtherSport(it.sport) }
+
     /** True when neither [item] nor any of its alternates tells a sport. */
     internal fun sportUnknown(item: SportsLiveItem): Boolean =
-        (listOf(item) + item.alternates).all { SportsLiveMySportsScope.kindOf(it) == null }
+        // A sport with no kind of its own ("Volleyball", "Handball") is still a sport: its teams never place it elsewhere.
+        (listOf(item) + item.alternates).all { SportsLiveMySportsScope.kindOf(it) == null && !SportsLiveSportKind.namesOtherSport(it.sport) }
 
     /** The game's two sides in written order ([SportsLiveTeams.writtenOrder]), memoised. */
     internal fun sides(name: String): Pair<String, String>? = sidesOf(name)

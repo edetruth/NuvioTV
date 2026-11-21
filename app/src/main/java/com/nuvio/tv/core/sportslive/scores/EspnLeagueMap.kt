@@ -260,6 +260,33 @@ object EspnLeagueMap {
         }.distinct()
     }
 
+    /**
+     * A men's soccer league and its country's women's top league on ESPN (live.23: "Liverpool vs Chelsea · Premier
+     * League" was the WSL game, ESPN's eng.1 had no such game). Germany and Italy have no women's league feed here.
+     */
+    private val WOMEN_COUNTERPARTS: Map<EspnLeague, EspnLeague> = mapOf(
+        EspnLeague("soccer", "eng.1") to EspnLeague("soccer", "eng.w.1"),
+        EspnLeague("soccer", "esp.1") to EspnLeague("soccer", "esp.w.1"),
+        EspnLeague("soccer", "fra.1") to EspnLeague("soccer", "fra.w.1"),
+        EspnLeague("soccer", "ned.1") to EspnLeague("soccer", "ned.w.1"),
+        EspnLeague("soccer", "mex.1") to EspnLeague("soccer", "mex.w.1"),
+        EspnLeague("soccer", "aus.1") to EspnLeague("soccer", "aus.w.1"),
+        EspnLeague("soccer", "usa.1") to NWSL
+    )
+
+    /**
+     * The women's league a card routed to one men's soccer league ([WOMEN_COUNTERPARTS]) may also be on, tried as the
+     * college feed is ([collegeFallbackFor]): only when its own feeds answer without the game, both sides STRONG. Null
+     * for a card that says men's or women's, or names no such league.
+     */
+    fun womenFallbackFor(item: SportsLiveItem): EspnLeague? {
+        if (genderOf(item) != null) return null
+        return leaguesFor(item).singleOrNull()?.let(WOMEN_COUNTERPARTS::get)
+    }
+
+    /** True when [league] is a women's counterpart [womenFallbackFor] gives. */
+    fun isWomenFallback(league: EspnLeague): Boolean = league in WOMEN_COUNTERPARTS.values
+
     // A college card routes only to a college feed, never to the pro league of the same sport.
     private val COLLEGE = Regex("""\bncaa\w*|\bcollege\b""")
     private val COLLEGE_FEEDS = setOf(COLLEGE_FOOTBALL, COLLEGE_BASKETBALL, COLLEGE_BASKETBALL_WOMEN) + VOLLEYBALL_FEEDS
