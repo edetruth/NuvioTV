@@ -1044,7 +1044,7 @@ class SportsLiveViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
         viewModel.selectTab(SportsLiveTab.REPLAYS)
-        runCurrent()
+        advanceUntilIdle()
         val raw = viewModel.uiState.value.visibleItems.first()
         // As played: the clean title, never the addon's (spoilerSafeReplay).
         val played = spoilerSafeReplay(raw, "Suns at Lakers")
