@@ -39,6 +39,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -504,14 +505,15 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
     val art = row.art
     val shown = details as? ScoreDetails.Shown
     val headline = when {
-        shown != null -> ScoreDetailsBuilder.scorelineText(shown, detailStrings)
-        // The game grammar's connector: "Hornets at Hawks" only when the first side is the away side.
-        art != null && row.twoSided -> stringResource(
-            if (agendaSaysAt(row)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
-            art.first.shortName,
-            art.second.shortName
+        shown != null -> AnnotatedString(ScoreDetailsBuilder.scorelineText(shown, detailStrings))
+        // The game grammar's connector: "Hornets at Hawks" only when the first side is the away side. A ranked side's small
+        // muted "#22" goes before its name here (l24 polish P5), so the ranks line below never repeats the matchup.
+        art != null && row.twoSided -> stageMatchup(
+            stringResource(if (agendaSaysAt(row)) R.string.sports_live_matchup_at else R.string.sports_live_matchup),
+            rankedName(art.first.shortName, art.first.rank, SportsLiveTokens.Type.Meta.fontSize),
+            rankedName(art.second.shortName, art.second.rank, SportsLiveTokens.Type.Meta.fontSize)
         )
-        else -> singleLineTitle(row.item)
+        else -> AnnotatedString(singleLineTitle(row.item))
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         BasicText(
@@ -547,8 +549,9 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
             overflow = TextOverflow.Ellipsis
         )
         SportsLiveStageFactsLine(facts)
-        // Ranks and the round (#137, #160): "#1 Sinner vs #8 Alcaraz · Semifinal", "#3 UConn vs #12 Arizona".
-        stageRanksLine(row)?.let { line ->
+        // Ranks and the round (#137, #160): "#1 Sinner vs #8 Alcaraz · Semifinal", "#3 UConn vs #12 Arizona". Under a
+        // scoreline only: a matchup headline already carries the ranks (l24 polish P5), so only the round is left.
+        (if (shown != null) stageRanksLine(row) else row.tennisRound)?.let { line ->
             Text(
                 text = line,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
@@ -570,6 +573,22 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
         }
     }
 }
+
+/**
+ * The stage's matchup headline (l24 polish P5): [template] ("%1$s vs %2$s", as the string resource is written, in any
+ * order) with [first] and [second] in place, each with its rank's style ([rankedName]).
+ */
+internal fun stageMatchup(template: String, first: AnnotatedString, second: AnnotatedString): AnnotatedString = buildAnnotatedString {
+    var last = 0
+    for (match in MATCHUP_PLACEHOLDER.findAll(template)) {
+        append(template.substring(last, match.range.first))
+        append(if (match.groupValues[1] == "1") first else second)
+        last = match.range.last + 1
+    }
+    append(template.substring(last))
+}
+
+private val MATCHUP_PLACEHOLDER = Regex("""%([12])\${'$'}s""")
 
 /**
  * The stage's ranks line (#137, #160): each ranked side as "#1 Sinner" (unranked: the name alone), joined by "vs",
