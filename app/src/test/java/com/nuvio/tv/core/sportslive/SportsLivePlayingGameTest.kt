@@ -37,6 +37,20 @@ class SportsLivePlayingGameTest {
     }
 
     @Test
+    fun `the same two clubs in another sport, or the women's game, are not the game playing`() {
+        // Review A3: the basketball row was hidden and OK on it went back to the football game.
+        val football = game("a", "1", "Real Madrid vs Barcelona", start = 0)
+        assertFalse(SportsLivePlayingGame.isSameGame(game("b", "2", "Real Madrid vs Barcelona", start = hour).copy(sport = "Basketball"), football))
+        val ncaam = game("a", "3", "Duke vs North Carolina", start = 0).copy(sport = "NCAAM")
+        assertFalse(SportsLivePlayingGame.isSameGame(game("b", "4", "Duke vs North Carolina", start = 2 * hour).copy(sport = "NCAAW"), ncaam))
+        val pl = game("a", "5", "Liverpool vs Chelsea", start = 0).let { it.copy(meta = it.meta.copy(genres = listOf("Premier League"))) }
+        assertFalse(SportsLivePlayingGame.isSameGame(game("b", "6", "Liverpool vs Chelsea", start = hour).let { it.copy(meta = it.meta.copy(genres = listOf("WSL"))) }, pl))
+        // A copy naming no sport, or the same sport in other words, still is.
+        assertTrue(SportsLivePlayingGame.isSameGame(game("b", "7", "Real Madrid vs Barcelona", start = 0).copy(sport = null), football))
+        assertTrue(SportsLivePlayingGame.isSameGame(game("b", "8", "Real Madrid vs Barcelona", start = 0).copy(sport = "Football"), football))
+    }
+
+    @Test
     fun `the panel and the guide never list the game playing again`() {
         val playing = game("a", "1", "Liverpool vs Chelsea", start = 0)
         val copy = game("b", "9", "Liverpool FC vs Chelsea FC", start = 0)
