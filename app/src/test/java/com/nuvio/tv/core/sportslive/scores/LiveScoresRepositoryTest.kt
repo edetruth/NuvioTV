@@ -370,6 +370,24 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `Upcoming's prefetch asks at most 6 feeds per burst, followed teams' leagues first (F4)`() = runTest {
+        val leagues = MySports.DEFAULT.feeds().distinct()
+        assertTrue(leagues.size > 3)
+        val followed = leagues.last()
+        val repo = repository("2026-11-16T17:00:00Z", followedLeagues = kotlinx.coroutines.flow.flowOf(listOf(followed)))
+        collect(repo)
+        runCurrent()
+        assertEquals(LiveScoresRepository.PREWARM_FEEDS, repo.prefetchUpcoming())
+        assertEquals(LiveScoresRepository.PREWARM_FEEDS, provider.calls.size)
+        assertEquals(followed, provider.calls.first().league)
+        // The next burst takes the feeds left, never the ones just asked for.
+        val first = provider.calls.toSet()
+        provider.calls.clear()
+        assertTrue(repo.prefetchUpcoming() <= LiveScoresRepository.PREWARM_FEEDS)
+        assertTrue(provider.calls.none { it in first })
+    }
+
+    @Test
     fun `cards on one feed share one request`() = runTest {
         provider.respond = { ScoreboardResult(nbaFixture) }
         val repo = repository("2026-11-16T12:00:00Z")

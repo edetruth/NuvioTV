@@ -745,7 +745,8 @@ class SportsLiveViewModel internal constructor(
             if (selection.tab != SportsLiveTab.LIVE_NOW || !screenVisible || ambientShowing) return@launch
             if (selection.filterByTab[SportsLiveTab.UPCOMING] != null || boardCache.has(SportsLiveTab.UPCOMING, null)) return@launch
             // Upcoming's scoreboards for today and tomorrow too, so its games match at once on open (capped in the repository).
-            launch {
+            // Not under Data saver (live.23 review F4), as the link prefetch.
+            if (SportsLiveDataSaver.prefetchAllowed(dataSaverActive)) launch {
                 val asked = prefetchUpcomingScores()
                 SportsLiveDebugTiming.log { "sportsOpen stage=prefetchScores requests=$asked" }
             }

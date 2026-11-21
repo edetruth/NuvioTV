@@ -659,23 +659,31 @@ class LiveScoresRepository internal constructor(
      * and tomorrow are fetched once, so opening Upcoming matches its games (times, logos) from the HTTP cache's recent
      * copy ([ScoreProvider.recentScoreboard], the pollers' warm start) instead of waiting on each feed. Capped: each feed
      * at most once per [UPCOMING_PREFETCH_EVERY_MS] (and not when anything asked for it within that time), never inside
-     * its Retry-After or after a failure, never under Scores Off; shared with a request in flight. Returns how many
-     * requests it made.
+     * its Retry-After or after a failure, never under Scores Off; shared with a request in flight. At most
+     * [PREWARM_FEEDS] per call (live.23 review F4), followed teams' leagues first. Returns how many requests it made.
      */
     suspend fun prefetchUpcoming(): Int {
+        val followed = try {
+            followedLeagues.first().toSet()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptySet()
+        }
         val requests = lock.withLock {
             if (scoresMode == ScoresMode.OFF) return@withLock emptyList()
             val at = now()
             val lastAsked = health.feeds.value
-            feedsOf(sports.feeds().distinct(), laterDates(at)).filter { feed ->
+            val leagues = sports.feeds().distinct().sortedBy { it !in followed }
+            feedsOf(leagues, laterDates(at)).filter { feed ->
                 val prefetched = upcomingPrefetchedAt[feed]
                 if (prefetched != null && at - prefetched < UPCOMING_PREFETCH_EVERY_MS) return@filter false
                 val asked = lastAsked[EspnFeedKey.scoreboard(feed.league, feed.date)]?.lastAttemptAt
                 if (asked != null && at - asked < UPCOMING_PREFETCH_EVERY_MS) return@filter false
                 val state = feeds[feed]
                 val retryAfter = state?.retryAfterMs?.let { wait -> state.lastAttemptAt?.let { at - it < wait } } == true
-                !retryAfter && (state?.failures ?: 0) == 0
-            }.map { feed ->
+                !retryAfter && (state?.failures ?: 0) == 0 && feed !in earlyFailures
+            }.take(PREWARM_FEEDS).map { feed ->
                 upcomingPrefetchedAt[feed] = at
                 fetchLocked(feed)
             }
