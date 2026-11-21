@@ -595,6 +595,8 @@ class LiveScoresRepository internal constructor(
             state.failures = 0
             state.retryAfterMs = null
             state.events = result.events
+            // Soccer pairings of the day keep two nations from being guessed as cricket (2026-11-21).
+            com.nuvio.tv.core.sportslive.SportsLiveOtherSportPairs.shared.record(result.events)
             state.fetched = true
             state.lastSuccessAt = state.lastAttemptAt
         }

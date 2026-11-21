@@ -22,21 +22,45 @@ object SportsLiveCricket {
     private val NATIONS = setOf(
         "australia", "england", "india", "new zealand", "pakistan", "south africa", "sri lanka", "west indies",
         "bangladesh", "afghanistan", "ireland", "zimbabwe", "scotland", "netherlands", "namibia", "nepal",
-        "oman", "united arab emirates", "united states", "canada", "hong kong", "papua new guinea", "kenya"
+        "oman", "united arab emirates", "united states", "canada", "hong kong", "papua new guinea", "kenya",
+        // ICC associates addons list (2026-11-21).
+        "uganda", "tanzania", "rwanda", "nigeria", "malaysia", "singapore", "thailand", "japan", "qatar", "kuwait",
+        "bahrain", "saudi arabia", "italy", "germany", "denmark", "jersey", "vanuatu", "bermuda", "cayman islands"
     )
 
     // A women's side: "Women", "(W)", a trailing "W".
     private val WOMEN = Regex("""\s*(\(w\)|\bwomen\b|\bw\b)\s*$""")
 
-    /** True when [teams] can only be a cricket game; see the class doc. */
-    fun isCricketGame(teams: TeamPair?): Boolean {
+    /**
+     * Nations whose national sides addons list almost only for cricket (coordinator decision, 2026-11-21): a pair of
+     * cricket nations with one of these is cricket, in any women's, youth or A form.
+     */
+    private val MAINLY_CRICKET = setOf(
+        "india", "pakistan", "sri lanka", "bangladesh", "afghanistan", "nepal", "west indies", "zimbabwe"
+    )
+
+    /**
+     * True when [teams] can only be a cricket game; see the class doc. Since 2026-11-21 (coordinator decision) also two
+     * cricket nations of which one is [MAINLY_CRICKET] ("Sri Lanka vs Hong Kong", "Ireland Women vs Zimbabwe Women"),
+     * unless ESPN's soccer or field-hockey scoreboards the app has loaded list that pairing that day ([otherSports]).
+     * "Australia vs England" stays unknown: rugby, football and hockey play it as much.
+     */
+    fun isCricketGame(
+        teams: TeamPair?,
+        otherSports: SportsLiveOtherSportPairs = SportsLiveOtherSportPairs.shared,
+        nowMs: Long = System.currentTimeMillis()
+    ): Boolean {
         teams ?: return false
         val a = side(teams.home)
         val b = side(teams.away)
         if (a in FRANCHISES && b in FRANCHISES) return true
         val aSideA = aSide(a)
         val aSideB = aSide(b)
-        return (aSideA != null || aSideB != null) && (aSideA ?: nation(a)) != null && (aSideB ?: nation(b)) != null
+        if ((aSideA != null || aSideB != null) && (aSideA ?: nation(a)) != null && (aSideB ?: nation(b)) != null) return true
+        val x = nation(SportsLiveOtherSportPairs.nation(teams.home)) ?: return false
+        val y = nation(SportsLiveOtherSportPairs.nation(teams.away)) ?: return false
+        if (x == y || (x !in MAINLY_CRICKET && y !in MAINLY_CRICKET)) return false
+        return !otherSports.lists(teams.home, teams.away, nowMs)
     }
 
     private fun side(name: String): String = SportsLiveTeams.normalise(name).replace(WOMEN, "").trim()

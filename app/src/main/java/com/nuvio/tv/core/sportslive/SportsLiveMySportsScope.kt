@@ -73,10 +73,14 @@ object SportsLiveMySportsScope {
      * catalog's name only when that names a single sport (a mixed catalog never decides). Null: unknown.
      */
     internal fun kindOf(item: SportsLiveItem): SportsLiveSportKind? =
-        (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description).firstNotNullOfOrNull { SportsLiveSportKind.of(it) }
-            ?: SportsLiveSportKind.single(item.catalogName)
+        textKindOf(item)
             // Cricket or rugby told from its teams alone (#145, live.23), a wrestling show by its name: as a tagged game is.
             ?: SportsLiveSportKind.fromTeamsOrTitle(item)
+
+    /** [kindOf] from the card's texts only: its sport word, title, genres, description, a single-sport catalog name. */
+    internal fun textKindOf(item: SportsLiveItem): SportsLiveSportKind? =
+        (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description).firstNotNullOfOrNull { SportsLiveSportKind.of(it) }
+            ?: SportsLiveSportKind.single(item.catalogName)
 
     /**
      * The My sports [item]'s sport can be ([kindOf]); empty for a sport My sports cannot hold. A bare
