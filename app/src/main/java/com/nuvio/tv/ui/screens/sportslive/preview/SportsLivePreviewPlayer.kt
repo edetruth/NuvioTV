@@ -84,6 +84,8 @@ internal class SportsLivePreviewPlayer(
         loadStartedAtMs = System.currentTimeMillis()
         rendered = false
         view?.player = exo
+        // A second decoder beside whatever plays: it lets go at once if the full player loses its own (#106).
+        SportsLiveSecondDecoders.hold(this) { yieldDecoder() }
         // Its own instance: parallel connections and the VOD cache stay at their defaults (off).
         exo.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), stream, url)
     }
@@ -140,6 +142,7 @@ internal class SportsLivePreviewPlayer(
      */
     fun stop() {
         cancelStallCheck()
+        SportsLiveSecondDecoders.drop(this)
         val current = player ?: return
         if (loadItem == null) return
         loadItem = null
@@ -152,6 +155,7 @@ internal class SportsLivePreviewPlayer(
     /** Frees the player at once (the view lets go of it first); does nothing when none was built. */
     fun release() {
         cancelStallCheck()
+        SportsLiveSecondDecoders.drop(this)
         val current = player ?: return
         player = null
         loaded = null
@@ -159,6 +163,13 @@ internal class SportsLivePreviewPlayer(
         rendered = false
         view?.player = null
         current.release()
+    }
+
+    /** The full player lost its decoder (#106): this player is freed at once and its preview ends as an error. */
+    private fun yieldDecoder() {
+        val item = loadItem
+        release()
+        item?.let(onError)
     }
 
     private fun cancelStallCheck() {
