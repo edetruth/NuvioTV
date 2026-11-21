@@ -68,24 +68,23 @@ enum class SportsLiveMiniStop {
 }
 
 /**
- * Whether the mini player plays on at [route]: only inside Sports & Live (its tabs, Game, Team and Player card
- * pages, setup) and the player itself (an expand or another player stops it on its own). Elsewhere it would
- * cover another screen's content with video the user can no longer act on, and on a slow box it holds a decoder
- * while the user is busy elsewhere. A null route (the app still starting) changes nothing.
+ * Whether the mini player plays on at [route] (#219): everywhere in the app. Outside the section it is the small
+ * "▶ Playing ‹game›" chip ([sportsLiveMiniChipOn]: sound on, no video over the content, focus only by a D-pad move),
+ * so it never covers another screen's content as it did before BUG13's stop; it ends when other playback starts (any
+ * player opening stops it), on Hold Back / Stop, or on the chip's Back.
  */
-fun sportsLiveMiniPlaysOn(route: String?): Boolean =
-    route == null || route.startsWith(SPORTS_LIVE_ROUTE_PREFIX) || route.startsWith(PLAYER_ROUTE_PREFIX)
+@Suppress("UNUSED_PARAMETER")
+fun sportsLiveMiniPlaysOn(route: String?): Boolean = true
 
-private const val SPORTS_LIVE_ROUTE_PREFIX = "sports_live"
 private const val SPORTS_LIVE_ROOT_ROUTE = "sports_live"
 
 /**
- * Whether the mini player shows as a small "▶ Playing ‹game›" chip at [route]: on Sports & Live's own pages (Game,
- * Team, Player card, ...), whose content the corner video would cover; never on the section itself (it docks in the
- * stage there) nor in the player.
+ * Whether the mini player shows as a small "▶ Playing ‹game›" chip at [route]: on every screen with content of its own
+ * (Sports & Live's Game, Team and Player card pages, and Home, Search, Library, Settings... #219), which the corner video
+ * would cover; never on the section itself (it docks in the stage there) nor in the player.
  */
 fun sportsLiveMiniChipOn(route: String?): Boolean =
-    route != null && route.startsWith(SPORTS_LIVE_ROUTE_PREFIX) && route != SPORTS_LIVE_ROOT_ROUTE
+    route != null && route != SPORTS_LIVE_ROOT_ROUTE && !route.startsWith(PLAYER_ROUTE_PREFIX)
 private const val PLAYER_ROUTE_PREFIX = "player/"
 
 /**
@@ -202,7 +201,7 @@ class SportsLiveMiniPlayerController(
         onStopped?.invoke()
     }
 
-    /** The app is on [route] now: outside Sports & Live the mini player stops (BUG13, [sportsLiveMiniPlaysOn]). */
+    /** The app is on [route] now: the mini player stops where it does not play on ([sportsLiveMiniPlaysOn]: #219, nowhere now). */
     fun onRoute(route: String?) {
         if (!sportsLiveMiniPlaysOn(route)) stop(SportsLiveMiniStop.LEFT_SECTION)
     }

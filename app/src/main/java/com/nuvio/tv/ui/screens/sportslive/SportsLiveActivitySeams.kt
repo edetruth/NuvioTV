@@ -206,7 +206,7 @@ class SportsLiveActivityServices @Inject constructor(
  */
 @Composable
 fun SportsLiveRouteEffects(navController: NavHostController, currentRoute: String?, availability: Boolean?) {
-    // The mini player stays inside Sports & Live (BUG13).
+    // The mini player follows the route (#219: it plays on everywhere, as a chip outside the section).
     LaunchedEffect(currentRoute) { SportsLiveMiniPlayers.controller.onRoute(currentRoute) }
     val latestRoute by rememberUpdatedState(currentRoute)
     val latestAvailability by rememberUpdatedState(availability)

@@ -220,16 +220,10 @@ class SportsLiveMiniPlayerStateTest {
     }
 
     @Test
-    fun `the mini player plays on only inside Sports and Live and the player`() {
-        assertTrue(sportsLiveMiniPlaysOn(null))
-        assertTrue(sportsLiveMiniPlaysOn("sports_live"))
-        assertTrue(sportsLiveMiniPlaysOn("sports_live_game"))
-        assertTrue(sportsLiveMiniPlaysOn("sports_live_player_card"))
-        assertTrue(sportsLiveMiniPlaysOn("player/{streamUrl}/{title}"))
-        assertFalse(sportsLiveMiniPlaysOn("home"))
-        assertFalse(sportsLiveMiniPlaysOn("search"))
-        assertFalse(sportsLiveMiniPlaysOn("stream/{videoId}"))
-        assertFalse(sportsLiveMiniPlaysOn("settings"))
+    fun `the mini player plays on everywhere in the app`() {
+        // #219: leaving Sports & Live (Settings) stopped it; it now keeps playing, as a chip outside the section.
+        listOf(null, "sports_live", "sports_live_game", "sports_live_player_card", "player/{streamUrl}/{title}", "home", "search",
+            "stream/{videoId}", "settings").forEach { assertTrue(it.toString(), sportsLiveMiniPlaysOn(it)) }
     }
 
     @Test
@@ -240,19 +234,25 @@ class SportsLiveMiniPlayerStateTest {
         assertFalse(sportsLiveMiniChipOn("sports_live"))
         assertFalse(sportsLiveMiniChipOn("player/{streamUrl}/{title}"))
         assertFalse(sportsLiveMiniChipOn(null))
+        // #219: every other screen shows the chip, never the corner video over its content (BUG13).
+        listOf("home", "search", "library", "settings", "stream/{videoId}").forEach { assertTrue(it, sportsLiveMiniChipOn(it)) }
     }
 
     @Test
-    fun `leaving Sports and Live stops the mini player, moving inside it does not`() = runTest {
+    fun `leaving Sports and Live keeps the mini player playing, Hold Back still stops it`() = runTest {
         val mini = controller()
         mini.onBackFromPlayer("a", session, stream)
 
         mini.onRoute("sports_live_game")
         assertTrue(mini.isActive)
 
+        // #219: Home and Settings keep it (as the chip).
         mini.onRoute("home")
+        mini.onRoute("settings")
+        assertTrue(mini.isActive)
+        assertTrue(mini.onStopKey(android.view.KeyEvent.KEYCODE_BACK, down = true, longPress = true))
         assertFalse(mini.isActive)
-        assertEquals(SportsLiveMiniStop.LEFT_SECTION, mini.lastStop)
+        assertEquals(SportsLiveMiniStop.USER_STOP, mini.lastStop)
     }
 
     @Test
