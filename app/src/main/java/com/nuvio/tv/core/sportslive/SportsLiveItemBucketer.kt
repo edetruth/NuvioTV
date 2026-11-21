@@ -355,7 +355,8 @@ object SportsLiveItemBucketer {
         items: List<SportsLiveItem>,
         addonOrder: List<String>,
         nowMs: Long = System.currentTimeMillis(),
-        directory: TeamDirectory = TeamDirectory.shared
+        directory: TeamDirectory = TeamDirectory.shared,
+        matchedEvents: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared
     ): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
         // Each copy's id view ([idView]: league inference and #168 identity) once per merge, not four times per pair
@@ -386,12 +387,18 @@ object SportsLiveItemBucketer {
             )
             for (item in ordered) {
                 var byIds = false
+                var byEvent = false
                 val index = primaries.indexOfFirst { primary ->
                     // A source already pooled under this primary is not pooled twice (no list built per pair).
                     if (primary.streamKey == item.streamKey ||
                         alternatesOf[primary.streamKey]?.any { it.streamKey == item.streamKey } == true
                     ) {
                         return@indexOfFirst false
+                    }
+                    // Matched to one ESPN game (live.23, TV report #10): one game, whatever the addons call it.
+                    if (matchedEvents.sameEvent(primary.streamKey, item.streamKey)) {
+                        byEvent = true
+                        return@indexOfFirst true
                     }
                     // ESPN team ids decide first; names only for teams the directory does not know.
                     val viewA = view(primary)
@@ -414,6 +421,13 @@ object SportsLiveItemBucketer {
                     alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
                     folded += item.streamKey
                     if (byIds && !namesLeague(primary) && namesLeague(item)) presentedBy.putIfAbsent(primary.streamKey, item)
+                    // The copy naming the matched game's league ("WSL", not "Premier League") is the one shown.
+                    if (byEvent) {
+                        val league = matchedEvents.leagueOf(item.streamKey)
+                        if (league != null && league in EspnLeagueMap.leaguesFor(item) && league !in EspnLeagueMap.leaguesFor(primary)) {
+                            presentedBy[primary.streamKey] = item
+                        }
+                    }
                     if (timedStart(primary) == null && timedStart(item) != null) {
                         adoptedStart[primary.streamKey] = item
                         primaries[index] = primary.copy(startMs = item.startMs, startHasTimeOfDay = true)
@@ -825,7 +839,11 @@ object SportsLiveItemBucketer {
         } else {
             // A merged game is followed when any of its sources is (their sports may differ).
             items.map { item ->
-                val women = (listOf(item) + item.alternates).any { womenGames.has(it.streamKey) }
+                // ESPN matched a women's game, or a soccer copy says women's ("WSL", "Liverpool W", live.23).
+                val women = (listOf(item) + item.alternates).any { copy ->
+                    womenGames.has(copy.streamKey) || (SportsLiveMySportsScope.kindOf(copy) == SportsLiveSportKind.SOCCER &&
+                        (EspnLeagueMap.saysWomen(copy) || saysWomenCompetition(copy)))
+                }
                 val isFollowed = followed.any { team ->
                     SportsLiveTeams.followsAnySource(team, item) && (!women || SportsLiveTeams.followsWomen(team))
                 }

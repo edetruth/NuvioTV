@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents
 import com.nuvio.tv.core.sportslive.SportsLiveWomenGames
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -687,6 +688,11 @@ class LiveScoresRepository internal constructor(
                 state == null || !state.fetched || state.events.any { it.eventId == match.eventId }
             }
             matched[card.key] = match
+            // Copies matched to one ESPN game merge on the next list build; a women's soccer game is never a men's
+            // club's "my team" (live.23, TV report #10).
+            val sources = listOf(card.key) + entry.liveKeys
+            SportsLiveMatchedEvents.shared.record(sources, match)
+            if (match.league.sport == "soccer" && ScoreMatcher.isWomenGame(match)) SportsLiveWomenGames.shared.record(sources)
             if (match.league == EspnLeagueMap.SOCCER_ALL && match.leagueSlug != EspnLeagueMap.SOCCER_ALL.league &&
                 SLUG.matches(match.leagueSlug) && card.key !in remembered
             ) {
@@ -761,8 +767,6 @@ class LiveScoresRepository internal constructor(
                 if (remembered.size >= MAX_REMEMBERED) remembered.clear()
                 remembered[key] = wait.fallback
                 collegeMisses -= key
-                // A women's game (live.23): a followed men's team never makes it "my team".
-                if (EspnLeagueMap.isWomenFallback(wait.fallback)) SportsLiveWomenGames.shared.record(listOf(key) + wait.entry.liveKeys)
             } else {
                 val answered = college.mapNotNull { feed -> feeds[feed]?.takeIf { it.fetched && it.isFresh(nowMs) }?.lastSuccessAt }
                 if (answered.size == college.size) {

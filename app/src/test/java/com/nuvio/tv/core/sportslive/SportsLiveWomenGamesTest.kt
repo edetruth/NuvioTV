@@ -77,4 +77,60 @@ class SportsLiveWomenGamesTest {
         // The ESPN-followed women's team is that side by its id.
         assertTrue(TeamFollows.followsCardSide(womensFollow, "Liverpool", epl, wsl))
     }
+
+    // ---- TV report #10: the WSL game as three rows ----
+
+    private fun copy(addon: String, name: String, sport: String, genres: List<String> = emptyList()) = card(name, sport, genres).copy(
+        addonId = addon, addonName = addon, catalogKey = "$addon:live", meta = card(name, sport, genres).meta.copy(id = "$addon-$name")
+    )
+
+    private val eplCopy = copy("a", "Liverpool FC vs Chelsea FC", "Premier League")
+    private val plainCopy = copy("b", "Liverpool vs Chelsea", "Premier League")
+    private val wslCopy = copy("c", "Liverpool vs Chelsea", "Women's Super League", listOf("Soccer"))
+
+    // The Premier League list the app keeps: both names resolve to the men's clubs, so the WSL copy's gender kept it apart.
+    private val eng1 = com.nuvio.tv.core.sportslive.scores.TeamDirectory().apply {
+        put(
+            EspnLeague("soccer", "eng.1"),
+            listOf(
+                com.nuvio.tv.core.sportslive.scores.DirectoryTeam("364", "Liverpool", "Liverpool", "LIV", "Liverpool", "Liverpool", "https://example.invalid/364.png"),
+                com.nuvio.tv.core.sportslive.scores.DirectoryTeam("363", "Chelsea", "Chelsea", "CHE", "Chelsea", "Chelsea", "https://example.invalid/363.png")
+            ),
+            fetchedAt = 1L
+        )
+    }
+
+    private val wslGame = ScoreSnapshot(
+        eventId = "wsl-liv-che", league = EspnLeague("soccer", "eng.w.1"), startMs = 0L, state = ScoreState.IN, clockText = "34'",
+        isFinal = false,
+        home = ScoreTeam(id = "liv-w", abbreviation = "LIV", displayName = "Liverpool", shortDisplayName = "Liverpool", name = "Liverpool",
+            location = "Liverpool", logo = null, score = 1, linescores = emptyList()),
+        away = ScoreTeam(id = "che-w", abbreviation = "CHE", displayName = "Chelsea", shortDisplayName = "Chelsea", name = "Chelsea",
+            location = "Chelsea", logo = null, score = 0, linescores = emptyList())
+    )
+
+    @Test
+    fun `copies matched to one ESPN game are one row, shown as the copy naming its league, and star no men's club`() {
+        val order = listOf("a", "b", "c")
+        val copies = listOf(eplCopy, plainCopy, wslCopy)
+        // Before any match: the two Premier League copies merge, the WSL copy stays apart (gender rule).
+        val before = SportsLiveItemBucketer.merge(copies, order, 0L, eng1, SportsLiveMatchedEvents())
+        assertEquals(2, before.size)
+        // Each copy matched ESPN's WSL game (the two by the women's fallback): one row.
+        val matched = SportsLiveMatchedEvents().apply { record(copies.map { it.streamKey }, wslGame) }
+        val row = SportsLiveItemBucketer.merge(copies, order, 0L, eng1, matched).single()
+        assertEquals(3, row.sourceCount)
+        assertEquals("Women's Super League", row.sport)
+        assertEquals("Liverpool vs Chelsea", row.meta.name)
+        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.of(row.sport))
+        // Its WSL copy says women's: a men's club followed by name never stars it (strip included: it reads followed).
+        assertFalse(SportsLiveItemBucketer.markFollowed(listOf(row), listOf(mensFollow), SportsLiveWomenGames()).single().followed)
+        assertTrue(SportsLiveItemBucketer.markFollowed(listOf(row), listOf(womensFollow), SportsLiveWomenGames()).single().followed)
+        // Copies of two different ESPN games never merge by it.
+        val other = SportsLiveMatchedEvents().apply {
+            record(listOf(eplCopy.streamKey), wslGame)
+            record(listOf(wslCopy.streamKey), wslGame.copy(eventId = "another"))
+        }
+        assertEquals(2, SportsLiveItemBucketer.merge(listOf(eplCopy, wslCopy), order, 0L, eng1, other).size)
+    }
 }

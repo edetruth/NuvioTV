@@ -47,7 +47,7 @@ enum class SportsLiveSportKind {
             SNOOKER to """snooker""",
             WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
             CYCLING to """cycling|tour de france""",
-            SOCCER to """soccer|football|futbol|futebol|premier league|\bla ?liga|bundesliga|scottish premiership|\bspfl\b|\bbundes\b|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
+            SOCCER to """soccer|football|futbol|futebol|premier league|\bla ?liga|bundesliga|scottish premiership|\bspfl\b|\bwsl\b|women'?s super league|\bbundes\b|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
                 """champions league|libertadores|sudamericana|\bcopa\b|ligapro|liga pro\b|liga mx|eredivisie|primeira liga|""" +
                 """liga portugal|super lig|ekstraklasa|allsvenskan|\bconmebol\b|\bconcacaf\b|\befl\b|fa cup|carabao|a-league|""" +
                 """j1 league|k league|serie b\b|coppa italia|dfb pokal"""
