@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive.nightly
 
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.nightly.NightlyAccuracy.Check
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -102,8 +103,21 @@ internal class NightlyWriter(
             appendLine("## E. One game left as two rows (merged lists)")
             appendLine()
             if (dupes.isEmpty() && nearMisses.isEmpty()) appendLine("None.")
-            dupes.forEach { appendLine("- \"${title(it.a)}\" (${it.a.addonName}) and \"${title(it.b)}\" (${it.b.addonName}): ${it.why}; kept apart: ${r(it.reason)}") }
+            // The copies' sport words tell a "sport mismatch" apart (live.23, #215.3: college football filed as soccer).
+            dupes.forEach {
+                appendLine("- \"${title(it.a)}\" (${it.a.addonName}, ${r(it.a.sport ?: "no sport")}) and \"${title(it.b)}\" " +
+                    "(${it.b.addonName}, ${r(it.b.sport ?: "no sport")}): ${it.why}; kept apart: ${r(it.reason)}")
+            }
             nearMisses.forEach { (a, b) -> appendLine("- near miss: \"${title(a)}\" (${a.addonName}) and \"${title(b)}\" (${b.addonName}): one side alike, the other not") }
+            appendLine()
+            appendLine("## F. Unscored live games by league")
+            appendLine()
+            appendLine("Listed-live rows the app shows with no score (not found on ESPN, no feed, no sport, no two teams), by the " +
+                "feed they route to or why they route nowhere.")
+            appendLine()
+            val table = NightlyText.unscoredByLeague(checks.filter { it.live }.map { NightlyText.LiveRow(groupOf(it), it.label, NightlyText.isUnscored(it.verdict)) })
+            if (table.isEmpty()) appendLine("None.")
+            table.forEach { appendLine(it) }
             appendLine()
             appendLine("## Notes")
             appendLine()
@@ -116,6 +130,14 @@ internal class NightlyWriter(
         File(outDir, "summary.txt").writeText("Nightly accuracy $runId\n$summary\nReport: ${File(outDir, "$runId.md").absolutePath}\n")
         keepFixtures(disagreements + checks.filter { it.aliases.isNotEmpty() })
         return summary
+    }
+
+    /** The group a live row is counted under in section F: its first routed feed, else why it has none (no addon text). */
+    private fun groupOf(check: Check): String = when (check.verdict) {
+        Verdict.UNPLACED -> "can't place (no sport)"
+        Verdict.NO_TEAMS -> "no two teams"
+        Verdict.NO_FEED -> "no ESPN feed (${SportsLiveSportKind.tagOf(check.row)?.name?.lowercase() ?: "sport unknown"})"
+        else -> check.leagues.firstOrNull()?.path ?: "no ESPN feed"
     }
 
     private fun summary(
@@ -137,6 +159,7 @@ internal class NightlyWriter(
             "Not found on ESPN: ${checks.count { it.verdict == Verdict.NOT_FOUND }} (alias candidates: ${checks.sumOf { it.aliases.size }}); " +
                 "can't place: ${checks.count { it.verdict == Verdict.UNPLACED }}; no ESPN feed: ${checks.count { it.verdict == Verdict.NO_FEED }}.",
             "Merged lists: ${dupes.size} possible duplicate rows, ${nearMisses.size} merge near misses.",
+            "Unscored live: ${checks.count { it.live && NightlyText.isUnscored(it.verdict) }} of ${all.listedLive} listed live (by league: section F).",
             "ESPN: $boardRequests scoreboards, $boardFailures failed." + if (notes.isNotEmpty()) " Notes: ${notes.size} (see report)." else ""
         ).joinToString("\n")
     }
