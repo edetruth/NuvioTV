@@ -53,11 +53,11 @@ object SportsLiveTeams {
      * The game's two sides in the order [name] writes them, as [parse] reads it ("Castilla at Real Madrid":
      * Castilla, then Real Madrid); for a channel, the bracketed game's. Null when it names no game.
      */
-    fun writtenOrder(name: String, bracketed: Boolean = false): Pair<String, String>? {
+    fun writtenOrder(name: String, bracketed: Boolean = false, withCompetition: Boolean = false): Pair<String, String>? {
         val written = if (bracketed) {
-            BRACKET_GROUP.findAll(name).firstNotNullOfOrNull { parseWritten(it.groupValues[1]) }
+            BRACKET_GROUP.findAll(name).firstNotNullOfOrNull { parseWritten(it.groupValues[1], withCompetition) }
         } else {
-            parseWritten(name)
+            parseWritten(name, withCompetition)
         }
         return written?.let { it.first to it.second }
     }
@@ -66,9 +66,11 @@ object SportsLiveTeams {
      * First side, second side, and whether the separator puts the away side first (" at ", " @ "). A
      * tournament written before the game ("Premier League - Arsenal vs Chelsea") or after it ("Arsenal vs
      * Chelsea - Matchday 5") is not part of a side; " - " alone splits only two team-like sides, so "ATP 250 -
-     * Stockholm Open" names no game ([isTeamLike]).
+     * Stockholm Open" names no game ([isTeamLike]). A side is its team's name alone ([SportsLiveDisplayText.teamSide]:
+     * "Espanyol Spain La Liga Football download free" is "Espanyol", #210); [withCompetition] keeps the competition
+     * written after it, for the caller to read.
      */
-    private fun parseWritten(name: String): Triple<String, String, Boolean>? {
+    private fun parseWritten(name: String, withCompetition: Boolean = false): Triple<String, String, Boolean>? {
         for (separator in SEPARATORS) {
             val index = name.indexOf(separator, ignoreCase = true)
             if (index < 0) continue
@@ -83,13 +85,19 @@ object SportsLiveTeams {
             }
             // "LIVE: Qatar U17" (#165): the addon's live marker is no part of the first side.
             firstText = withoutLivePrefix(firstText)
-            val first = display(firstText)
-            val second = display(secondText)
-            if (first.isEmpty() || second.isEmpty()) continue
+            val firstWritten = display(firstText)
+            val secondWritten = display(secondText)
+            if (firstWritten.isEmpty() || secondWritten.isEmpty()) continue
+            val first = SportsLiveDisplayText.teamSide(firstWritten)
+            val second = SportsLiveDisplayText.teamSide(secondWritten)
             if (dash && (!isTeamLike(first) || !isTeamLike(second))) continue
             // "ATP 250 vs Stockholm Open" (F4): a tournament written as a game, no side a team, names no game.
             if (!isTeamLike(first) && !isTeamLike(second)) continue
-            return Triple(first, second, separator in AWAY_FIRST)
+            return if (withCompetition) {
+                Triple(firstWritten, secondWritten, separator in AWAY_FIRST)
+            } else {
+                Triple(first, second, separator in AWAY_FIRST)
+            }
         }
         return null
     }

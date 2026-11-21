@@ -220,21 +220,33 @@ internal fun agendaStageTitleText(row: ScoreboardRow, context: android.content.C
 
 /** A replay row's time ("8:30 PM", the locale's short time); null for a replay dated without a time. */
 internal fun replayTimeText(item: com.nuvio.tv.domain.model.SportsLiveItem, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String? =
-    item.startMs?.takeIf { item.startHasTimeOfDay }?.let { agendaTimeText(it, zone, locale) }
+    // An addon's bare date sent as midnight UTC has no time of day (#210): never "7:00 PM" the evening before.
+    item.startMs?.takeUnless { com.nuvio.tv.core.sportslive.scores.GameDay.isDateOnly(item) }?.let { agendaTimeText(it, zone, locale) }
 
-/** A replay's "When" on its stage: "Yesterday · 8:30 PM", "Mon 16 Nov" (the device's locale, never "11/16/26"). */
+/**
+ * A replay's "When" on its stage: "Yesterday · 8:30 PM", "Mon 16 Nov" (the device's locale, never "11/16/26"). Its day
+ * is [day], the one the list puts it under (#210: a replay under Today read "Yesterday" on its stage), else [GameDay]'s.
+ */
 @Composable
-internal fun replayWhenText(item: com.nuvio.tv.domain.model.SportsLiveItem, nowMs: Long): String? {
-    val start = item.startMs ?: return null
+internal fun replayWhenText(item: com.nuvio.tv.domain.model.SportsLiveItem, nowMs: Long, day: LocalDate? = null): String? {
     val zone = ZoneId.systemDefault()
-    val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
-    val date = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
-    val day = when (java.time.temporal.ChronoUnit.DAYS.between(date, today)) {
-        in Long.MIN_VALUE..0L -> stringResource(R.string.sports_live_agenda_today)
-        1L -> stringResource(R.string.sports_live_agenda_yesterday)
+    val date = day ?: com.nuvio.tv.core.sportslive.scores.GameDay.of(item, null, zone) ?: return null
+    val label = when (replayWhenDay(date, nowMs, zone)) {
+        AgendaDayKind.TODAY -> stringResource(R.string.sports_live_agenda_today)
+        AgendaDayKind.YESTERDAY -> stringResource(R.string.sports_live_agenda_yesterday)
         else -> agendaDateText(date)
     }
-    return listOfNotNull(day, replayTimeText(item, zone)).joinToString(" · ")
+    return listOfNotNull(label, replayTimeText(item, zone)).joinToString(" · ")
+}
+
+/** How a replay's stage names its [date]: Today (a date ahead too, as the list), Yesterday, else the date. */
+internal fun replayWhenDay(date: LocalDate, nowMs: Long, zone: ZoneId): AgendaDayKind {
+    val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+    return when (java.time.temporal.ChronoUnit.DAYS.between(date, today)) {
+        in Long.MIN_VALUE..0L -> AgendaDayKind.TODAY
+        1L -> AgendaDayKind.YESTERDAY
+        else -> AgendaDayKind.DATE
+    }
 }
 
 /**
@@ -256,7 +268,9 @@ internal fun SportsLiveReplayStage(
     /** The "When" line in place of the replay's date and time (a catch-up's "Replay · Yesterday", #155). */
     whenText: String? = null,
     /** The primary's words in place of "Watch replay": "Resume from 1:12:30" for a replay left part-way. */
-    watchLabel: String? = null
+    watchLabel: String? = null,
+    /** The day the list puts the replay under ([SportsLiveAgenda.dayOf]), so the stage never names another (#210). */
+    day: LocalDate? = null
 ) {
     Column(
         modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp).fillMaxHeight(),
@@ -312,7 +326,7 @@ internal fun SportsLiveReplayStage(
                 overflow = TextOverflow.Ellipsis,
                 autoSize = TextAutoSize.StepBased(minFontSize = 15.sp, maxFontSize = TITLE_STYLE.fontSize, stepSize = 1.sp)
             )
-            (whenText ?: replayWhenText(row.item, nowMs))?.let { whenLine ->
+            (whenText ?: replayWhenText(row.item, nowMs, day))?.let { whenLine ->
                 Text(text = whenLine, style = SportsLiveTokens.style(WHEN_STYLE), color = Colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

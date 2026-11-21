@@ -18,8 +18,13 @@ object GameDay {
     fun of(item: SportsLiveItem, event: ScoreSnapshot?, zone: ZoneId): LocalDate? {
         event?.takeIf { it.timeValid }?.startMs?.let { return Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
         val start = item.startMs ?: return null
-        val dateOnly = !item.startHasTimeOfDay || start % DAY_MS == 0L
-        return Instant.ofEpochMilli(start).atZone(if (dateOnly) ZoneOffset.UTC else zone).toLocalDate()
+        return Instant.ofEpochMilli(start).atZone(if (isDateOnly(item)) ZoneOffset.UTC else zone).toLocalDate()
+    }
+
+    /** True when [item]'s start is a date alone: none of its own, or exactly midnight UTC (an addon's bare date, #210). */
+    fun isDateOnly(item: SportsLiveItem): Boolean {
+        val start = item.startMs ?: return true
+        return !item.startHasTimeOfDay || start % DAY_MS == 0L
     }
 
     private const val DAY_MS = 24 * 60 * 60_000L

@@ -72,6 +72,10 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
         }
     }
 
+    /** The day [item] is listed under (#210: its stage names the same day); null under a header with no date, or not listed. */
+    fun dayOf(item: SportsLiveItem): LocalDate? =
+        games.firstOrNull { it.row.item.streamKey == item.streamKey }?.let { days.getOrNull(it.day)?.date }
+
     /** The list position of game [game]. */
     fun listIndexOf(game: Int): Int = if (game !in games.indices) -1 else game + games[game].day + 1
 

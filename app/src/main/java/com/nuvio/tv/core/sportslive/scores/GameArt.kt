@@ -87,13 +87,13 @@ data class GameArt(
          */
         fun ofReplay(item: SportsLiveItem, title: String, known: TeamLogoBook = TeamLogoBook.shared): GameArt? {
             if (item.isChannel) return null
-            val (writtenFirst, writtenSecond) = SportsLiveTeams.writtenOrder(title) ?: return null
-            // "Real Madrid Euroleague": the competition comes off the team's name and becomes the league.
-            val firstSplit = SportsLiveDisplayText.competitionSuffix(writtenFirst)
-            val secondSplit = SportsLiveDisplayText.competitionSuffix(writtenSecond)
-            val first = firstSplit?.first ?: writtenFirst
-            val second = secondSplit?.first ?: writtenSecond
-            val competition = secondSplit?.second ?: firstSplit?.second
+            val (writtenFirst, writtenSecond) = SportsLiveTeams.writtenOrder(title, withCompetition = true) ?: return null
+            // "Real Madrid Euroleague", "Espanyol Spain La Liga Football" (#210): the competition comes off the team's
+            // name and becomes the league.
+            val first = SportsLiveDisplayText.teamSide(writtenFirst)
+            val second = SportsLiveDisplayText.teamSide(writtenSecond)
+            val competition = SportsLiveDisplayText.competitionSuffix(writtenSecond)?.second
+                ?: SportsLiveDisplayText.competitionSuffix(writtenFirst)?.second
             val remembered = known.forCard(item, first, second)
             return GameArt(
                 first = team(first, null, remembered?.first),
