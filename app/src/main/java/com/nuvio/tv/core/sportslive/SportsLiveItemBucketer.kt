@@ -94,7 +94,7 @@ object SportsLiveItemBucketer {
         val network = claimed.kind == SportsLiveKind.EVENTS &&
             (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name) ||
                 isPlaceholderChannel(rawMeta, catalog.name))
-        // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
+        // A leading 🔴 / 🔜 / ✅ (one addon marks titles so) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
         val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
         val meta = if (status == null) rawMeta else rawMeta.copy(name = trimmedName.removePrefix(status).trimStart())
