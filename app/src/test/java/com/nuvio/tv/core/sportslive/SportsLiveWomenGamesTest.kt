@@ -16,6 +16,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import org.junit.Test
 
 /** live.23 TV report: "Liverpool vs Chelsea · Premier League" was ESPN's WSL game, not the men's. */
@@ -132,5 +135,32 @@ class SportsLiveWomenGamesTest {
             record(listOf(wslCopy.streamKey), wslGame.copy(eventId = "another"))
         }
         assertEquals(2, SportsLiveItemBucketer.merge(listOf(eplCopy, wslCopy), order, 0L, eng1, other).size)
+    }
+
+    @Test
+    fun `a burst of matches that merge copies or mark women's games rebuilds the lists once`() = kotlinx.coroutines.test.runTest {
+        val events = SportsLiveMatchedEvents()
+        val women = SportsLiveWomenGames()
+        val signals = mutableListOf<Long>()
+        backgroundScope.launch { SportsLiveSharedBuckets.matchChanges(events, women).collect { signals += it } }
+        runCurrent()
+        // One copy of a game: nothing merges, no rebuild.
+        events.record(listOf("a|1"), wslGame)
+        advanceTimeBy(2_000L); runCurrent()
+        assertTrue(signals.isEmpty())
+        // A poll matches two more copies and marks the game women's: one rebuild, a second after the quiet.
+        events.record(listOf("b|1"), wslGame)
+        events.record(listOf("c|1"), wslGame)
+        women.record(listOf("a|1", "b|1", "c|1"))
+        advanceTimeBy(500L); runCurrent()
+        events.record(listOf("b|1"), wslGame)
+        assertTrue(signals.isEmpty())
+        advanceTimeBy(SportsLiveSharedBuckets.MATCH_DEBOUNCE_MS + 1); runCurrent()
+        assertEquals(1, signals.size)
+        // The next polls match the same games again: no rebuild.
+        events.record(listOf("a|1", "b|1", "c|1"), wslGame)
+        women.record(listOf("a|1"))
+        advanceTimeBy(5_000L); runCurrent()
+        assertEquals(1, signals.size)
     }
 }
