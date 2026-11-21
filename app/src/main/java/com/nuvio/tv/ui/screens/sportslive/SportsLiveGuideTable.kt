@@ -215,12 +215,12 @@ internal fun guideLegend(shown: Boolean): List<GuideLegend> = if (shown) GuideLe
 internal const val GUIDE_VISIBLE_ROWS = 5
 
 /**
- * The lines the table lists (B2: no section headers): game rows, then "N more hidden by My sports". Finished games are
- * left out (#213: a "Live games" table listed Final rows, and a chip said 2 over 4 rows; the chips count live games
- * only). A game that ends while the guide is open keeps its place, dimmed, until it closes ([ZapPanelRow.placed], #164).
+ * The lines the table lists (B2: no section headers): game rows, then "N more hidden by My sports". Finished games
+ * ([ZapPanelRow.finished], the side panel's rule too) are left out (#213: a "Live games" table listed Final rows, and a
+ * chip said 2 over 4 rows; the chips count live games only).
  */
 internal fun guideLines(guide: PanelGuide): List<PanelGuideEntry> = guide.entries.filterNot { entry ->
-    entry is PanelGuideEntry.Header || (entry is PanelGuideEntry.Game && entry.row.placed == ScoreboardGroup.JUST_ENDED)
+    entry is PanelGuideEntry.Header || (entry is PanelGuideEntry.Game && entry.row.finished)
 }
 
 /**

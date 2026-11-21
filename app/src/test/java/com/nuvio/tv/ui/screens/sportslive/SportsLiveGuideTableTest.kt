@@ -241,9 +241,9 @@ class SportsLiveGuideTableTest {
         val lines = guideLines(panelGuide(lineup, currentKey = null))
         assertEquals(listOf("a", "b"), lines.map { (it as PanelGuideEntry.Game).row.item.id })
         assertEquals(lineup.count { it.zappable }, lines.size)
-        // A game that ended while the guide is open keeps its place, dimmed, until the guide closes.
+        // A game that ended while the guide is open, still placed under Live, is not listed either.
         val endedWhileOpen = row("e", ZapPanelGroup.JUST_ENDED).copy(placed = ScoreboardGroup.LIVE)
-        assertEquals(3, guideLines(panelGuide(lineup + endedWhileOpen, currentKey = null)).size)
+        assertEquals(2, guideLines(panelGuide(lineup + endedWhileOpen, currentKey = null)).size)
     }
 
     @Test

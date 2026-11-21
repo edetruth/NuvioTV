@@ -107,20 +107,25 @@ class ZapPanelFocusTest {
     }
 
     @Test
-    fun `ended and vanished games stay in place, dimmed and out of the zap order`() {
+    fun `a vanished game stays in place, dimmed, and an ended one moves to Just ended, never under Live`() {
         val (_, frozen) = freezePanelLineup(
             listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("c", ZapPanelGroup.LIVE_NOW)), null
         )
         // a ends (Just ended), b leaves the list altogether.
-        val (shown, _) = freezePanelLineup(listOf(row("c", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.JUST_ENDED)), frozen)
-        assertEquals(listOf("a", "b", "c"), keys(shown))
-        assertEquals(ScoreboardGroup.JUST_ENDED, shown[0].section)
-        assertEquals(ScoreboardGroup.LIVE, shown[0].placed)
-        assertTrue(shown[1].gone)
-        assertEquals(listOf(false, false, true), shown.map { it.zappable })
-        // One header over the run as it opened.
+        val (shown, next) = freezePanelLineup(listOf(row("c", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.JUST_ENDED)), frozen)
+        // #216: a final under LIVE read as live: a goes to Just ended at once; b keeps its place, dimmed.
+        assertEquals(listOf("b", "c", "a"), keys(shown))
+        assertEquals(ScoreboardGroup.JUST_ENDED, shown[2].placed)
+        assertTrue(shown[0].gone)
+        assertEquals(listOf(false, true, false), shown.map { it.zappable })
         val guide = panelGuide(shown, null)
-        assertEquals(listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 3, run = 0)), guide.entries.filterIsInstance<PanelGuideEntry.Header>())
+        assertEquals(
+            listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 2, run = 0), PanelGuideEntry.Header(ScoreboardGroup.JUST_ENDED, 1, run = 1)),
+            guide.entries.filterIsInstance<PanelGuideEntry.Header>()
+        )
+        // It stays there on the next update.
+        val (later, _) = freezePanelLineup(listOf(row("c", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.JUST_ENDED)), next)
+        assertEquals(listOf("b", "c", "a"), keys(later))
     }
 
     @Test

@@ -195,6 +195,12 @@ data class ZapPanelRow(
 ) {
     /** CH+/CH− stop on it (F11): every row but a final, a just ended game or one gone, which the panel still lists. */
     val zappable: Boolean get() = section != ScoreboardGroup.JUST_ENDED && !gone
+
+    /**
+     * A final or a just ended game (#213, #216): the one rule the side panel and the guide share. It is never listed under
+     * Live or another header (the panel moves it to Just ended as it ends, [freezePanelLineup]); the guide lists none.
+     */
+    val finished: Boolean get() = section == ScoreboardGroup.JUST_ENDED
 }
 
 /** A row built with no status (tests, the fallback row): its V2 group from its panel [group]. */
@@ -312,7 +318,8 @@ internal data class FrozenPanelOrder(
  * for the next update. Null [frozen] takes [fresh] as the snapshot. Otherwise rows never move: each known row
  * keeps its place and its group header, its score, clock and status updated in place; a row gone from [fresh]
  * stays where it was, dimmed ([ZapPanelRow.gone]) and out of the zap order; a row new to the list is appended to
- * the end of its group, tagged New ([ZapPanelRow.isNew]).
+ * the end of its group, tagged New ([ZapPanelRow.isNew]). A game that ends ([ZapPanelRow.finished]) is the exception: it
+ * goes to the start of Just ended at once (#216: FT games sat under LIVE while the panel was open).
  */
 internal fun freezePanelLineup(fresh: List<ZapPanelRow>, frozen: FrozenPanelOrder?): Pair<List<ZapPanelRow>, FrozenPanelOrder> {
     if (frozen == null) {
@@ -334,6 +341,13 @@ internal fun freezePanelLineup(fresh: List<ZapPanelRow>, frozen: FrozenPanelOrde
         } else {
             frozen.last[key]?.let { rows += it.copy(placed = placed, gone = true) }
         }
+    }
+    // Ended since the panel opened: out of its old group, to the start of Just ended (or the end of the list).
+    val endedNow = rows.filter { it.finished && !it.gone && it.placed != ScoreboardGroup.JUST_ENDED }
+    if (endedNow.isNotEmpty()) {
+        rows.removeAll(endedNow.toSet())
+        val at = rows.indexOfFirst { it.placed == ScoreboardGroup.JUST_ENDED }.takeIf { it >= 0 } ?: rows.size
+        rows.addAll(at, endedNow.map { it.copy(placed = ScoreboardGroup.JUST_ENDED) })
     }
     val added = LinkedHashSet(frozen.added)
     fresh.forEach { row ->
