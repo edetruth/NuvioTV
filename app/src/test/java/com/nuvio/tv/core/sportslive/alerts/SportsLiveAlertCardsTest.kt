@@ -169,8 +169,10 @@ class SportsLiveAlertCardsTest {
         val stale = START + SportsLiveAlertCards.WAITING_SCORE_STALE_MS + 1
         assertFalse(SportsLiveAlertCards.expired(score(), START, START + SportsLiveAlertCards.WAITING_SCORE_STALE_MS))
         assertTrue(SportsLiveAlertCards.expired(score(), START, stale))
-        assertFalse(SportsLiveAlertCards.expired(fullTime, START, START + 60 * MINUTE))
-        assertFalse(SportsLiveAlertCards.expired(kickoff, START, START + 60 * MINUTE))
+        assertFalse(SportsLiveAlertCards.expired(fullTime, START, START + 20 * MINUTE))
+        assertTrue(SportsLiveAlertCards.expired(fullTime, START, START + 31 * MINUTE))
+        assertFalse(SportsLiveAlertCards.expired(kickoff, START, START + 20 * MINUTE))
+        assertTrue(SportsLiveAlertCards.expired(kickoff, START, START + 31 * MINUTE))
         // A new alert clears the expired ones out of the queue.
         val waiting = mutableListOf<Pair<SportsLiveAlert, Long>>(score(pacers) to START, fullTime to START)
         SportsLiveAlertCards.addWaiting(waiting, kickoff, stale)

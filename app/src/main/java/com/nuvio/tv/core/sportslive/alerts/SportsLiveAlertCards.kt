@@ -90,6 +90,9 @@ object SportsLiveAlertCards {
     /** A score or close-finish alert still waiting this long after it was raised is old news ([expired]). */
     const val WAITING_SCORE_STALE_MS = 120_000L
 
+    /** A kickoff or full time still waiting this long (e.g. after a long time in another app) is old news too. */
+    const val WAITING_KEPT_STALE_MS = 30 * 60_000L
+
     /**
      * [alert], raised at [nowMs], waits in [waiting] for the card up to close (live.24 RC review M1: it was dropped, the
      * spoiler-free "game is over · result hidden" card too, and never fired again). One per game and kind: the newest
@@ -105,9 +108,9 @@ object SportsLiveAlertCards {
         }
     }
 
-    /** A waiting score or close finish raised over [WAITING_SCORE_STALE_MS] before [nowMs]; kickoffs and full times never. */
+    /** A waiting score or close finish raised over [WAITING_SCORE_STALE_MS] before [nowMs]; kickoffs and full times after [WAITING_KEPT_STALE_MS]. */
     fun expired(alert: SportsLiveAlert, raisedAtMs: Long, nowMs: Long): Boolean =
-        droppable(alert) && nowMs - raisedAtMs > WAITING_SCORE_STALE_MS
+        nowMs - raisedAtMs > if (droppable(alert)) WAITING_SCORE_STALE_MS else WAITING_KEPT_STALE_MS
 
     private fun droppable(alert: SportsLiveAlert): Boolean =
         alert is SportsLiveAlert.ScoreChange || alert is SportsLiveAlert.Crunch
