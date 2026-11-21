@@ -791,9 +791,13 @@ class LiveScoresRepository internal constructor(
         val state = feeds[feed] ?: return null
         val last = state.lastAttemptAt ?: return 0L
         val eventIds = state.events.mapTo(HashSet()) { it.eventId }
+        // A tracked card drawing its kept score counts as matched (live.23): its game is polled at its own pace, so a
+        // guide reopened after a minute is asked again at once, not at the 5-minute pace of a feed with no match.
+        val matched = (raw.values.asSequence() + keptShown.values.asSequence().map { it.snapshot })
+            .filter { it.eventId in eventIds }.distinctBy { it.eventId }.toList()
         val interval = ScoreCadence.nextIntervalMs(
             feed = feed,
-            matched = raw.values.filter { it.eventId in eventIds }.distinctBy { it.eventId },
+            matched = matched,
             events = state.events,
             failures = state.failures,
             retryAfterMs = state.retryAfterMs,
