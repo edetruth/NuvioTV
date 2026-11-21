@@ -287,19 +287,31 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
  */
 @Composable
 internal fun rememberRowPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
+    val plain = rememberTextPlainTag(row)
+    return row.sportTag ?: plain
+}
+
+/**
+ * The sport [row]'s text alone tells ([SportsLiveSportKind.plainTagOf]), kept per item and directory revision: a row
+ * recomposes often, and a bare "Football" asks the team directory each time (release review, TV performance).
+ */
+@Composable
+private fun rememberTextPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
     val revision by TeamDirectory.shared.revision.collectAsState()
-    return remember(row, revision) { row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item) }
+    return remember(row.item, revision) { SportsLiveSportKind.plainTagOf(row.item) }
 }
 
 /** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual). */
 @Composable
 internal fun boardTagText(row: ScoreboardRow): String =
-    com.nuvio.tv.core.sportslive.SportsLiveTags.short(rowTagText(row), row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item))
+    com.nuvio.tv.core.sportslive.SportsLiveTags.short(rowTagText(row), rememberRowPlainTag(row))
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
-internal fun rowTagText(row: ScoreboardRow): String =
-    rowTagOf(row, row.sportTag?.let { sportKindLabel(it) }, SportsLiveSportKind.plainTagOf(row.item)?.let { sportKindLabel(it) })
+internal fun rowTagText(row: ScoreboardRow): String {
+    val plain = rememberTextPlainTag(row)
+    return rowTagOf(row, row.sportTag?.let { sportKindLabel(it) }, plain?.let { sportKindLabel(it) })
+}
 
 /**
  * [rowTagText] with the sport its text tells already worded ([sportLabel]): ESPN's league, the card's sport, else
