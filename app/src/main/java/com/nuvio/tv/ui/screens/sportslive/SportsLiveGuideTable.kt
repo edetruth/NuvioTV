@@ -191,7 +191,10 @@ internal class GuideRowMemory(private val holdMs: Long = GUIDE_MATCH_HOLD_MS) {
         }
         val marks = (last.row.marks.filter { it == GuideMark.CLOSE_LATE } + fresh.marks.filter { it != GuideMark.CLOSE_LATE })
             .sortedBy { it.ordinal }
-        return last.row.copy(dimmedAtRest = fresh.dimmedAtRest, isNew = fresh.isNew, marks = marks)
+        return last.row.copy(
+            dimmedAtRest = fresh.dimmedAtRest, isNew = fresh.isNew, marks = marks,
+            firstMyTeam = fresh.firstMyTeam, secondMyTeam = fresh.secondMyTeam
+        )
     }
 }
 
@@ -211,8 +214,14 @@ internal fun guideLegend(shown: Boolean): List<GuideLegend> = if (shown) GuideLe
 /** The table shows this many rows under Now playing (B2). */
 internal const val GUIDE_VISIBLE_ROWS = 5
 
-/** The lines the table lists (B2: no section headers): game rows, then "N more hidden by My sports". */
-internal fun guideLines(guide: PanelGuide): List<PanelGuideEntry> = guide.entries.filterNot { it is PanelGuideEntry.Header }
+/**
+ * The lines the table lists (B2: no section headers): game rows, then "N more hidden by My sports". Finished games are
+ * left out (#213: a "Live games" table listed Final rows, and a chip said 2 over 4 rows; the chips count live games
+ * only). A game that ends while the guide is open keeps its place, dimmed, until it closes ([ZapPanelRow.placed], #164).
+ */
+internal fun guideLines(guide: PanelGuide): List<PanelGuideEntry> = guide.entries.filterNot { entry ->
+    entry is PanelGuideEntry.Header || (entry is PanelGuideEntry.Game && entry.row.placed == ScoreboardGroup.JUST_ENDED)
+}
 
 /**
  * Where the selection opens (brief B): on the game ▼ would zap to, so open + OK does what one zap does: the first
@@ -312,6 +321,29 @@ internal fun guideChipWindow(count: Int, selected: Int, max: Int = GUIDE_MAX_CHI
 }
 
 internal const val GUIDE_MAX_CHIPS = 4
+
+/**
+ * Of the drawn chips (widths [widths], in px), the run shown whole in [available] px (#213: the last chip was cut
+ * mid-word, "Basketb"): it always holds [selected], starts as early as it can, and an arrow ([arrow] px) stands at each
+ * end with chips beyond it ([hiddenBefore] / [hiddenAfter]: chips outside [widths] too). [gap] is the space between items.
+ * Only [selected], when even it alone does not fit (it is then cut with an ellipsis).
+ */
+internal fun guideChipsFit(widths: List<Int>, selected: Int, available: Int, arrow: Int, gap: Int, hiddenBefore: Boolean, hiddenAfter: Boolean): IntRange {
+    if (widths.isEmpty()) return IntRange.EMPTY
+    fun needed(start: Int, end: Int): Int {
+        var total = (start..end).sumOf { widths[it] } + (end - start) * gap
+        if (hiddenBefore || start > 0) total += arrow + gap
+        if (hiddenAfter || end < widths.lastIndex) total += gap + arrow
+        return total
+    }
+    for (start in 0..selected) {
+        var end = selected
+        if (needed(start, end) > available) continue
+        while (end < widths.lastIndex && needed(start, end + 1) <= available) end++
+        return start..end
+    }
+    return selected..selected
+}
 
 // ---- Keys ----
 

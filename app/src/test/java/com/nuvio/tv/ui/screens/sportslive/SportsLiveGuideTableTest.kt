@@ -220,6 +220,33 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
+    fun `sport chips that do not fit whole are left for the arrow, never cut mid-word`() {
+        // #213: "Basketb" was cut at the edge. Four chips of 100 px, 10 px gaps, 20 px arrows, 340 px of room.
+        val widths = listOf(100, 100, 100, 100)
+        // The first picked: two chips and the arrow after them (240 px); a third would need 350.
+        assertEquals(0..1, guideChipsFit(widths, 0, 340, arrow = 20, gap = 10, hiddenBefore = false, hiddenAfter = false))
+        // The last picked: the run moves on so it shows whole, with an arrow before.
+        assertEquals(2..3, guideChipsFit(widths, 3, 340, arrow = 20, gap = 10, hiddenBefore = false, hiddenAfter = false))
+        // All fit: no arrow needed.
+        assertEquals(0..3, guideChipsFit(widths, 1, 430, arrow = 20, gap = 10, hiddenBefore = false, hiddenAfter = false))
+        // Even the picked one alone is too wide: it alone (cut with an ellipsis).
+        assertEquals(1..1, guideChipsFit(widths, 1, 60, arrow = 20, gap = 10, hiddenBefore = false, hiddenAfter = false))
+        assertTrue(guideChipsFit(emptyList(), 0, 100, arrow = 20, gap = 10, hiddenBefore = false, hiddenAfter = false).isEmpty())
+    }
+
+    @Test
+    fun `the Live games table lists no finished game, so a chip's count equals its rows`() {
+        // #213: two live games and two finals under Basketball: the chip said 2, the table listed 4.
+        val lineup = listOf(row("a"), row("b"), row("c", ZapPanelGroup.JUST_ENDED), row("d", ZapPanelGroup.JUST_ENDED))
+        val lines = guideLines(panelGuide(lineup, currentKey = null))
+        assertEquals(listOf("a", "b"), lines.map { (it as PanelGuideEntry.Game).row.item.id })
+        assertEquals(lineup.count { it.zappable }, lines.size)
+        // A game that ended while the guide is open keeps its place, dimmed, until the guide closes.
+        val endedWhileOpen = row("e", ZapPanelGroup.JUST_ENDED).copy(placed = ScoreboardGroup.LIVE)
+        assertEquals(3, guideLines(panelGuide(lineup + endedWhileOpen, currentKey = null)).size)
+    }
+
+    @Test
     fun `Now playing is selectable above the table, OK on it only closes the guide and the table window ignores it`() {
         val lineup = listOf(row("a"), row("b"), row("c"))
         val lines = guideLines(panelGuide(lineup, lineup[0].item.streamKey))

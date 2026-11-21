@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -356,8 +357,9 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
     val selected = chips.indexOf(state.chip).coerceAtLeast(0)
     val window = guideChipWindow(chips.size, selected)
     val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in chips
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (window.first > 0) GuideChipArrow("◂")
+    // #213: only chips that fit whole are drawn ([guideChipsFit]), the picked one always; ▸ / ◂ say more are there.
+    Layout(content = {
+        GuideChipArrow("◂")
         for (at in window) {
             val chip = chips[at]
             val name = when (chip) {
@@ -372,9 +374,45 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
                 gold = chip == SportsLiveUiState.MY_TEAMS_FILTER
             )
         }
-        if (window.last < chips.lastIndex) GuideChipArrow("▸")
+        GuideChipArrow("▸")
+    }) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val gap = GUIDE_CHIP_GAP.roundToPx()
+        val before = measurables.first().measure(loose)
+        val after = measurables.last().measure(loose)
+        val chipMeasurables = measurables.subList(1, measurables.size - 1)
+        val widths = chipMeasurables.map { it.maxIntrinsicWidth(constraints.maxHeight) }
+        val selectedInWindow = (selected - window.first).coerceIn(0, (widths.size - 1).coerceAtLeast(0))
+        val available = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
+        val shown = guideChipsFit(
+            widths, selectedInWindow, available, arrow = maxOf(before.width, after.width), gap = gap,
+            hiddenBefore = window.first > 0, hiddenAfter = window.last < chips.lastIndex
+        )
+        val showBefore = !shown.isEmpty() && (window.first > 0 || shown.first > 0)
+        val showAfter = !shown.isEmpty() && (window.last < chips.lastIndex || shown.last < widths.lastIndex)
+        val arrowsWidth = (if (showBefore) before.width + gap else 0) + (if (showAfter) after.width + gap else 0)
+        val placeables = shown.map { at ->
+            chipMeasurables[at].measure(loose.copy(maxWidth = (available - arrowsWidth).coerceAtLeast(0)))
+        }
+        val height = (placeables.map { it.height } + before.height).maxOrNull() ?: 0
+        val width = (placeables.sumOf { it.width } + (placeables.size - 1).coerceAtLeast(0) * gap + arrowsWidth)
+            .coerceAtMost(available)
+        layout(width, height) {
+            var x = 0
+            if (showBefore) {
+                before.placeRelative(x, (height - before.height) / 2)
+                x += before.width + gap
+            }
+            placeables.forEach { placeable ->
+                placeable.placeRelative(x, (height - placeable.height) / 2)
+                x += placeable.width + gap
+            }
+            if (showAfter) after.placeRelative(x, (height - after.height) / 2)
+        }
     }
 }
+
+private val GUIDE_CHIP_GAP = 7.dp
 
 @Composable
 private fun GuideChip(text: String, selected: Boolean, gold: Boolean) {
@@ -396,7 +434,8 @@ private fun GuideChip(text: String, selected: Boolean, gold: Boolean) {
                 else -> Colors.TextPrimary
             },
             maxLines = 1,
-            softWrap = false
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
