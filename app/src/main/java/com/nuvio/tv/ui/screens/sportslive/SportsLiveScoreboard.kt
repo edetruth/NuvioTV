@@ -7,6 +7,13 @@ import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.GameStatusText
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowseKind
+import com.nuvio.tv.core.sportslive.SportsLiveChannelCountries
+import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelList
+import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
+import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveProgress
 import com.nuvio.tv.core.sportslive.displayName
@@ -79,7 +86,9 @@ data class ScoreboardRow(
     /** Crunch time (#137): a close game late, the "Close game" badge (Scores not Off). */
     val closeGame: Boolean = false,
     /** The tag in place of the league's name (#160): a tennis match's tour, "ATP", never a tournament's initials. */
-    val leagueTag: String? = null
+    val leagueTag: String? = null,
+    /** A channel in the profile's favorites now (Channels phase 1): the gold ★, and Remove from favorites in its menu. */
+    val favorite: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -166,20 +175,79 @@ internal fun scoreboardRowOf(
     )
 }
 
+/** The Channels tab's rows and what it says besides them (phase 2). */
+internal data class ChannelBoard(val rows: List<ScoreboardRow>, val summary: SportsLiveChannelSummary)
+
 /**
- * The Channels tab's rows (V2 P4): one per channel, grouped by region ([SportsLiveChannelRegions.grouped]:
- * country codes, long names, then Other), each region's channels as listed.
+ * The Channels tab (phases 1 and 2): every channel listed once across addons ([SportsLiveChannelList.merge]).
+ * - The tab's own view ([lists] with no browse; [sections]: no region picked): ★ Favorites in the order added, then
+ *   the last [SportsLiveChannelFavorites.RECENT_SHOWN] plays that are not favorites, then Popular now
+ *   ([SportsLiveChannelList.popular], at most [SportsLiveChannelList.POPULAR_SHOWN]), in the order taken when the tab
+ *   opened ([SportsLiveChannelLists.order]); no region headings. With none of them it lists every channel A to Z.
+ * - The browse view: the countries' channels (or their sports channels) A to Z under letter headings, or all of
+ *   Popular now; Find a channel's query narrows either.
+ * The current favorites carry the ★ everywhere. [dead]: a channel whose links all failed (left out of Popular).
  */
-internal fun channelRows(items: List<SportsLiveItem>): List<ScoreboardRow> =
-    SportsLiveChannelRegions.grouped(items).flatMap { (region, channels) ->
-        channels.map { item ->
-            ScoreboardRow(
-                item = item, group = ScoreboardGroup.CHANNELS, chip = null, art = null,
-                firstFollowed = false, secondFollowed = false, probablyEnded = false,
-                status = GameStatus.Channel, twoSided = false, section = region
-            )
+internal fun channelBoard(
+    items: List<SportsLiveItem>,
+    lists: SportsLiveChannelLists = SportsLiveChannelLists.NONE,
+    sections: Boolean = true,
+    nowMs: Long = 0L,
+    followed: List<FollowedTeam> = emptyList(),
+    dead: (SportsLiveItem) -> Boolean = { false }
+): ChannelBoard {
+    val merged = SportsLiveChannelList.merge(items)
+    val marked = SportsLiveChannelFavorites.resolve(lists.favorites, merged).mapTo(HashSet()) { it.streamKey }
+    fun row(item: SportsLiveItem, section: String) = ScoreboardRow(
+        item = item, group = ScoreboardGroup.CHANNELS, chip = null, art = null,
+        firstFollowed = false, secondFollowed = false, probablyEnded = false,
+        status = GameStatus.Channel, twoSided = false, section = section,
+        favorite = item.streamKey in marked
+    )
+    fun lettered(channels: List<SportsLiveItem>) =
+        SportsLiveChannelList.sortedAZ(channels).map { row(it, SportsLiveChannelList.LETTER + SportsLiveChannelList.letterOf(it)) }
+
+    val yours = SportsLiveChannelCountries.yours(lists.tvRegion, followed)
+    val selected = SportsLiveChannelCountries.selected(lists.countries, yours, merged)
+    val listed = merged.filter { SportsLiveChannelCountries.listed(it, selected) }
+    val sports = listed.filter(SportsLiveChannelList::isSports)
+    val popular = SportsLiveChannelList.popular(merged, selected, lists.order.plays, nowMs, dead)
+    val counts = SportsLiveChannelCountries.counts(merged)
+    val countOf = counts.toMap()
+    val summary = SportsLiveChannelSummary(
+        view = SportsLiveChannelSummary.viewKey(lists.browse),
+        popularTotal = popular.size,
+        sports = sports.size,
+        all = listed.size,
+        selected = selected,
+        yours = yours.map { it to (countOf[it.country] ?: 0) },
+        countryCounts = counts
+    )
+    val browse = lists.browse
+    if (browse != null) {
+        val query = browse.query
+        val rows = when (browse.kind) {
+            SportsLiveChannelBrowseKind.ALL -> lettered(listed.filter { SportsLiveChannelList.matches(it, query) })
+            SportsLiveChannelBrowseKind.SPORTS -> lettered(sports.filter { SportsLiveChannelList.matches(it, query) })
+            SportsLiveChannelBrowseKind.POPULAR ->
+                SportsLiveChannelList.popular(merged, selected, lists.order.plays, nowMs, dead, perFamily = null)
+                    .filter { SportsLiveChannelList.matches(it, query) }
+                    .map { row(it, SportsLiveChannelList.POPULAR) }
         }
+        return ChannelBoard(rows, summary)
     }
+    // A region picked in the header's filter (kept for a session): that region alone, A to Z.
+    if (!sections) return ChannelBoard(lettered(merged), summary)
+    val top = SportsLiveChannelFavorites.sections(merged, lists.order)
+    val topKeys = (top.favorites + top.recent).flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
+    val popularRows = popular.filter { item -> (listOf(item) + item.alternates).none { it.streamKey in topKeys } }
+        .take(SportsLiveChannelList.POPULAR_SHOWN)
+    val rows = top.favorites.map { row(it, SportsLiveChannelFavorites.FAVORITES) } +
+        top.recent.map { row(it, SportsLiveChannelFavorites.RECENT) } +
+        popularRows.map { row(it, SportsLiveChannelList.POPULAR) }
+    if (rows.isEmpty()) return ChannelBoard(lettered(listed), summary.copy(fallback = true))
+    return ChannelBoard(rows, summary.copy(popularShown = popularRows.size))
+}
 
 /**
  * The Replays tab's rows (V2 P4, #90): each replay under its spoiler-free title ([SportsLiveDisplayText.spoilerFree])

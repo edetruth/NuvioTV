@@ -147,9 +147,9 @@ fun SportsLiveTeamSearch(
         }
         Row(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.width(SearchSize.GridWidth)) {
-                SearchField(query = state.query, listening = voice.listening)
+                SportsLiveSearchField(query = state.query, listening = voice.listening)
                 Spacer(Modifier.height(10.dp))
-                LetterGrid(
+                SportsLiveLetterGrid(
                     firstKey = firstKey,
                     downFocus = downFocus,
                     onKey = viewModel::type,
@@ -184,7 +184,7 @@ fun SportsLiveTeamSearch(
 private val TitleStyle = TextStyle(fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
 
 @Composable
-private fun SearchField(query: String, listening: Boolean) {
+internal fun SportsLiveSearchField(query: String, listening: Boolean) {
     val shape = SportsLiveTokens.Radius.ButtonShape
     Row(
         modifier = Modifier
@@ -212,8 +212,9 @@ private fun SearchField(query: String, listening: Boolean) {
     }
 }
 
+/** The on-screen letter grid (#149), also Channels' Find a channel (phase 2). */
 @Composable
-private fun LetterGrid(
+internal fun SportsLiveLetterGrid(
     firstKey: FocusRequester,
     downFocus: FocusRequester?,
     onKey: (String) -> Unit,

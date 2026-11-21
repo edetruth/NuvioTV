@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRef
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
@@ -477,5 +479,52 @@ class SportsLivePreferencesDataStoreTest {
         assertEquals(listOf(reminder), store.reminders.first().reminders)
         store.nowMs = { start + 7 * 60 * 60_000L }
         assertEquals(RemindersState(), store.reminders.first())
+    }
+
+    @Test
+    fun `channel favorites and recent plays are kept per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val favorite = SportsLiveChannelRef("addon.one", "ch-1", "us sports one")
+        val played = SportsLiveChannelRef("addon.two", "ch-2", "sports two")
+        assertEquals(SportsLiveChannelPicks.NONE, store.channelPicks.first())
+        store.updateChannelPicks { it.copy(favorites = listOf(favorite), recent = listOf(played, favorite)) }
+        assertEquals(SportsLiveChannelPicks(listOf(favorite), listOf(played, favorite)), store.channelPicks.first())
+
+        activeProfile.value = 2
+        assertEquals(SportsLiveChannelPicks.NONE, store.channelPicks.first())
+        activeProfile.value = 1
+        assertEquals(listOf(favorite), store.channelPicks.first().favorites)
+    }
+
+    @Test
+    fun `channel picks stay on this TV and never reach the account sync`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.updateChannelPicks { it.copy(favorites = listOf(SportsLiveChannelRef("addon.one", "ch-1", "sports one"))) }
+        val exported = com.nuvio.tv.core.sync.SportsLiveSettingsSync.export(profile1Store.data.first(), 0L).toString()
+        assertFalse(exported.contains("addon.one"))
+        assertFalse(exported.contains("ch-1"))
+    }
+
+    @Test
+    fun `channel plays and the countries chosen are kept per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.updateChannelPicks { it.copy(plays = mapOf("US|sports one" to listOf(1_000L, 2_000L))) }
+        assertEquals(mapOf("US|sports one" to listOf(1_000L, 2_000L)), store.channelPicks.first().plays)
+        assertNull(store.channelCountries.first())
+        store.setChannelCountries(setOf("US", "CA"))
+        assertEquals(setOf("US", "CA"), store.channelCountries.first())
+
+        activeProfile.value = 2
+        assertNull(store.channelCountries.first())
+        activeProfile.value = 1
+        store.setChannelCountries(null)
+        assertNull(store.channelCountries.first())
+    }
+
+    @Test
+    fun `unreadable channel picks read as none`() = runTest {
+        profile1Store.updateData { mutablePreferencesOf(stringPreferencesKey("sports_live_channel_favorites") to "{not json") }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(SportsLiveChannelPicks.NONE, store.channelPicks.first())
     }
 }

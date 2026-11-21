@@ -500,7 +500,10 @@ private fun ChannelCells(row: ScoreboardRow, watching: Boolean) {
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 title.quality?.let { SportsLiveBadge(it) }
-                if (item.followed) StarMark()
+                // Channels phase 2: the country as a small tag ("US"), as region headings are gone from the tab.
+                channelCountryTag(item)?.let { SportsLiveBadge(it) }
+                // Gold ★: a followed team's game on the channel, or a favorite channel (Channels phase 1).
+                if (item.followed || row.favorite) StarMark()
                 if (watching) SportsLiveWatchingPill()
             }
             channelNowText(item)?.let { now ->
@@ -599,6 +602,10 @@ private fun nameStyle(bold: Boolean, compact: Boolean): TextStyle =
         fontWeight = FontWeight.Normal,
         lineHeight = if (compact) 17.sp else 20.sp
     ).let { if (bold) it.sportsLiveBold() else it }
+
+/** A channel's country code for its row's tag (phase 2); null for a long group name or none. */
+internal fun channelCountryTag(item: com.nuvio.tv.domain.model.SportsLiveItem): String? =
+    com.nuvio.tv.core.sportslive.SportsLiveChannelRegions.regionOf(item).takeIf { it.length in 2..3 && it.all(Char::isLetter) }
 
 @Composable
 private fun StarMark() {
