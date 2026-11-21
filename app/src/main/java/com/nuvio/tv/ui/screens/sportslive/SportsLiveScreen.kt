@@ -178,12 +178,15 @@ fun SportsLiveScreen(
     // Spoiler protection (#151): the scores come stamped with it; a kept Just ended final is stamped here.
     val protection by scoresViewModel.protection.collectAsStateWithLifecycle()
     val scoredTab = uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.UPCOMING
+    // Your teams (#155): followed teams' games on Upcoming, for the strip's "later today" (a few rows at most).
+    val upcomingFollowed = remember(uiState.tabs) { uiState.tabs[SportsLiveTab.UPCOMING].orEmpty().filter { it.followed } }
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_SECTION,
         // Live now tracks the whole tab (every filter), so each game's feed answers before it may be
-        // estimated as ended (#60) and the tab count does not change with the filter.
+        // estimated as ended (#60) and the tab count does not change with the filter. J4: and the strip's later-today
+        // games, so their cards get ESPN's logos and names (Mavericks vs Clippers drew "Da… Lo…" untracked).
         cards = when (uiState.selectedTab) {
-            SportsLiveTab.LIVE_NOW -> uiState.tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+            SportsLiveTab.LIVE_NOW -> uiState.tabs[SportsLiveTab.LIVE_NOW].orEmpty() + upcomingFollowed
             SportsLiveTab.UPCOMING -> uiState.visibleItems
             else -> emptyList()
         },
@@ -268,8 +271,6 @@ fun SportsLiveScreen(
         resultsViewModel.setReplaysActive(uiState.selectedTab == SportsLiveTab.REPLAYS && screenStarted)
     }
     val replayMatches by resultsViewModel.replayMatches.collectAsStateWithLifecycle()
-    // Your teams (#155): followed teams' games on Upcoming, for the strip's "later today" (a few rows at most).
-    val upcomingFollowed = remember(uiState.tabs) { uiState.tabs[SportsLiveTab.UPCOMING].orEmpty().filter { it.followed } }
     val upcomingFollowedRows = remember(upcomingFollowed, scores, scoresMode, revealed, uiState.nowMs) {
         if (upcomingFollowed.isEmpty()) emptyList() else scoreboardRows(upcomingFollowed, SportsLiveTab.UPCOMING, scores, scoresMode, revealed, uiState.nowMs)
     }

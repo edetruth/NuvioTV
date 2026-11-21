@@ -52,6 +52,8 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.GameArtTeam
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
@@ -572,14 +574,36 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
     }
 }
 
-/** "BOS · NYK": both short names, each cut with an ellipsis rather than clipped. */
+/** "BOS · NYK": both short names ([yourTeamsShortName]), codes when a name is long, so none is ever cut. */
 @Composable
 private fun SlimNames(art: GameArt, style: TextStyle, color: Color) {
+    val first = remember(art.first) { yourTeamsShortName(art.first) }
+    val second = remember(art.second) { yourTeamsShortName(art.second) }
     Row(horizontalArrangement = Arrangement.spacedBy(SLIM_LOGO_GAP), verticalAlignment = Alignment.CenterVertically) {
-        SlimText(art.first.short, style, color, Modifier.weight(1f, fill = false))
-        SlimText(art.second.short, style, color, Modifier.weight(1f, fill = false))
+        SlimText(first, style, color, Modifier.weight(1f, fill = false))
+        SlimText(second, style, color, Modifier.weight(1f, fill = false))
     }
 }
+
+/**
+ * A team's name on a slim strip card (J4, user TV report 2026-11-21: "Da… Lo…" for Mavericks vs Clippers with no ESPN
+ * match): ESPN's (or a learned) abbreviation; else the abbreviation our own team lists give the name, its city
+ * written short or in full ([abbreviationOf]: "Los Angeles Clippers" is the NBA's "LAC"); else a code made from the
+ * name ([panelShortCode]: "DAL"). Never the full name, which a card ~100 dp wide can only cut.
+ */
+internal fun yourTeamsShortName(
+    team: GameArtTeam,
+    abbreviationOf: (String) -> String? = { name ->
+        TeamDirectory.cityVariants(name).firstNotNullOfOrNull { TeamDirectory.shared.abbreviationAnywhere(it) }
+    }
+): String {
+    val short = team.short.trim()
+    if (short.isNotEmpty() && short.length <= SLIM_CODE_MAX && !short.equals(team.name.trim(), ignoreCase = true)) return short
+    return abbreviationOf(team.name)?.trim()?.takeIf { it.isNotEmpty() } ?: panelShortCode(team.name)
+}
+
+/** The longest name a slim card sets whole beside the other ("UCONN"). */
+private const val SLIM_CODE_MAX = 5
 
 @Composable
 private fun SlimText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
