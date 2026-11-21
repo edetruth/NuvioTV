@@ -33,6 +33,21 @@ class SportsLiveLeagueTagsTest {
     }
 
     @Test
+    fun `ESPN abbreviations that read as bare initials get a readable tag`() {
+        // "Argentine LPF" read "AL" on the Live now row (TV QA live.20).
+        assertEquals("ARG LIGA", scoreboardRowTag("Argentine LPF", "Soccer", "Live"))
+        assertEquals("AUSTRIA", scoreboardRowTag("Austrian Bundesliga", "Soccer", "Live"))
+        assertEquals("A-LEAGUE", scoreboardRowTag("A-League Men", "Soccer", "Live"))
+        listOf("Argentine LPF", "A-League Men", "Colombian Primera A", "Chilean Primera", "Liga AUF Uruguaya", "Japanese J1 League",
+            "Belgian Pro League", "Austrian Bundesliga", "Swiss Super League", "Danish Superliga", "Greek Super League").forEach { name ->
+            val tag = SportsLiveLeagueTags.of(name)!!
+            // At most 8: the row's short vocabulary keeps it as is.
+            assertTrue(tag, tag.length <= SportsLiveTags.MAX_CHARS && tag == tag.uppercase())
+            assertEquals(tag, SportsLiveTags.short(tag, null))
+        }
+    }
+
+    @Test
     fun `an unmapped league keeps the current tag`() {
         assertNull(SportsLiveLeagueTags.of("NBA"))
         assertEquals("NBA", scoreboardRowTag("NBA", "Basketball", "Live"))
