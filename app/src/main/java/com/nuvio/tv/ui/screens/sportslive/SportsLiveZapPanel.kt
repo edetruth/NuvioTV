@@ -627,9 +627,18 @@ data class SportsLiveZapPanelState(
     /** J7: the game played before the one playing, still live, as a row: the "Just watched" line. */
     val justWatchedRow: ZapPanelRow? = null,
     /** The shared Live now list is not loaded yet (Watch from outside Sports & Live): "Loading games…" shows. */
-    val loading: Boolean = false
+    val loading: Boolean = false,
+    /** The profile picked My sports (not the default): the list is My sports' games, even when it hides none. */
+    val mySportsPicked: Boolean = false
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
+
+    /**
+     * The first chip (null) is My sports, not All (TV report #14: "All 52" under My sports with nothing to hide, as
+     * live.23 took All sports away): picked My sports, More live's row, or its view as a chip.
+     */
+    val mySportsScoped: Boolean
+        get() = mySportsPicked || moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in chips
 
     /** The list under Now playing, in the lineup's own order (#140, #164). */
     internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports, playing = nowPlayingRow?.item, moreLive = moreLive, justWatched = justWatchedRow) }

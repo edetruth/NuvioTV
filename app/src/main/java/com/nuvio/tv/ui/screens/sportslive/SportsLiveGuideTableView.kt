@@ -114,6 +114,8 @@ internal fun SportsLiveGuideTable(
     registerKeys: (((android.view.KeyEvent) -> Boolean)?) -> Unit = {},
     /** Each row's one reading ([GuideRowMemory]), kept by the player across openings. */
     memory: GuideRowMemory = remember { GuideRowMemory() },
+    /** The scores' hold for the stream playing, m:ss ([scoreHoldText], TV report #14); null: no hold line. */
+    scoreHold: String? = null,
     modifier: Modifier = Modifier
 ) {
     val guide = state?.guide
@@ -316,6 +318,7 @@ internal fun SportsLiveGuideTable(
         GuideFooter(
             legend = keysHint,
             moreBelow = (lines.size - (start + GUIDE_VISIBLE_ROWS)).coerceAtLeast(0),
+            scoreHold = scoreHold,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
@@ -375,7 +378,7 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
     if (chips.size <= 1) return
     val selected = chips.indexOf(state.chip).coerceAtLeast(0)
     val window = guideChipWindow(chips.size, selected)
-    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in chips
+    val scoped = state.mySportsScoped
     // #213: only chips that fit whole are drawn ([guideChipsFit]), the picked one always; ▸ / ◂ say more are there.
     Layout(content = {
         GuideChipArrow("◂")
@@ -703,7 +706,7 @@ private fun GuideScoreTime(row: GuideRow, style: TextStyle, modifier: Modifier =
 
 /** The one footer line: the keys; the marks' legend while the keys hint shows; how many rows wait below. */
 @Composable
-private fun GuideFooter(legend: Boolean, moreBelow: Int, modifier: Modifier = Modifier) {
+private fun GuideFooter(legend: Boolean, moreBelow: Int, scoreHold: String? = null, modifier: Modifier = Modifier) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = stringResource(R.string.sports_live_guide_footer),
@@ -726,7 +729,19 @@ private fun GuideFooter(legend: Boolean, moreBelow: Int, modifier: Modifier = Mo
             }
         }
         Spacer(modifier = Modifier.weight(1f))
+        // TV report #14: why the scores trail ESPN, on the right, after the keys (which keep their room).
+        scoreHold?.let { hold ->
+            Text(
+                text = stringResource(R.string.sports_live_scores_held, hold),
+                style = SportsLiveTokens.style(GuideType.Footer),
+                color = Colors.TextMuted,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(start = 24.dp)
+            )
+        }
         if (moreBelow > 0) {
+            if (scoreHold != null) Spacer(modifier = Modifier.width(24.dp))
             Text(
                 text = stringResource(R.string.sports_live_guide_more_below, moreBelow),
                 style = SportsLiveTokens.style(GuideType.Footer),
