@@ -70,9 +70,10 @@ import kotlin.random.Random
  * - The [ScoreDelay] is applied here, once, so every surface gets the delayed view.
  * - Failure-silent: a feed failing three times in a row is paused and its scores hidden until a success.
  * - Scope (#66): every tracked card on screen, whatever My sports says; My sports only orders the
- *   feed budget. At most [MAX_FEEDS] feeds poll at once (in parallel): followed teams' games claim
- *   theirs first, then games in My sports. A card routed by a bare "Basketball" / "Football" that its
- *   pro feed does not list also tries the college feed ([EspnLeagueMap.collegeFallbackFor]), only while
+ *   feed budget. At most [MAX_FEEDS] feeds poll at once (in parallel): followed teams' live games claim
+ *   theirs first, then every other live game (My sports first), then games not live yet (followed teams', then
+ *   My sports): a game later in the week never takes a live game's score (live.23 RC). A card routed by a
+ *   bare "Basketball" / "Football" that its pro feed does not list also tries the college feed ([EspnLeagueMap.collegeFallbackFor]), only while
  *   it is tracked.
  * - Logos (#66): each matched side's logo is learned into [logos] (kept in app storage) so cards draw
  *   it on the next launch before any feed answers, and tracked games' logos are prefetched.
@@ -218,6 +219,8 @@ class LiveScoresRepository internal constructor(
         val card: ScoreCard,
         val leagues: List<EspnLeague>,
         val followed: Boolean,
+        /** An addon lists the game live (not a channel): it claims the feed budget before any game not live yet. */
+        val live: Boolean,
         /** The college feed to try when [leagues] answer without the game (#66); null for most cards. */
         val fallback: EspnLeague?,
         /** A tennis card (#160): matched by surname on its tour's live copy ([TennisMatcher]). */
@@ -426,25 +429,26 @@ class LiveScoresRepository internal constructor(
     override fun track(screenId: String, cards: List<SportsLiveItem>) {
         val entries = cards.mapNotNull { item ->
             val card = ScoreCard.from(item) ?: return@mapNotNull null
+            val live = item.isLive && !item.isChannel
             val sources = listOf(item) + item.alternates
             val routed = sources.asSequence().map { it to EspnLeagueMap.leaguesFor(it) }.firstOrNull { it.second.isNotEmpty() }
             if (routed == null) {
                 // A tennis match (#160): its tour's feeds, matched by the players' surnames.
                 val tennis = sources.asSequence().map(EspnLeagueMap::tennisLeaguesFor).firstOrNull { it.isNotEmpty() }
-                if (tennis != null) return@mapNotNull TrackedCard(card, tennis, item.followed, fallback = null, tennis = true)
+                if (tennis != null) return@mapNotNull TrackedCard(card, tennis, item.followed, live, fallback = null, tennis = true)
                 // No sport anywhere on the card (#206): only the feeds already polled for others.
                 if (item.isChannel || item.teams == null || sources.any { SportsLiveSportKind.tagOf(it) != null }) return@mapNotNull null
                 val liveKeys = if (item.isLive) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
                 val sports = sources.firstNotNullOfOrNull { source -> SportsLiveTeams.knownSport(source)?.let(EspnLeagueMap::espnSportsOf) }
                 return@mapNotNull TrackedCard(
-                    card, emptyList(), item.followed, fallback = null, liveKeys = liveKeys, piggyback = true, piggybackSports = sports
+                    card, emptyList(), item.followed, live, fallback = null, liveKeys = liveKeys, piggyback = true, piggybackSports = sports
                 )
             }
             val (source, leagues) = routed
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
             // A bare sport word's college feed (#66), else a men's soccer league's women's counterpart (live.23).
             val fallback = (EspnLeagueMap.collegeFallbackFor(source) ?: EspnLeagueMap.womenFallbackFor(source))?.takeIf { it !in leagues }
-            TrackedCard(card, leagues, item.followed, fallback, liveKeys = liveKeys)
+            TrackedCard(card, leagues, item.followed, live, fallback, liveKeys = liveKeys)
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
@@ -469,12 +473,20 @@ class LiveScoresRepository internal constructor(
     }
 
     /**
-     * Every screen's tracked cards, one entry per card key (the same card on two screens is one),
-     * followed teams' games first, then games in My sports: they claim the feed budget before the rest.
+     * Every screen's tracked cards, one entry per card key (the same card on two screens is one), in the order they
+     * claim the feed budget: followed teams' live games, the other live games, then games not live yet; followed teams'
+     * games, then games in My sports within each. Live before not live (live.23 RC, TV: Live now also tracks followed
+     * teams' Upcoming games, and a week of them took every feed, so Serie A, Bundesliga, La Liga and college football
+     * games in play showed no score): a later game only costs its logos, a live one its score.
      */
     private fun trackedUnion(): List<TrackedCard> =
         tracked.value.values.flatten().distinctBy { it.card.key }
-            .sortedWith(compareByDescending<TrackedCard> { it.followed }.thenByDescending { entry -> entry.leagues.any(::inMySports) })
+            .sortedWith(
+                compareByDescending<TrackedCard> { it.followed && it.live }
+                    .thenByDescending { it.live }
+                    .thenByDescending { it.followed }
+                    .thenByDescending { entry -> entry.leagues.any(::inMySports) }
+            )
 
     // While someone collects [scores]: settings, then the tracked cards, drive the pollers.
     private suspend fun run() {

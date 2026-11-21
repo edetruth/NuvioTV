@@ -989,6 +989,58 @@ class LiveScoresRepositoryTest {
         assertTrue(ScoreFeed(EspnLeagueMap.NBA, days[days.size - 2]) !in provider.calls)
     }
 
+    /** A game in play on [league]'s feed, named as its card names it ("Parma vs Roma": Parma at home). */
+    private fun liveGame(id: String, league: EspnLeague, card: String, start: String, home: Int, away: Int): ScoreSnapshot {
+        val (first, second) = card.split(" vs ")
+        fun side(name: String, score: Int) = ScoreTeam(
+            id = name, abbreviation = null, displayName = name, shortDisplayName = name, name = name, location = null,
+            logo = null, score = score, linescores = emptyList()
+        )
+        return pacers.copy(
+            eventId = id, league = league, leagueSlug = league.league, leagueName = null, competitionId = null,
+            startMs = ms(start), state = ScoreState.IN, isFinal = false, clockText = "23'",
+            home = side(first, home), away = side(second, away)
+        )
+    }
+
+    @Test
+    fun `Live now's games of every league are polled and scored, never crowded out by a week of followed games`() = runTest {
+        // live.23 RC, TV 11:52 CT: Premier League and Ligue 1 scored, Serie A, Bundesliga, La Liga and college football
+        // games in play did not. Live now also tracked every followed game on Upcoming, a week of them (each its own
+        // feed), and followed teams' games took the feed budget first.
+        val today = LocalDate.of(2026, 11, 21)
+        val eng1 = EspnLeague("soccer", "eng.1")
+        val live = listOf(
+            Triple(eng1, "Premier League", "Newcastle vs Arsenal"),
+            Triple(EspnLeague("soccer", "fra.1"), "Ligue 1", "Nice vs Lens"),
+            Triple(EspnLeague("soccer", "ita.1"), "Serie A", "Parma vs Roma"),
+            Triple(EspnLeague("soccer", "ger.1"), "Bundesliga", "Schalke vs Stuttgart"),
+            Triple(EspnLeague("soccer", "esp.1"), "La Liga", "Sevilla vs Betis"),
+            Triple(EspnLeagueMap.COLLEGE_FOOTBALL, "NCAAF", "Army vs Tulane")
+        ).mapIndexed { index, (league, sport, name) ->
+            val card = item(name, sport, "2026-11-21T17:30:00Z", followed = index == 0)
+            Triple(league, card, liveGame("live$index", league, name, "2026-11-21T17:30:00Z", 1, index))
+        }
+        provider.respond = { feed ->
+            ScoreboardResult(live.filter { (league, _, _) -> league == feed.league && feed.date == today }.map { it.third })
+        }
+        val repo = repository("2026-11-21T17:52:00Z")
+        collect(repo)
+        // A followed team's games on each of the next weeks' days: more feeds than the whole budget.
+        val followedLater = (1..LiveScoresRepository.MAX_FEEDS + 4).map { day ->
+            item("Lakers vs Team$day", "NBA", "${today.plusDays(day.toLong())}T23:00:00Z", followed = true).copy(isLive = false)
+        }
+        repo.track(SECTION, live.map { it.second } + followedLater)
+        runCurrent()
+        for ((league, card, game) in live) {
+            assertTrue("${league.path} polled", ScoreFeed(league, today) in provider.calls)
+            assertEquals("${card.meta.name} scored", game.eventId, repo.scores.value[card.streamKey]?.eventId)
+        }
+        // The budget still holds; the followed later games take what is left.
+        assertTrue(provider.calls.distinct().size <= LiveScoresRepository.MAX_FEEDS)
+        assertTrue(ScoreFeed(EspnLeagueMap.NBA, today.plusDays(1)) in provider.calls)
+    }
+
     @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
