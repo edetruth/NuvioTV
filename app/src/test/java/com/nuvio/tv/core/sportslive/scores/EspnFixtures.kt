@@ -35,6 +35,8 @@ internal object EspnFixtures {
     const val SOCCER_ALL_20261120 = "espn_soccer_all_20261120.json"
     /** College football FBS (groups=80), 2026-11-20 (ET): Iowa State at UCF live (#208). */
     const val CFB_FBS_20261120 = "espn_cfb_fbs_20261120.json"
+    /** College football FBS (groups=80), 2026-11-21, captured ~21:10Z (trimmed to ids, teams, status, links): Iowa at Illinois live (#18). */
+    const val CFB_FBS_20261121 = "espn_cfb_fbs_20261121.json"
 
     val CAF_QUAL = EspnLeague("soccer", "caf.nations_qual")
     val ENG1 = EspnLeague("soccer", "eng.1")

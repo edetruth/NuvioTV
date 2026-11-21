@@ -244,7 +244,12 @@ class LiveScoresRepository internal constructor(
          */
         val piggyback: Boolean = false,
         /** A [piggyback] card's ESPN sports when a source names one no feed covers; null: told by its teams. */
-        val piggybackSports: Set<String>? = null
+        val piggybackSports: Set<String>? = null,
+        /**
+         * A card whose only sport is the generic "American Football" (live.24, TV report #18): its own feeds are the NFL's
+         * and college football's alike, college football's games matched with both sides STRONG.
+         */
+        val strict: Boolean = false
     )
 
     private class FeedState {
@@ -457,8 +462,15 @@ class LiveScoresRepository internal constructor(
             }
             val (source, leagues) = routed
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
+            val college = EspnLeagueMap.collegeFallbackFor(source)
+            // A card that says only "American Football" (live.24, TV report #18: "Illinois vs Iowa" on a busy Saturday): the
+            // NFL and college football are both its own feeds, budgeted as any live game's, matched with both sides STRONG.
+            // As a fallback, college football came after every other game's feeds and found no slot.
+            if (leagues == listOf(EspnLeagueMap.NFL) && college == EspnLeagueMap.COLLEGE_FOOTBALL) {
+                return@mapNotNull TrackedCard(card, leagues + college, item.followed, live, fallback = null, liveKeys = liveKeys, strict = true)
+            }
             // A bare sport word's college feed (#66), else a men's soccer league's women's counterpart (live.23).
-            val fallback = (EspnLeagueMap.collegeFallbackFor(source) ?: EspnLeagueMap.womenFallbackFor(source))?.takeIf { it !in leagues }
+            val fallback = (college ?: EspnLeagueMap.womenFallbackFor(source))?.takeIf { it !in leagues }
             TrackedCard(card, leagues, item.followed, live, fallback, liveKeys = liveKeys)
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
@@ -972,7 +984,14 @@ class LiveScoresRepository internal constructor(
             }
             // A card matched on its college fallback stays held to both sides STRONG.
             val strict = entry.fallback != null && remembered[card.key] == entry.fallback
-            var match = if (entry.tennis) matchOn(card, cardFeeds, tennis = true) else matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
+            var match = when {
+                entry.tennis -> matchOn(card, cardFeeds, tennis = true)
+                // A generic American football card (live.24): the NFL's games as any NFL card, college football's with
+                // both sides STRONG, as the college fallback always was.
+                entry.strict -> matchOn(card, cardFeeds.filter { it.league != EspnLeagueMap.COLLEGE_FOOTBALL }, matcher)
+                    ?: matchOn(card, cardFeeds.filter { it.league == EspnLeagueMap.COLLEGE_FOOTBALL }, strictMatcher)
+                else -> matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
+            }
             // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
             if (match == null && leagues.all { it.sport == "soccer" && it != EspnLeagueMap.SOCCER_ALL } &&
                 cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused } == true }
