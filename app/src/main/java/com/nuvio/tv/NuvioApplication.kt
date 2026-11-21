@@ -106,6 +106,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         MemoryBudget.init(this)
         super.onCreate()
         com.nuvio.tv.ui.screens.sportslive.SportsLiveCrashCapture.install(this)
+        com.nuvio.tv.core.sportslive.SportsLiveJankWatchdog.install() // Fork #207: debug builds log slow main-thread messages
         SentryInitializer.start(this, sentrySettingsDataStore)
         PluginRuntimeHooks.onApplicationCreate(this)
         androidTvChannelSyncService.start()

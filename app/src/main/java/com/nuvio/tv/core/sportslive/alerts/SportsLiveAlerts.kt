@@ -38,7 +38,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +56,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -201,8 +202,15 @@ class SportsLiveAlerts @Inject constructor(
     @Volatile
     private var reminderLoadAsked = false
 
-    /** Runs until cancelled (the app left the foreground): tracks, decides and queues alerts. */
-    suspend fun runInForeground() = coroutineScope {
+    /**
+     * Where the alerts' work runs (#207): the host starts [runInForeground] from a composition effect, on the main
+     * thread, and its pass over every listed game each 5 s froze the UI on a slow box. Tests swap it.
+     */
+    @VisibleForTesting
+    internal var compute: CoroutineContext = Dispatchers.Default
+
+    /** Runs until cancelled (the app left the foreground): tracks, decides and queues alerts, on [compute]. */
+    suspend fun runInForeground() = withContext(compute) {
         val cards = combine(repo.latest, repo.claimedCatalogs, repo.followedTeams) { load, claimed, followed ->
             candidates(load, claimed, followed)
         }.flowOn(Dispatchers.Default)
@@ -481,7 +489,10 @@ class SportsLiveAlerts @Inject constructor(
             repo.latest.value
         }
         val reminder = GameReminders.of(item)
-        val fresh = candidates(load, repo.claimedCatalogs.first(), repo.followedTeams.first()).firstOrNull { card ->
+        val claimed = repo.claimedCatalogs.first()
+        val followed = repo.followedTeams.first()
+        // Two whole-tab sortings: never on the main thread a prompt's Watch is pressed on (#207).
+        val fresh = withContext(compute) { candidates(load, claimed, followed) }.firstOrNull { card ->
             card.streamKey == item.streamKey || (reminder != null && GameReminders.matches(reminder, card))
         }
         val card = fresh ?: item

@@ -2,7 +2,10 @@ package com.nuvio.tv.ui.screens.home
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -30,23 +33,27 @@ import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 @Composable
 internal fun rememberLiveNowCardArt(
     items: List<SportsLiveItem>,
-    scores: Map<String, ScoreSnapshot>,
+    scores: State<Map<String, ScoreSnapshot>>,
     mode: ScoresMode?
 ): (String) -> (@Composable () -> Unit)? {
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
+    // #207: the lookup changes with the cards only, never with a score. Every card on Home reads it, so a new one on
+    // each score update redrew them all; each drawn card reads its own game's score instead, and only a card whose game
+    // changed is drawn again.
     return remember(items, scores, mode, strings, liveWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
-            val snapshot = scores[item.streamKey]
-            // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
-            val chip = ScoreChips.of(item, snapshot, mode, revealed = false)
-            val footer = SportsLiveHomeMeta.cardFooter(chip, mode, strings, liveWord)
-            val art = GameArt.of(item, snapshot)
             val title = SportsLiveHomeMeta.cleanTitle(item.displayName)
             val league = item.sport?.takeUnless(SportsLiveTeams::isNonSportTag)
             val card: @Composable () -> Unit = {
+                val snapshot by remember { derivedStateOf { scores.value[item.streamKey] } }
+                // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
+                val footer = remember(snapshot) {
+                    SportsLiveHomeMeta.cardFooter(ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord)
+                }
+                val art = remember(snapshot) { GameArt.of(item, snapshot) }
                 val ready = rememberSportsLiveReadyMark(item) == SportsLiveReadyMark.READY
                 if (art != null) {
                     SportsLiveDrawnGameCard(art = art, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
