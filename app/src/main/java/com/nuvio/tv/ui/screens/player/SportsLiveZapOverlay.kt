@@ -247,8 +247,10 @@ internal fun BoxScope.SportsLiveZapOverlay(
         }
     }
 
+    // live.21 B2: the guide as the new table (Settings → Sports & Live → More), over the same panel state.
+    val guideTable by viewModel.guideTable.collectAsState()
     // Toasts and the kickoff prompt never sit under the panel (research 4): beside it while it is open.
-    com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsBesidePanel(open = panelOpen)
+    com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsBesidePanel(open = panelOpen && !guideTable)
     var wasOpen by remember { mutableStateOf(false) }
     LaunchedEffect(panelOpen) {
         if (wasOpen && !panelOpen) runCatching { playerFocusRequester.requestFocus() }
@@ -262,17 +264,26 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val scoresAheadToast = stringResource(R.string.sports_live_scores_ahead_toast)
     val openGame = LocalOpenSportsLiveGame.current
     LaunchedEffect(panelOpen) { if (!panelOpen) menu = null }
-    AnimatedVisibility(
-        visible = panelOpen,
-        enter = slideInHorizontally(tween(220)) { -it },
-        exit = slideOutHorizontally(tween(220)) { -it },
-        modifier = Modifier
-            .align(Alignment.CenterStart)
-            .zIndex(3.2f)
-    ) {
-        panel?.let { state ->
-            LiveGamesPanel(
-                state = state,
+    // B2: the guide stays open while its Hold OK menu is up, and its idle wait starts again once the menu goes.
+    LaunchedEffect(menu != null) { viewModel.onGuideMenu(held = menu != null) }
+    if (guideTable) {
+        val fadeMs = if (com.nuvio.tv.ui.screens.sportslive.GUIDE_SQUEEZE_MODE == com.nuvio.tv.ui.screens.sportslive.GuideSqueezeMode.SCALE) {
+            com.nuvio.tv.ui.screens.sportslive.GUIDE_SQUEEZE_MS
+        } else {
+            com.nuvio.tv.ui.screens.sportslive.GUIDE_FADE_MS
+        }
+        AnimatedVisibility(
+            visible = panelOpen,
+            enter = fadeIn(tween(fadeMs)),
+            exit = fadeOut(tween(fadeMs)),
+            modifier = Modifier.fillMaxSize().zIndex(3.2f)
+        ) {
+            com.nuvio.tv.ui.screens.sportslive.SportsLiveGuideTable(
+                state = panel,
+                readiness = panelReadiness,
+                open = panelOpen,
+                menuOpen = menu != null,
+                keysHint = panelKeysHint,
                 // OK: a matched Just ended game opens its box score (#140); any other row zaps to its game.
                 onPick = { item ->
                     viewModel.onPanelOk(item, canOpenGame = openGame != null)?.let { request ->
@@ -282,15 +293,42 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     }
                 },
                 onLongPick = { item -> menu = viewModel.panelMenu(item) },
-                menuOpen = menu != null,
-                onClose = { viewModel.closePanel() },
                 onChip = viewModel::onPanelChip,
                 onRowFocus = viewModel::onPanelRowFocus,
-                onKey = viewModel::onPanelKey,
-                open = panelOpen,
-                readiness = panelReadiness,
-                keysHint = panelKeysHint
+                onKey = viewModel::onPanelKey
             )
+        }
+    } else {
+        AnimatedVisibility(
+            visible = panelOpen,
+            enter = slideInHorizontally(tween(220)) { -it },
+            exit = slideOutHorizontally(tween(220)) { -it },
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .zIndex(3.2f)
+        ) {
+            panel?.let { state ->
+                LiveGamesPanel(
+                    state = state,
+                    // OK: a matched Just ended game opens its box score (#140); any other row zaps to its game.
+                    onPick = { item ->
+                        viewModel.onPanelOk(item, canOpenGame = openGame != null)?.let { request ->
+                            SportsLiveGameRequests.open(request)
+                            viewModel.onGameOpened(wasPlaying = isPlaying())
+                            openGame?.invoke()
+                        }
+                    },
+                    onLongPick = { item -> menu = viewModel.panelMenu(item) },
+                    menuOpen = menu != null,
+                    onClose = { viewModel.closePanel() },
+                    onChip = viewModel::onPanelChip,
+                    onRowFocus = viewModel::onPanelRowFocus,
+                    onKey = viewModel::onPanelKey,
+                    open = panelOpen,
+                    readiness = panelReadiness,
+                    keysHint = panelKeysHint
+                )
+            }
         }
     }
 

@@ -64,6 +64,8 @@ internal enum class SportsLiveSetting(
     HOVER_PREVIEW(SportsLiveSettingsSection.HOME_AND_ROWS, R.string.sports_live_setting_hover_preview, R.string.sports_live_setting_hover_preview_subtitle),
     RUN_SETUP(SportsLiveSettingsSection.SETUP, R.string.sports_live_setting_run_setup, R.string.sports_live_setting_run_setup_subtitle),
     SCORES_STATUS(SportsLiveSettingsSection.STATUS, R.string.sports_live_setting_scores_status, R.string.sports_live_setting_scores_status_subtitle),
+    /** "In-player guide: New table (beta)" (live.21, design B2): off by default, so the user can compare it with the panel. */
+    GUIDE_TABLE(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_guide_table, R.string.sports_live_setting_guide_table_help),
     DATA_SAVER(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_data_saver, R.string.sports_live_setting_data_saver_subtitle),
     /** "Real-time scores" (live.20 Q18, #85): opt-in, every score delay off, also while video plays. */
     REAL_TIME_SCORES(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_real_time_scores, R.string.sports_live_setting_real_time_scores_help),
@@ -92,7 +94,7 @@ internal enum class SportsLiveSetting(
             // The device's own picture-in-picture support is checked by the screen on top of this.
             MY_SPORTS, SCORES, OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS, REMINDED_TEAMS,
             TIP_OFF, OK_ON_LIVE,
-            SCORES_STATUS, DATA_SAVER, REAL_TIME_SCORES, CATALOGS -> section
+            SCORES_STATUS, DATA_SAVER, REAL_TIME_SCORES, CATALOGS, GUIDE_TABLE -> section
         }
     }
 
@@ -103,7 +105,7 @@ internal enum class SportsLiveSetting(
     private companion object {
         val SWITCHES = setOf(
             REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
-            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS, REAL_TIME_SCORES
+            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS, REAL_TIME_SCORES, GUIDE_TABLE
         )
     }
 }

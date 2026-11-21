@@ -1213,6 +1213,8 @@ fun PlayerScreen(
         val fallbackSubtitleLiftPx = with(LocalDensity.current) { SUBTITLE_CONTROLS_LIFT.toPx() }
         val playerSurfaceModifier = Modifier
             .align(Alignment.TopEnd)
+            // Sports & Live B2: the video squeezes to its window while the new in-player guide is open.
+            .then(com.nuvio.tv.ui.screens.sportslive.sportsLiveGuideSqueeze(sportsLiveZap))
             .padding(end = postPlayRecommendationPlayerPadding, top = postPlayRecommendationPlayerPadding)
             .fillMaxWidth(postPlayRecommendationPlayerWidth)
             .aspectRatio(16f / 9f)

@@ -17,6 +17,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveOffReason.SECTION_HIDDEN
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATALOGS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATCH_UP_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.DATA_SAVER
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GUIDE_TABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.FULL_TIME_ALERTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GAME_END
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OK_ON_LIVE
@@ -92,8 +93,8 @@ class SportsLiveSettingsHelpTest {
         )
         assertEquals(listOf(header(SETUP), row(RUN_SETUP), header(STATUS)), items.subList(items.indexOf(header(SETUP)), items.indexOf(header(STATUS)) + 1))
         assertEquals(
-            listOf(header(MORE), Item.MoreToggle, row(DATA_SAVER), row(REAL_TIME_SCORES), row(RESET_STREAM_MEMORY), row(HIDDEN), row(CATALOGS), row(REPORT_PROBLEM)),
-            items.takeLast(8)
+            listOf(header(MORE), Item.MoreToggle, row(GUIDE_TABLE), row(DATA_SAVER), row(REAL_TIME_SCORES), row(RESET_STREAM_MEMORY), row(HIDDEN), row(CATALOGS), row(REPORT_PROBLEM)),
+            items.takeLast(9)
         )
     }
 

@@ -179,7 +179,9 @@ class SportsLiveZapViewModel internal constructor(
     // live.20 (#168): the panel's games whose sport is unknown are looked up too, also when the section was never opened.
     private val identify: (List<SportsLiveItem>) -> Unit = {},
     // #172, TV QA: Hold OK → More… → Report a problem saves a report by its trigger ([SportsLiveReporter.report]).
-    private val report: (String) -> Unit = {}
+    private val report: (String) -> Unit = {},
+    // live.21 B2: "In-player guide: New table (beta)"; OK opens it and it closes by itself when idle.
+    guideTableSetting: Flow<Boolean> = flowOf(false)
 ) : ViewModel() {
 
     @Inject constructor(
@@ -209,8 +211,19 @@ class SportsLiveZapViewModel internal constructor(
         okOnLive = prefs?.okOnLive ?: flowOf(SportsLiveOkOnLive.DEFAULT),
         nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 },
         identify = { items -> identifier?.offer(items) },
-        report = { trigger -> reporter?.report(trigger) }
+        report = { trigger -> reporter?.report(trigger) },
+        guideTableSetting = prefs?.guideTable ?: flowOf(false)
     )
+
+    /**
+     * The in-player guide is the new table (live.21, design B2) rather than the side panel: the same panel state, drawn
+     * as [SportsLiveGuideTable] with the video squeezed to a corner.
+     */
+    val guideTable: StateFlow<Boolean> = guideTableSetting.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // B2: OK opens the guide (on its release); the guide closes itself after GUIDE_IDLE_CLOSE_MS with no key.
+    private val guideOk = SportsLiveGuideOkKey()
+    private val guideIdle = SportsLiveGuideIdle(viewModelScope) { closePanel() }
 
     /** "OK on live" is Pause (research Q19): a bare OK pauses a live game at once, as Google's TV-PC says. */
     val okPausesLive: StateFlow<Boolean> = okOnLive.map { it == SportsLiveOkOnLive.PAUSE }
@@ -523,6 +536,8 @@ class SportsLiveZapViewModel internal constructor(
     /** A key was pressed inside the panel: from now on a row focused for a second reveals its score. */
     fun onPanelKey(keyCode: Int = 0) {
         lastPanelKeyAtMs = System.currentTimeMillis()
+        // B2: any key keeps the guide open another GUIDE_IDLE_CLOSE_MS.
+        if (_panelOpen.value && guideTable.value) guideIdle.kick()
         // Research 8: Info brings the keys hint back, whenever the viewer wants it.
         if (keyCode == android.view.KeyEvent.KEYCODE_INFO) _panelKeysHint.value = true
         if (panelKeyPressed) return
@@ -920,11 +935,35 @@ class SportsLiveZapViewModel internal constructor(
      */
     fun onShortPressKey(event: KeyEvent, partyActive: Boolean): SportsLiveShortPress {
         val active = !partyActive && controller.session(contentId) != null
+        // B2: with the new guide, OK on a live game opens it (on release); ◀ still does, below.
+        when (guideOk.onKey(event.keyCode, event.action, event.repeatCount, active && guideOkOpens())) {
+            SportsLiveShortPress.OPEN_PANEL -> {
+                openPanel()
+                return SportsLiveShortPress.OPEN_PANEL
+            }
+            SportsLiveShortPress.CONSUMED -> return SportsLiveShortPress.CONSUMED
+            else -> Unit
+        }
         val result = shortPressKeys.onKey(event, active)
         if (result == SportsLiveShortPress.OPEN_PANEL) openPanel()
         // The full-time toast's "Next live game →" (#60): a short Right moves on instead of showing the controls.
         if (result == SportsLiveShortPress.SHOW_CONTROLS && nextLiveGame()) return SportsLiveShortPress.CONSUMED
         return result
+    }
+
+    /**
+     * OK opens the new guide (B2) only where the player's OK would show the controls: a live game (not a replay), "OK on
+     * live" left on Show controls (Pause keeps its pause; ◀ still opens the guide), and no "Looking for streams…" card
+     * wanting OK for its Skip.
+     */
+    private fun guideOkOpens(): Boolean =
+        guideTable.value && nowPlaying != null && nowPlaying.kind != com.nuvio.tv.domain.model.SportsLiveKind.REPLAY &&
+            !okPausesLive.value && banner.value?.looking != true
+
+    /** The guide's Hold OK menu is up ([held]): it stays open meanwhile, and the idle wait starts again after. */
+    fun onGuideMenu(held: Boolean) {
+        if (!_panelOpen.value || !guideTable.value) return
+        if (held) guideIdle.stop() else guideIdle.kick()
     }
 
     internal fun openPanel() {
@@ -943,6 +982,7 @@ class SportsLiveZapViewModel internal constructor(
         panelChip.value = openingChip(session)
         panelSession.value = session
         _panelOpen.value = true
+        if (guideTable.value) guideIdle.kick()
         _panelKeysHint.value = false
         viewModelScope.launch {
             _panelKeysHint.value = try {
@@ -968,6 +1008,7 @@ class SportsLiveZapViewModel internal constructor(
     fun closePanel(): Boolean {
         if (!_panelOpen.value) return false
         _panelOpen.value = false
+        guideIdle.stop()
         panelSession.value = null
         // #164: the next open (and CH± meanwhile) takes the fresh order.
         frozenOrder = null

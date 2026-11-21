@@ -9,6 +9,14 @@
     <string name="sports_live_setting_hover_preview">Preview games on hover</string>
     <string name="sports_live_setting_data_saver">Data saver</string>
     <string name="sports_live_setting_real_time_scores">Real-time scores</string>
+    <string name="sports_live_setting_guide_table">In-player guide: New table (beta)</string>
+    <string name="sports_live_setting_guide_table_help">OK during a live game opens a table of the games while the video shrinks to a corner. Off keeps the side panel. This TV only</string>
+    <string name="sports_live_guide_title">Live games</string>
+    <string name="sports_live_guide_footer">OK Watch  ·  ◂ ▸ Sport  ·  Back Close</string>
+    <string name="sports_live_guide_more_below">▼ %1$d more</string>
+    <string name="sports_live_guide_legend_close">Close, late</string>
+    <string name="sports_live_guide_legend_my_team">Your team</string>
+    <string name="sports_live_guide_legend_ready">Ready</string>
     <string name="sports_live_setting_real_time_scores_help">Scores the moment ESPN has them, with no delay, also while a game plays. Your stream runs about a minute behind, so other games\' scores can come before the picture. The game you watch never shows our score.</string>
     <string name="sports_live_setting_scores">Scores</string>
     <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Never show: no scores are shown or kept; only start times are checked.</string>

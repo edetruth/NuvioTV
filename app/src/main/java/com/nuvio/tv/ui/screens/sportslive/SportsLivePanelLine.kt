@@ -818,7 +818,7 @@ internal fun panelFirstFit(widths: List<Int>, available: Int): Int =
  * that fits the width given ([panelFirstFit]). At least the last form's width, at most the first's.
  */
 @Composable
-private fun PanelFirstFit(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun PanelFirstFit(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Layout(content = content, modifier = modifier, measurePolicy = PanelFirstFitPolicy)
 }
 

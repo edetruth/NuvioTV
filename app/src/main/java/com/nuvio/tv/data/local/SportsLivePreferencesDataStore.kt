@@ -73,6 +73,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val showHomeRowKey = booleanPreferencesKey("sports_live_show_home_row")
     private val hoverPreviewKey = booleanPreferencesKey("sports_live_hover_preview")
     private val dataSaverKey = booleanPreferencesKey("sports_live_data_saver")
+    // live.21 B2: the in-player guide as the new bottom table (beta); this TV only, not synced.
+    private val guideTableKey = booleanPreferencesKey("sports_live_guide_table")
     private val pipEnabledKey = booleanPreferencesKey("sports_live_pip_enabled")
     private val hideUnplayableKey = booleanPreferencesKey("sports_live_hide_unplayable_links")
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
@@ -147,6 +149,15 @@ class SportsLivePreferencesDataStore @Inject constructor(
      */
     val dataSaver: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[dataSaverKey] ?: false }
+    }
+
+    /** "In-player guide: New table (beta)" (live.21, design B2): off by default ([SPORTS_LIVE_GUIDE_TABLE_DEFAULT]). */
+    val guideTable: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[guideTableKey] ?: SPORTS_LIVE_GUIDE_TABLE_DEFAULT }
+    }
+
+    suspend fun setGuideTable(v: Boolean) {
+        store().edit { it[guideTableKey] = v }
     }
 
     /**
@@ -766,6 +777,9 @@ private const val REMINDER_KEY_SEPARATOR = "\u001F"
 
 /** In-player panel openings that show the keys hint (live.20). */
 const val PANEL_KEYS_HINT_OPENS = 3
+
+/** The new in-player guide (live.21 B2) starts off in this branch: the user compares it with the panel on the TV. */
+const val SPORTS_LIVE_GUIDE_TABLE_DEFAULT = false
 
 /**
  * A gap without opening the panel after which its keys hint shows again (research 8: help must be easy to recall; a

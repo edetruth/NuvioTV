@@ -8,6 +8,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATCH_UP_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.DATA_SAVER
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.FULL_TIME_ALERTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GAME_END
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GUIDE_TABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OK_ON_LIVE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.TIP_OFF
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMINDED_TEAMS
@@ -67,7 +68,7 @@ class SportsLiveSettingsSectionsTest {
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 SETUP to listOf(RUN_SETUP),
                 STATUS to listOf(SCORES_STATUS),
-                MORE to listOf(DATA_SAVER, REAL_TIME_SCORES, RESET_STREAM_MEMORY, HIDDEN, CATALOGS, REPORT_PROBLEM)
+                MORE to listOf(GUIDE_TABLE, DATA_SAVER, REAL_TIME_SCORES, RESET_STREAM_MEMORY, HIDDEN, CATALOGS, REPORT_PROBLEM)
             ),
             sportsLiveSettingsLayout()
         )
@@ -91,7 +92,9 @@ class SportsLiveSettingsSectionsTest {
                 // live.20 Q18.
                 REAL_TIME_SCORES,
                 // #172.
-                REPORT_PROBLEM
+                REPORT_PROBLEM,
+                // live.21 B2.
+                GUIDE_TABLE
             ),
             shown.toSet()
         )

@@ -167,6 +167,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.CLOSE_GAME_ALERTS -> viewModelScope.launch { prefs.setCloseGameAlerts(on) }
             SportsLiveSetting.MY_TEAMS_SPOILERS -> viewModelScope.launch { prefs.updateScoresChoice { it.withMyTeamsOnly(on) } }
             SportsLiveSetting.REAL_TIME_SCORES -> viewModelScope.launch { prefs.setRealTimeScores(on) }
+            SportsLiveSetting.GUIDE_TABLE -> viewModelScope.launch { prefs.setGuideTable(on) }
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
@@ -232,6 +233,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
             prefs.updateReminders { com.nuvio.tv.core.sportslive.alerts.GameReminders.removeTeam(it, team) }
         }
     }
+
+    /** "In-player guide: New table (beta)" (live.21 B2). */
+    val guideTable: StateFlow<Boolean> = prefs.guideTable
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nuvio.tv.data.local.SPORTS_LIVE_GUIDE_TABLE_DEFAULT)
 
     /** "OK on live" (research Q19). */
     val okOnLive: StateFlow<com.nuvio.tv.core.sportslive.SportsLiveOkOnLive> = prefs.okOnLive

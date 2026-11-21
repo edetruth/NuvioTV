@@ -112,6 +112,7 @@ internal fun SportsLiveSettingsContent(
     val remindedTeams by viewModel.remindedTeams.collectAsStateWithLifecycle()
     val gameEndAction by viewModel.gameEndAction.collectAsStateWithLifecycle()
     val okOnLive by viewModel.okOnLive.collectAsStateWithLifecycle()
+    val guideTable by viewModel.guideTable.collectAsStateWithLifecycle()
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
     val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
     val clockMs by rememberSportsLiveClockMs()
@@ -245,6 +246,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.MY_TEAMS_SPOILERS -> state.scoresChoice.myTeamsOnly
                 SportsLiveSetting.REAL_TIME_SCORES -> state.scores.realTime
                 SportsLiveSetting.HOVER_PREVIEW -> state.hoverPreview
+                SportsLiveSetting.GUIDE_TABLE -> guideTable
                 else -> state.dataSaver
             }
             // A row switched off by another setting reads Off; the help line says why.
