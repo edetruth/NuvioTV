@@ -84,6 +84,17 @@ internal open class SportsLiveHandoverHold<P : Any>(private val releasePlayer: (
         releasePlayer(held.player)
     }
 
+    /** True while a player is held for [contentId]: its picture covers that full player (L1, live.23 review). */
+    fun covers(contentId: String?): Boolean = contentId != null && _held.value?.contentId == contentId
+
+    /**
+     * The app went to the background (ON_STOP, live.23 review L2): the held player is let go at once, so the game's
+     * sound never plays on behind the launcher until the timer. A configuration change keeps it.
+     */
+    fun onAppStop(changingConfigurations: Boolean) {
+        if (!changingConfigurations) release()
+    }
+
     /** Releases [player] if it is the one held: a late timer or error for a player already let go does nothing. */
     fun releaseIfHeld(player: P) {
         if (_held.value?.player === player) release()
@@ -129,6 +140,16 @@ internal object SportsLiveFullScreenHold : SportsLiveHandoverHold<ExoPlayer>(rel
         hold(contentId, player, System.currentTimeMillis())
         main.postDelayed({ releaseIfHeld(player) }, SportsLiveStreamThresholds.STARTUP_HARD_CAP_MS)
     }
+}
+
+/**
+ * True while a held pane picture covers [contentId]'s full player (L1): its starting and waiting cards are not drawn
+ * then, so a card the viewer cannot see never holds focus or takes OK ("Try next link", "Sources").
+ */
+@Composable
+fun rememberSportsLiveHoldCovers(contentId: String?): Boolean {
+    val held by SportsLiveFullScreenHold.held.collectAsStateWithLifecycle()
+    return held != null && SportsLiveFullScreenHold.covers(contentId)
 }
 
 /** How often the full player is checked for its first frame while a picture is held. */

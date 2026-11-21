@@ -1489,9 +1489,11 @@ fun PlayerScreen(
 
         // Sports & Live (#39): a dual pane handed to full screen plays on over the player until its first frame.
         com.nuvio.tv.ui.screens.sportslive.SportsLiveHeldPicture(viewModel.controller.contentId, { viewModel.hasStartedPlaying() }, uiState.error != null, (uiState.sportsStarting?.linkNumber ?: 1) > 1, Modifier.fillMaxSize().zIndex(2.6f))
+        val sportsHoldCovers = com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveHoldCovers(viewModel.controller.contentId)
 
         // Sports & Live (#138): a link is starting; the viewer can move on instead of waiting.
-        uiState.sportsStarting?.takeIf { SportsLivePlayerLayers.shows(SportsLivePlayerLayer.STARTING, sportsLayers) }?.let { starting ->
+        // L1: not under the held pane picture, where it could hold focus and take OK unseen.
+        uiState.sportsStarting?.takeIf { !sportsHoldCovers && SportsLivePlayerLayers.shows(SportsLivePlayerLayer.STARTING, sportsLayers) }?.let { starting ->
             val linkCount = remember(uiState.sourceAllStreams) {
                 uiState.sourceAllStreams
                     .filterNot(com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver::isNonStream)
@@ -1526,7 +1528,7 @@ fun PlayerScreen(
 
         // Sports & Live (#162): the game's links are not live yet near kickoff; it plays as soon as one is.
         // V2 (live.19 QA F12): the starting card's corner, not a modal; Back is the Back key's.
-        uiState.sportsWaiting?.takeIf { SportsLivePlayerLayers.shows(SportsLivePlayerLayer.WAITING, sportsLayers) }?.let { waiting ->
+        uiState.sportsWaiting?.takeIf { !sportsHoldCovers && SportsLivePlayerLayers.shows(SportsLivePlayerLayer.WAITING, sportsLayers) }?.let { waiting ->
             com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingCard(
                 game = uiState.title,
                 startMs = waiting.startMs,
