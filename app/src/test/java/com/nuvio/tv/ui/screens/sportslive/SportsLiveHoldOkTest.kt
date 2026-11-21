@@ -167,6 +167,21 @@ class SportsLiveHoldOkTest {
     }
 
     @Test
+    fun `a report snapshot that fails at the hold never throws from the key handler, and Report saves one later`() {
+        val later = mutableListOf<String>()
+        val sheet = holdOkSheet("settings/{x}", capture = { error("snapshot") }, reportLater = { later += it })
+        assertEquals("Settings", sheet.title)
+        assertTrue(later.isEmpty())
+        sheet.save()
+        assertEquals(listOf("Hold OK (settings)"), later)
+        // A snapshot that builds is the one saved.
+        var saved = 0
+        holdOkSheet("settings", capture = { { saved++ } }, reportLater = { later += it }).save()
+        assertEquals(1, saved)
+        assertEquals(1, later.size)
+    }
+
+    @Test
     fun `a Hold OK report says From Hold OK and the screen`() {
         val route = "playback_settings"
         val input = SportsLiveReportInput(

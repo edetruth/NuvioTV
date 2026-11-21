@@ -229,7 +229,17 @@ class SportsLiveZapViewModel internal constructor(
         identify = { items -> identifier?.offer(items) },
         report = { trigger -> reporter?.report(trigger) },
         guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.PANEL),
-        captureReport = { trigger -> reporter?.capture(trigger) ?: {} },
+        // L6: a snapshot that fails at the hold saves one built when Report a problem is picked, never a crash.
+        captureReport = { trigger ->
+            reporter?.let { r ->
+                val save: () -> Unit = try {
+                    r.capture(trigger)
+                } catch (_: Exception) {
+                    { r.report(trigger) }
+                }
+                save
+            } ?: {}
+        },
         channelPicks = prefs?.channelPicks ?: flowOf(SportsLiveChannelPicks.NONE),
         updateChannelPicks = { change -> prefs?.updateChannelPicks(change) }
     )
