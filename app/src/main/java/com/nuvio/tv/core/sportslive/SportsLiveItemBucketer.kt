@@ -697,9 +697,24 @@ object SportsLiveItemBucketer {
         val sportA = SportsLiveTeams.knownSport(a) ?: return true
         val sportB = SportsLiveTeams.knownSport(b) ?: return true
         if (sportA.equals(sportB, ignoreCase = true)) return true
+        // Volleyball and handball (live.23): known sports, so a copy of one never agrees with another sport's copy.
+        val otherA = otherSportOf(sportA)
+        val otherB = otherSportOf(sportB)
+        if (otherA != null || otherB != null) return otherA == otherB
         val kindsA = sportKinds(sportA) ?: return true
         val kindsB = sportKinds(sportB) ?: return true
         return kindsA.any { it in kindsB }
+    }
+
+    // Sports with no [SportsLiveSportKind] that still tell two copies apart, by a word of their sport ("Beach Volleyball").
+    private val OTHER_SPORTS = listOf(
+        "volleyball" to Regex("""volley"""),
+        "handball" to Regex("""handball|balonmano|handebol|pallamano""")
+    )
+
+    private fun otherSportOf(sport: String): String? {
+        val text = SportsLiveTeams.foldAccents(sport).lowercase()
+        return OTHER_SPORTS.firstOrNull { (_, regex) -> regex.containsMatchIn(text) }?.first
     }
 
     private val bareFootball = Regex("""^\s*football\s*$""", RegexOption.IGNORE_CASE)

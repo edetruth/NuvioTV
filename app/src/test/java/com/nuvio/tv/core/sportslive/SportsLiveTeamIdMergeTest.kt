@@ -95,9 +95,15 @@ class SportsLiveTeamIdMergeTest {
     }
 
     @Test
-    fun `only soccer and American football are read as one football word, never basketball`() {
+    fun `only soccer and American football are read as one football word, never basketball, volleyball or handball`() {
         val ncaaf = game("a", "Duke vs Clemson", "NCAAF")
         assertEquals(2, mergeFootball(ncaaf, game("b", "Clemson Tigers vs Duke Blue Devils", "Basketball")).size)
+        // Volleyball and handball are sports of their own, never the football game of the same two schools.
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Clemson Tigers vs Duke Blue Devils", "Volleyball")).size)
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Duke vs Clemson", "Women's Volleyball")).size)
+        assertEquals(2, mergeFootball(ncaaf, game("b", "Duke vs Clemson", "Handball")).size)
+        // Two volleyball copies still merge.
+        assertEquals(1, mergeFootball(game("a", "Duke vs Clemson", "Volleyball"), game("b", "Clemson vs Duke", "Beach Volleyball")).size)
         // Another pairing filed under soccer stays its own row.
         assertEquals(2, mergeFootball(ncaaf, game("b", "Toledo Rockets vs Duke Blue Devils", "Soccer")).size)
     }
