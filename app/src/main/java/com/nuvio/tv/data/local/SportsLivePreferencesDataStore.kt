@@ -97,6 +97,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val panelHintShownKey = intPreferencesKey("sports_live_panel_hint_shown")
     private val panelLastOpenKey = longPreferencesKey("sports_live_panel_last_open")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
+    private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     // Local only (not in SportsLiveSettingsSync): where each followed team's replay was left, by ESPN event id.
     private val replayPositionsKey = stringPreferencesKey("sports_live_replay_positions")
@@ -637,6 +638,20 @@ class SportsLivePreferencesDataStore @Inject constructor(
             prefs[panelLastOpenKey] = nowMs
         }
         return show
+    }
+
+    /**
+     * Called once per dual screen entry (live.24): true when its keys hint shows this time ([show] of the times it has
+     * shown: the first few entries), which is then counted.
+     */
+    suspend fun claimDualKeysHint(show: (shownCount: Int) -> Boolean): Boolean {
+        var shows = false
+        store().edit { prefs ->
+            val shown = prefs[dualHintShownKey] ?: 0
+            shows = show(shown)
+            if (shows) prefs[dualHintShownKey] = shown + 1
+        }
+        return shows
     }
 
     /** The dual screen layout the profile chose last (#123): a [com.nuvio.tv.ui.screens.sportslive.dual.DualLayout] name; null: never chosen. */

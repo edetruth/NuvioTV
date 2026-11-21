@@ -159,6 +159,22 @@ data class SportsLiveZapSession(
     }
 }
 
+/**
+ * The list a zap session started on [tab] walks (live.24, audit G14/G15): Channels and Replays their own list
+ * ([listed]), Live now its games; every other tab (Upcoming, a game just started there) the Live now games ([liveNow]),
+ * with [item] first when they lack it, never the games that have not started. The session freezes its order at the
+ * first zap ([SportsLiveZapSession.withFrozenLineup]).
+ */
+internal fun sportsLiveZapSource(
+    tab: SportsLiveTab,
+    item: SportsLiveItem,
+    listed: List<SportsLiveItem>,
+    liveNow: List<SportsLiveItem>
+): Pair<List<SportsLiveItem>, SportsLiveTab> = when (tab) {
+    SportsLiveTab.LIVE_NOW, SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS -> listed to tab
+    else -> (if (liveNow.any { it.streamKey == item.streamKey }) liveNow else listOf(item) + liveNow) to SportsLiveTab.LIVE_NOW
+}
+
 /** A chip of the player's live games panel (#68): [filter] is a sport or "★ My teams"; null is All. */
 data class ZapPanelChip(val filter: String?)
 

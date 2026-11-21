@@ -393,6 +393,13 @@ class SportsLiveZapViewModel internal constructor(
     private val _panelKeysHint = MutableStateFlow(false)
     val panelKeysHint: StateFlow<Boolean> = _panelKeysHint.asStateFlow()
 
+    /**
+     * The guide's and the panel's "Scores held 1:15 to match your stream" hold (TV report #14), m:ss; null when no hold
+     * applies or Scores is not Show ([scoreHoldText]).
+     */
+    val scoreHold: StateFlow<String?> = combine(liveScores.scoreHoldMs, liveScores.mode) { holdMs, mode -> scoreHoldText(holdMs, mode) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     // The panel's games are tracked for live scores only while it is open: the section stops its own
     // tracking when the player covers it (ON_STOP), so the player has its own scope.
     private val scoreTracker = LiveScoresTracker(LiveScoresRepository.SCREEN_PLAYER_PANEL, liveScores)
@@ -463,7 +470,7 @@ class SportsLiveZapViewModel internal constructor(
             val scopedKeys = scoped.mapTo(HashSet()) { it.streamKey }
             val moreLive = SportsLiveMoreLive.groups(games.filter { it.streamKey !in scopedKeys }, others)
             val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) moreLive.flatMap { it.items } else scoped
-            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive)
+            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive, mySportsPicked = !sports.isDefault)
         }
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
@@ -515,8 +522,12 @@ class SportsLiveZapViewModel internal constructor(
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
             PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished, favorites)
         }.flowOn(computeDispatcher)
-            // A player whose sources cannot be read keeps the session's own order.
-            .catch { }
+            // An update that throws is retried, never the end of the lineup (TV report #14: `.catch { }` here ended it for the
+            // player's life, and the guide's scores and clocks stood still). Until it recovers, the last lineup stays; a
+            // player whose sources cannot be read keeps the session's own order (null).
+            .retryAfterError(LINEUP_RETRY_MS) { error ->
+                if (BuildConfig.IS_DEBUG_BUILD) android.util.Log.w("SportsLiveZap", "panel lineup update failed, retrying", error)
+            }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     }
 
@@ -585,7 +596,8 @@ class SportsLiveZapViewModel internal constructor(
                 } else {
                     emptyList()
                 },
-                loading = repo.latest.value == null
+                loading = repo.latest.value == null,
+                mySportsPicked = current.list.mySportsPicked
             )
             // Laid out here, off the main thread.
             state.guide
@@ -1088,7 +1100,10 @@ class SportsLiveZapViewModel internal constructor(
         }
         val idle = playerIdle && !partyActive && controller.session(contentId) != null
         val menu = idle && playerOkOffered()
-        return when (playerOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, guide = idle && guideOkOpens(), menu = menu)) {
+        // Audit G9 (live.24): in every other player state (a replay, OK = Pause, the end card, the controls) the press
+        // stays the player's, and only a hold of it opens the player menu, Report a problem first.
+        val lateMenu = !partyActive && nowPlaying != null
+        return when (playerOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, guide = idle && guideOkOpens(), menu = menu, lateMenu = lateMenu)) {
             SportsLivePlayerOk.OPEN_GUIDE -> {
                 openPanel()
                 true
@@ -1122,8 +1137,8 @@ class SportsLiveZapViewModel internal constructor(
         focusedRowKey = null
         // #164: the order is taken afresh as the panel opens, then kept while it is open.
         frozenOrder = null
-        // BUG6/Q10: CH± follow the order the panel shows from now on.
-        controller.thaw(contentId)
+        // CH± keep the zap order frozen at the session's first zap (user, live.24: ▲ then ▼ always returns to the game
+        // you were on); opening the guide no longer re-takes it, picking a game from it does ([PlayerZapController.pick]).
         lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
@@ -1496,13 +1511,22 @@ private data class PanelList(
     /** [all] as My sports lists them (#146). */
     val scoped: List<SportsLiveItem> = all,
     /** More live's groups (user 2026-11-21): the live games My sports leaves out and the listings that are no game. */
-    val moreLive: List<SportsLiveMoreLive.Group> = emptyList()
+    val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
+    /** My sports is picked (not the default): the first chip reads "My sports" (TV report #14). */
+    val mySportsPicked: Boolean = false
 )
 
 /**
  * OK on [item] in the panel or guide only closes it (J5) when [item] is the game [playing] (or another addon's copy of
  * it) and the stream is healthy: playing, not buffering, stalled or failed. Otherwise the pick restarts or switches (M1).
  */
+/**
+ * The stream playing is healthy for a panel pick of its own game (M1; review L1, live.24): playing, or paused by the
+ * viewer (not buffering), with no error. Only a buffering, stalled or failed stream is started again; a pause is kept,
+ * with its place.
+ */
+internal fun panelStreamHealthy(isBuffering: Boolean, hasError: Boolean): Boolean = !isBuffering && !hasError
+
 internal fun panelPickKeepsPlaying(item: SportsLiveItem, playing: SportsLiveItem?, streamHealthy: Boolean): Boolean =
     streamHealthy && playing != null && SportsLivePlayingGame.isSameGame(item, playing)
 
@@ -1573,3 +1597,6 @@ private const val PANEL_TICK_MS = 30_000L
 
 /** How long the team directory must be still before the panel list is merged again (live.18). */
 private const val REBUCKET_DEBOUNCE_MS = 2_000L
+
+/** The panel lineup is computed again this long after an update threw (doubling, [retryAfterError]). */
+private const val LINEUP_RETRY_MS = 1_000L

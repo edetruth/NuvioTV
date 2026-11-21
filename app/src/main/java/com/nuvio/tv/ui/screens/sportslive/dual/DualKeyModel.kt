@@ -10,21 +10,23 @@ import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
  * YouTube TV multiview and Apple TV multiview (the D-pad moves the active view and the sound follows it; Select on
  * the active view goes full screen; Apple's one larger view).
  *
- *   ◀ ▶       move the white ring to the other pane; the sound follows it. Past the edge (◀ on the left pane,
- *             ▶ on the right one): pick the game of the other pane (#57).
+ *   ◀ ▶       side by side: move the white ring (and the sound) to the other pane; past the edge nothing more.
+ *             Big + small (user, live.24): swap which game is big; the sound follows the big one. Neither ever opens
+ *             the picker (live.23 TV report: ◀ pressed to swap sizes opened "Pick another to watch"); that is Hold OK
+ *             › Change the other game.
  *   ▲ ▼       change the ringed pane's game (previous / next live game). On a pane card with buttons (a link
  *             starting, the game over) they move through its buttons first; past the top or bottom button they
  *             change the game, so a card never traps the pane.
  *   OK        split, or the big pane: full screen (Back there returns to dual with both games). The small pane of
  *             big + small: it becomes the big one (the sound stays with it). On a pane card: presses the selected
  *             button ("Couldn't play": choose a stream; an end card with nothing next: closes it).
- *   Hold OK   the app-wide "more" menu (#88: a key keeps its meaning): Layout · Swap panes · Change the other game ·
- *             Full screen ([dualMenuEntries]).
+ *   Hold OK   the app-wide "more" menu (#88: a key keeps its meaning): Report a problem · Layout · Swap panes ·
+ *             Change the other game · Full screen ([dualMenuEntries]).
  *   Back      closes a pane's end card first; then as before (back to the full player or out).
  *
  * Optional shortcuts: MENU swaps the panes, held it changes the layout (#123); CH+/CH- and next/previous change the
- * game, on a card too; INFO shows the game info (#139). The keys hint names the D-pad ones on every entry, for
- * a few seconds or until ◀ ▶ or OK is pressed.
+ * game, on a card too; INFO shows the game info (#139). The keys hint names ◀ ▶, OK and Hold OK on the profile's
+ * first few entries ([DUAL_KEYS_HINT_OPENS]), for a few seconds or until ◀ ▶ or OK is pressed.
  */
 
 /** What a key does in dual screen, from [dualKeyRoute]. */
@@ -32,8 +34,8 @@ internal sealed interface DualKeyRoute {
     /** The ring (and the sound) moves to [side]. */
     data class Highlight(val side: Side) : DualKeyRoute
 
-    /** ◀ on the left pane, or ▶ on the right one: the picker for the other pane's game (#57). */
-    data object PickOtherGame : DualKeyRoute
+    /** Big + small: the panes trade places, so the other game is big (and has the sound). */
+    data object SwapBig : DualKeyRoute
 
     /** The ringed pane's card selects its button [index]. */
     data class CardButton(val index: Int) : DualKeyRoute
@@ -58,10 +60,11 @@ internal fun dualCardButtons(pane: DualPane): Int = when {
  */
 internal fun dualKeyRoute(state: DualState, keyCode: Int, cardSelected: Int = 0): DualKeyRoute? {
     when (keyCode) {
-        KeyEvent.KEYCODE_DPAD_LEFT ->
-            return if (state.highlighted == Side.LEFT) DualKeyRoute.PickOtherGame else DualKeyRoute.Highlight(Side.LEFT)
-        KeyEvent.KEYCODE_DPAD_RIGHT ->
-            return if (state.highlighted == Side.RIGHT) DualKeyRoute.PickOtherGame else DualKeyRoute.Highlight(Side.RIGHT)
+        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> return when {
+            state.layout == DualLayout.BIG_SMALL -> DualKeyRoute.SwapBig
+            keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> DualKeyRoute.Highlight(Side.LEFT)
+            else -> DualKeyRoute.Highlight(Side.RIGHT)
+        }
     }
     val pane = state.pane(state.highlighted)
     val buttons = dualCardButtons(pane)
@@ -89,8 +92,26 @@ internal enum class DualOk {
     FULL_SCREEN
 }
 
-/** What a short OK does in [state] (see the key model above). */
-internal fun dualOkRoute(state: DualState): DualOk {
+/**
+ * The pane a short OK and Back act on (live.24, audit G1: a card owns its keys wherever it sits): the ringed pane; or,
+ * when it has no card of its own, the other pane while that one shows the error card ("OK Try another link · BACK
+ * Close this side") or an end card. In big + small the ring never sits on the small pane, which is where an alert's
+ * game lands, so its cards must be reachable without it.
+ */
+internal fun dualKeySide(state: DualState): Side {
+    val ringed = state.highlighted
+    if (dualPaneOwnsKeys(state.pane(ringed)) || dualCardButtons(state.pane(ringed)) > 0) return ringed
+    return if (dualPaneOwnsKeys(state.pane(ringed.other))) ringed.other else ringed
+}
+
+/** A pane card that takes OK and Back: the error card after every link failed, or an end card still up. */
+internal fun dualPaneOwnsKeys(pane: DualPane): Boolean =
+    pane.status == PaneStatus.Error || (pane.status == PaneStatus.Ended && pane.end != null)
+
+/** What a short OK does in [state] (see the key model above), on the pane [dualKeySide] picks. */
+internal fun dualOkRoute(state: DualState): DualOk = dualRingedOkRoute(state.copy(highlighted = dualKeySide(state)))
+
+private fun dualRingedOkRoute(state: DualState): DualOk {
     val pane = state.pane(state.highlighted)
     return when {
         dualCardButtons(pane) > 0 || (pane.status == PaneStatus.Ended && pane.end != null) -> DualOk.CARD_BUTTON
@@ -101,21 +122,30 @@ internal fun dualOkRoute(state: DualState): DualOk {
 }
 
 /** One line of the keys hint: a key and what it does. */
-internal enum class DualHint { MOVE, ZAP, OK_FULL_SCREEN, OK_MAKE_BIG, HOLD_OK_MORE }
+internal enum class DualHint { MOVE, SWAP_BIG, OK_FULL_SCREEN, OK_MAKE_BIG, HOLD_OK_MORE }
 
 /**
- * The keys hint for [state] (research 8): the D-pad model only, for the panes playing (a pane card names its own
- * keys). ◀ ▶ names the edge too; OK says what it does on the ringed pane; Hold OK opens the menu.
+ * The keys hint for [state] (research 8, live.24): three keys, for the panes playing (a pane card names its own keys).
+ * ◀ ▶ say what they do in this layout ("Swap big" or "Sound"); OK says what it does on the ringed pane; Hold OK opens
+ * the menu. ▲ ▼ are left out: they are found by use, and the hint stays short enough to read at a glance.
  */
 internal fun dualKeyHints(state: DualState): List<DualHint> = listOf(
-    DualHint.MOVE,
-    DualHint.ZAP,
+    if (state.layout == DualLayout.BIG_SMALL) DualHint.SWAP_BIG else DualHint.MOVE,
     if (state.layout == DualLayout.BIG_SMALL && state.highlighted == Side.RIGHT) DualHint.OK_MAKE_BIG else DualHint.OK_FULL_SCREEN,
     DualHint.HOLD_OK_MORE
 )
 
+/** The dual keys hint shows on the profile's first this many dual screen entries (user, live.24), then never. */
+internal const val DUAL_KEYS_HINT_OPENS = 3
+
+/** Whether the dual keys hint shows on this entry, after it has shown [shownCount] times. */
+internal fun shouldShowDualKeysHint(shownCount: Int): Boolean = shownCount < DUAL_KEYS_HINT_OPENS
+
 /** An entry of the Hold OK menu in dual screen. */
 internal enum class DualMenuEntry {
+    /** Report a problem (#172), with the snapshot taken as OK was held: first, as in every Hold OK sheet (#218). */
+    REPORT_PROBLEM,
+
     /** Split now: big + small. */
     LAYOUT_BIG_SMALL,
 
@@ -130,8 +160,12 @@ internal enum class DualMenuEntry {
     FULL_SCREEN
 }
 
-/** The Hold OK menu for [state], in its order: Layout (the other one) · Swap panes · Change the other game · Full screen. */
+/**
+ * The Hold OK menu for [state], in its order: Report a problem · Layout (the other one) · Swap panes · Change the other
+ * game · Full screen. Five entries: it never grows past six (user, live.24).
+ */
 internal fun dualMenuEntries(state: DualState): List<DualMenuEntry> = listOf(
+    DualMenuEntry.REPORT_PROBLEM,
     if (state.layout == DualLayout.SPLIT) DualMenuEntry.LAYOUT_BIG_SMALL else DualMenuEntry.LAYOUT_SIDE_BY_SIDE,
     DualMenuEntry.SWAP,
     DualMenuEntry.CHANGE_OTHER_GAME,

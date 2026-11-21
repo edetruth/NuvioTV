@@ -771,6 +771,9 @@ class PlayerRuntimeController(
     internal var softwareVideoDecoderUrl: String? = null
     /** The link that already had its one hardware-decoder retry ([tryVideoDecoderRecovery]). */
     internal var videoDecoderHardwareRetriedUrl: String? = null
+
+    /** The link retried once after the dual pane held for this player let go of it (review L2). */
+    internal var heldPaneRetriedUrl: String? = null
     /** The link the "compatibility mode" note was shown for ([maybeShowCompatibilityNote]). */
     internal var compatibilityNoteShownUrl: String? = null
     internal var startupRetryCount: Int = 0

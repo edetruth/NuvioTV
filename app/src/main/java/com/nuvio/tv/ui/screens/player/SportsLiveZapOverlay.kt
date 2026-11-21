@@ -183,6 +183,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val panel by viewModel.panel.collectAsState()
     val panelReadiness by viewModel.panelReadiness.collectAsState()
     val panelKeysHint by viewModel.panelKeysHint.collectAsState()
+    // TV report #14: "Scores held 1:15 to match your stream" in the guide's and the panel's footer.
+    val scoreHold by viewModel.scoreHold.collectAsState()
     val openDual = LocalOpenSportsLiveDual.current
 
     // The last banner, kept on screen while it fades out.
@@ -300,7 +302,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 onKey = viewModel::onPanelKey,
                 onClose = { viewModel.closePanel() },
                 registerKeys = { handler -> viewModel.guideKeyHandler = handler },
-                memory = guideMemory
+                memory = guideMemory,
+                scoreHold = scoreHold
             )
         }
     } else {
@@ -331,7 +334,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     onKey = viewModel::onPanelKey,
                     open = panelOpen,
                     readiness = panelReadiness,
-                    keysHint = panelKeysHint
+                    keysHint = panelKeysHint,
+                    scoreHold = scoreHold
                 )
             }
         }
@@ -684,7 +688,9 @@ private fun LiveGamesPanel(
     /** Ready / no working stream by stream key (#147, live.20 1b); a game with none has no mark. */
     readiness: Map<String, SportsLiveReadyMark> = emptyMap(),
     /** The keys hint shows under the list (live.20: the profile's first few openings). */
-    keysHint: Boolean = false
+    keysHint: Boolean = false,
+    /** The scores' hold for the stream playing, m:ss ([scoreHoldText]); null: no hold line. */
+    scoreHold: String? = null
 ) {
     // #140: the list starts at its top, never scrolled to centre one.
     val listState = rememberLazyListState()
@@ -1029,6 +1035,18 @@ private fun LiveGamesPanel(
                         modifier = Modifier.padding(start = PANEL_FOOTER_START, top = 2.dp)
                     )
                 }
+                // TV report #14: why the scores trail ESPN. Its own line on the right, under the keys, never cutting them.
+                scoreHold?.let { hold ->
+                    Text(
+                        text = stringResource(R.string.sports_live_scores_held, hold),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                        color = SportsLiveTokens.Colors.TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        modifier = Modifier.fillMaxWidth().padding(start = PANEL_FOOTER_START, end = PANEL_ROW_ROOM, top = 2.dp)
+                    )
+                }
             }
         }
     }
@@ -1047,7 +1065,7 @@ private fun PanelFilter(
     onOpenChange: (Boolean) -> Unit,
     onFocused: (Boolean) -> Unit
 ) {
-    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
+    val scoped = state.mySportsScoped
     val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
     // More live (user 2026-11-21): the All sports value is More live's view.
     val allSportsLabel = stringResource(R.string.sports_live_more_live_title)

@@ -15,7 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #136: grouped cards, their timing, where they sit, who takes a key, and the peek. */
+/** #136 and the live.24 redesign: one alert per card, its time, where it sits, who takes a key, the countdown; the peek kept. */
 class SportsLiveAlertCardsTest {
 
     private val pacers = item("Pacers @ 76ers", followed = true)
@@ -25,15 +25,21 @@ class SportsLiveAlertCardsTest {
     private fun score(game: com.nuvio.tv.domain.model.SportsLiveItem = pacers, lead: Boolean = false) =
         SportsLiveAlert.ScoreChange(game, live(10, 11), ScoreSide.AWAY, leadChange = lead)
 
-    // Per-alert duration
+    // Per-alert time on screen (live.24)
 
     @Test
-    fun `a plain score shows about six seconds, a lead change or a final longer`() {
-        assertEquals(6_000L, SportsLiveAlertCards.durationMs(score()))
-        assertEquals(SportsLiveAlertCards.BIG_MS, SportsLiveAlertCards.durationMs(score(lead = true)))
-        assertEquals(SportsLiveAlertCards.BIG_MS, SportsLiveAlertCards.durationMs(SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false)))
-        assertEquals(SportsLiveAlertCards.BIG_MS, SportsLiveAlertCards.durationMs(SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = true)))
-        assertTrue(SportsLiveAlertCards.BIG_MS > SportsLiveAlertCards.NORMAL_MS)
+    fun `an actionable card stays ten seconds, a lead change twelve, Full time six, never shorter than accessibility asks`() {
+        assertEquals(10_000L, SportsLiveAlertCards.durationMs(score()))
+        assertEquals(12_000L, SportsLiveAlertCards.durationMs(score(lead = true)))
+        assertEquals(6_000L, SportsLiveAlertCards.durationMs(SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false)))
+        assertEquals(10_000L, SportsLiveAlertCards.durationMs(SportsLiveAlert.Kickoff(lakers, null)))
+        // "Time to take action" set to 1 minute: the card waits that long; a recommendation below ours never shortens it.
+        assertEquals(60_000L, SportsLiveAlertCards.durationMs(score()) { _, _ -> 60_000L })
+        assertEquals(10_000L, SportsLiveAlertCards.durationMs(score()) { _, _ -> 2_000L })
+        // Only actionable cards ask with controls on them.
+        var asked: Boolean? = null
+        SportsLiveAlertCards.durationMs(SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false)) { ms, actionable -> asked = actionable; ms }
+        assertEquals(false, asked)
     }
 
     @Test
@@ -50,69 +56,78 @@ class SportsLiveAlertCardsTest {
         // Level, then ahead (or ahead, then level) is no lead change.
         assertFalse(change(live(10, 10), live(10, 12)).leadChange)
         assertFalse(change(live(10, 8), live(10, 10)).leadChange)
-        assertEquals(SportsLiveAlertCards.BIG_MS, SportsLiveAlertCards.durationMs(change(live(10, 8), live(10, 11))))
+        assertEquals(SportsLiveAlertCards.LEAD_CHANGE_MS, SportsLiveAlertCards.durationMs(change(live(10, 8), live(10, 11))))
     }
 
-    // Grouping and cycling
+    // One alert per card, the highest priority (live.24)
 
     @Test
-    fun `alerts within eight seconds join one card, later ones wait for the next`() {
-        val card = AlertCard(1, listOf(score(pacers)), shownAtMs = START)
-        assertTrue(SportsLiveAlertCards.canJoin(card, score(lakers), START + 5_000))
-        val joined = SportsLiveAlertCards.join(card, score(lakers), START + 5_000)
-        assertEquals(listOf(pacers, lakers), joined.alerts.map { it.item })
-        assertEquals(START + 5_000, joined.lastJoinedAtMs)
-        // Eight seconds after the newest one still joins (the card is still up); past that, a card of its own.
-        val big = AlertCard(2, listOf(score(pacers, lead = true)), shownAtMs = START)
-        assertTrue(SportsLiveAlertCards.canJoin(big, score(knicks), START + 8_000))
-        assertFalse(SportsLiveAlertCards.canJoin(big, score(knicks), START + 8_001))
-    }
-
-    @Test
-    fun `a kickoff prompt never groups, and nothing joins it`() {
+    fun `of the alerts waiting, my team's kickoff wins, then a score, then full time, then a close finish`() {
+        val crunch = SportsLiveAlert.Crunch(knicks, live(80, 79), mockk(relaxed = true), namesOnly = false)
+        val fullTime = SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false)
         val kickoff = SportsLiveAlert.Kickoff(lakers, null)
-        val card = AlertCard(1, listOf(score()), shownAtMs = START)
-        assertFalse(SportsLiveAlertCards.canJoin(card, kickoff, START + 1_000))
-        assertFalse(SportsLiveAlertCards.canJoin(AlertCard(2, listOf(kickoff), START), score(), START + 1_000))
+        val waiting = listOf(crunch to START, fullTime to START + 1, score(pacers) to START + 2, kickoff to START + 3)
+        assertEquals(3, SportsLiveAlertCards.next(waiting))
+        assertEquals(2, SportsLiveAlertCards.next(waiting.dropLast(1)))
+        assertEquals(1, SportsLiveAlertCards.next(waiting.take(2)))
+        // A tie: the earliest raised.
+        assertEquals(0, SportsLiveAlertCards.next(listOf(score(pacers) to START, score(lakers) to START + 1)))
+        assertEquals(null, SportsLiveAlertCards.next(emptyList()))
     }
 
     @Test
-    fun `a card that has left takes no more alerts`() {
-        val card = AlertCard(1, listOf(score()), shownAtMs = START)
-        assertEquals(START + 6_000, SportsLiveAlertCards.endsAtMs(card))
-        assertFalse(SportsLiveAlertCards.canJoin(card, score(lakers), START + 6_000))
+    fun `alerts raised together show one card, the highest priority, the other toasts are dropped and kickoffs wait`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        val kickoff = SportsLiveAlert.Kickoff(item("Bulls @ Nets", followed = true), null)
+        alerts.enqueue(listOf(score(pacers), score(lakers, lead = true), kickoff), now)
+        val first = alerts.current.value!!
+        assertEquals(kickoff, first.alert)
+        // The scores raised with it were dropped as stale (the guide and the rows still show them): nothing follows.
+        alerts.close(first, AlertAnswer.DISMISS)
+        assertEquals(null, alerts.current.value)
+        // Two scores together: the lead change is no more important than the other, so the earlier one shows alone.
+        alerts.enqueue(listOf(score(pacers), score(lakers, lead = true)), now + 1_000)
+        val second = alerts.current.value!!
+        assertEquals(pacers, second.alert.item)
+        alerts.close(second, AlertAnswer.TIMEOUT)
+        assertEquals(null, alerts.current.value)
     }
 
     @Test
-    fun `a newer alert for a game on the card takes that one's place`() {
-        val card = AlertCard(1, listOf(score(pacers), score(lakers)), shownAtMs = START)
-        val ended = SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false)
-        val joined = SportsLiveAlertCards.join(card, ended, START + 2_000)
-        assertEquals(2, joined.alerts.size)
-        assertEquals(ended, joined.alerts[0])
+    fun `while a card is up a toast no more important is dropped, a kickoff waits its turn, nothing cycles`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(score(pacers)), now)
+        val card = alerts.current.value!!
+        alerts.enqueue(listOf(score(lakers)), now + 1_000)
+        val kickoff = SportsLiveAlert.Kickoff(item("Bulls @ Nets", followed = true), null)
+        alerts.enqueue(listOf(kickoff), now + 2_000)
+        // The card up is untouched: one alert, the same.
+        assertEquals(card, alerts.current.value)
+        // A close for a card no longer up changes nothing.
+        alerts.close(card.copy(id = card.id + 99), AlertAnswer.TIMEOUT)
+        assertEquals(card, alerts.current.value)
+        alerts.close(card, AlertAnswer.TIMEOUT)
+        assertEquals(kickoff, alerts.current.value!!.alert)
+        alerts.close(alerts.current.value!!, AlertAnswer.DISMISS)
+        // The second score was dropped, not queued.
+        assertEquals(null, alerts.current.value)
     }
 
     @Test
-    fun `a grouped card cycles through its alerts every three seconds`() {
-        val card = AlertCard(1, listOf(score(pacers), score(lakers), score(knicks)), shownAtMs = START)
-        assertEquals(0, SportsLiveAlertCards.showingIndex(card, START))
-        assertEquals(0, SportsLiveAlertCards.showingIndex(card, START + 2_999))
-        assertEquals(1, SportsLiveAlertCards.showingIndex(card, START + 3_000))
-        assertEquals(2, SportsLiveAlertCards.showingIndex(card, START + 6_500))
-        assertEquals(0, SportsLiveAlertCards.showingIndex(card, START + 9_000))
-        assertEquals(0, SportsLiveAlertCards.showingIndex(AlertCard(2, listOf(score()), START), START + 4_000))
+    fun `over a movie only a kickoff shows, and no close finish on a Sports and Live screen`() {
+        val movie = SportsLiveWatching(inPlayer = true, sportsPlayback = false)
+        val crunch = SportsLiveAlert.Crunch(knicks, live(80, 79), mockk(relaxed = true), namesOnly = false)
+        assertTrue(SportsLiveAlerts.mayShowOver(SportsLiveAlert.Kickoff(lakers, null), movie))
+        assertFalse(SportsLiveAlerts.mayShowOver(score(), movie))
+        assertFalse(SportsLiveAlerts.mayShowOver(SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false), movie))
+        assertFalse(SportsLiveAlerts.mayShowOver(crunch, movie))
+        assertFalse(SportsLiveAlerts.mayShowOver(crunch, SportsLiveWatching(sportsLiveScreen = true)))
+        assertTrue(SportsLiveAlerts.mayShowOver(score(), SportsLiveWatching(sportsLiveScreen = true)))
+        assertTrue(SportsLiveAlerts.mayShowOver(crunch, SportsLiveWatching(inPlayer = true, sportsPlayback = true)))
     }
 
-    @Test
-    fun `a grouped card stays a turn for each, from its last join, and never past twenty seconds`() {
-        val two = AlertCard(1, listOf(score(pacers), score(lakers)), shownAtMs = START, lastJoinedAtMs = START + 4_000)
-        // Two turns are shorter than one alert's six seconds: six from the last join.
-        assertEquals(START + 10_000, SportsLiveAlertCards.endsAtMs(two))
-        val three = AlertCard(1, listOf(score(pacers), score(lakers, lead = true), score(knicks)), shownAtMs = START, lastJoinedAtMs = START + 2_000)
-        assertEquals(START + 2_000 + 9_000, SportsLiveAlertCards.endsAtMs(three))
-        val many = AlertCard(1, List(8) { score(item("Team$it @ Other$it", followed = true)) }, shownAtMs = START, lastJoinedAtMs = START + 7_000)
-        assertEquals(START + SportsLiveAlertCards.MAX_CARD_MS, SportsLiveAlertCards.endsAtMs(many))
-    }
 
     // Placement
 
@@ -137,109 +152,129 @@ class SportsLiveAlertCardsTest {
         assertTrue(SportsLiveAlertPlacement.sameGame(knicks, merged))
     }
 
-    // Who takes a key
+    // Who takes a key (live.24): if a card shows "OK", OK is the card's
 
-    private val actionable = AlertKeyContext(cardActionable = true, canPeek = true, peeking = false)
-
-    @Test
-    fun `an actionable card watches on Play or a held OK, peeks on Down and goes on Back, never on a plain OK`() {
-        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, actionable))
-        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY, actionable))
-        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, actionable, held = true))
-        // Research Q17: a plain OK is the screen's (the player's controls).
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, actionable))
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_ENTER, actionable))
-        assertEquals(AlertKeyAction.PEEK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, actionable))
-        assertEquals(AlertKeyAction.DISMISS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, actionable))
-        // Everything else is the player's: Up still zaps, Left still opens the panel, CH- still zaps.
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, actionable))
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_LEFT, actionable))
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_CHANNEL_DOWN, actionable))
-        // A held key other than OK is never an alert's.
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, actionable, held = true))
-    }
+    private val scoreCard = AlertCard(1, score(), raisedAtMs = START)
 
     @Test
-    fun `with no card, or the player's controls up, every key stays the player's`() {
-        val notActionable = AlertKeyContext(cardActionable = false, canPeek = false, peeking = false)
-        listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE).forEach { code ->
-            assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(code, notActionable))
+    fun `a plain OK acts on a card that shows OK, once it has been up 0_8 s`() {
+        val early = SportsLiveAlertKeys.context(scoreCard, shownAtMs = START, nowMs = START + 799)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, early))
+        // Back closes it from the start.
+        assertEquals(AlertKeyAction.DISMISS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, early))
+        val ready = SportsLiveAlertKeys.context(scoreCard, shownAtMs = START, nowMs = START + 800)
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, ready))
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_ENTER, ready))
+        // ▶ is never an alert's, nor the arrows or the zap keys.
+        for (code in listOf(
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_CHANNEL_DOWN
+        )) {
+            assertEquals("key $code", AlertKeyAction.PASS, SportsLiveAlertKeys.route(code, ready))
         }
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, notActionable, held = true))
+        // A kickoff and the no-stream note take OK too.
+        val kickoff = AlertCard(2, SportsLiveAlert.Kickoff(lakers, null), START)
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, SportsLiveAlertKeys.context(kickoff, START, START + 1_000)))
+        val note = AlertCard(3, SportsLiveAlert.Kickoff(lakers, null, noStreamYet = true), START)
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, SportsLiveAlertKeys.context(note, START, START + 1_000)))
     }
 
     @Test
-    fun `where no peek is possible Down is left to the screen`() {
-        val dual = AlertKeyContext(cardActionable = true, canPeek = false, peeking = false)
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, dual))
-        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, dual))
-    }
-
-    @Test
-    fun `during a peek OK stays, Back returns, the volume works and nothing else reaches the player`() {
-        val peeking = AlertKeyContext(cardActionable = false, canPeek = false, peeking = true)
-        assertEquals(AlertKeyAction.PEEK_STAY, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, peeking))
-        assertEquals(AlertKeyAction.PEEK_RETURN, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, peeking))
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_VOLUME_UP, peeking))
-        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, peeking))
-        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_CHANNEL_UP, peeking))
-        // A card showing during a peek does not take OK from it, nor a kickoff toast.
-        assertEquals(AlertKeyAction.PEEK_STAY, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, peeking.copy(cardActionable = true)))
-        assertEquals(AlertKeyAction.PEEK_RETURN, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, peeking.copy(kickoff = true)))
-    }
-
-    // The kickoff toast (research Q17): never focus, never a plain OK
-
-    private val kickoffCard = AlertCard(1, listOf(SportsLiveAlert.Kickoff(lakers, null)), shownAtMs = START)
-
-    @Test
-    fun `the kickoff toast watches only on Play or a held OK, on every screen`() {
-        listOf(
-            SportsLiveAlertKeys.context(kickoffCard, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false),
-            SportsLiveAlertKeys.context(kickoffCard, canActHere = true, surfaceBusy = true, canPeek = true, peeking = false),
-            // Outside the player too (it used to take focus there).
-            SportsLiveAlertKeys.context(kickoffCard, canActHere = false, surfaceBusy = null, canPeek = false, peeking = false)
-        ).forEach { context ->
-            assertTrue(context.kickoff)
-            assertFalse(context.cardActionable)
-            assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, context))
-            assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY, context))
-            assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, context, held = true))
-        }
-    }
-
-    @Test
-    fun `under the kickoff toast OK, Back, the D-pad and the zap keys stay the screen's`() {
-        val context = SportsLiveAlertKeys.context(kickoffCard, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false, canBoth = true)
-        listOf(
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BACK,
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
-            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_VOLUME_UP
-        ).forEach { code ->
+    fun `Full time is information only, every key stays the screen's`() {
+        val fullTime = AlertCard(1, SportsLiveAlert.FullTime(pacers, final(101, 99), namesOnly = false), START)
+        assertFalse(SportsLiveAlertCards.actionable(fullTime.alert))
+        val context = SportsLiveAlertKeys.context(fullTime, START, START + 5_000)
+        for (code in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
             assertEquals("key $code", AlertKeyAction.PASS, SportsLiveAlertKeys.route(code, context))
         }
-        assertFalse(context.canBoth)
     }
 
     @Test
-    fun `over a movie or show the kickoff only informs, and once it closes nothing is taken`() {
-        val overMovie = SportsLiveAlertKeys.context(kickoffCard, canActHere = false, surfaceBusy = null, canPeek = false, peeking = false, kickoffKeys = false)
-        assertFalse(overMovie.kickoff)
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, overMovie))
-        val closed = SportsLiveAlertKeys.context(null, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false)
-        listOf(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BACK).forEach { code ->
-            assertEquals("key $code", AlertKeyAction.PASS, SportsLiveAlertKeys.route(code, closed))
-        }
+    fun `a card waiting under the guide or a menu takes no key, and its grace starts again when it shows`() {
+        // Raised while the guide is open: it waits.
+        var clock = AlertCardClock().step(START, busy = true)
+        assertEquals(null, clock.shownAtMs)
+        val waiting = SportsLiveAlertKeys.context(scoreCard, clock.shownAtMs, START + 3_000)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, waiting))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, waiting))
+        // The guide closes at +5 s: it shows, and OK is the screen's for 0.8 s more.
+        clock = clock.step(START + 5_000, busy = false)
+        assertEquals(START + 5_000, clock.shownAtMs)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, SportsLiveAlertKeys.context(scoreCard, clock.shownAtMs, START + 5_500)))
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, SportsLiveAlertKeys.context(scoreCard, clock.shownAtMs, START + 5_800)))
+        // A menu opens over it at +8 s: it hides again, its 3 s shown are kept; back at +9 s, a new grace.
+        clock = clock.step(START + 8_000, busy = true)
+        assertEquals(3_000L, clock.totalShownMs(START + 8_500))
+        clock = clock.step(START + 9_000, busy = false)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, SportsLiveAlertKeys.context(scoreCard, clock.shownAtMs, START + 9_100)))
     }
 
     @Test
-    fun `Back cancels only a running switch countdown`() {
-        val counting = SportsLiveAlertKeys.context(kickoffCard, canActHere = false, surfaceBusy = null, canPeek = false, peeking = false, countdown = true)
-        assertEquals(AlertKeyAction.PROMPT_CANCEL, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, counting))
-        assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, counting))
-        // A score card has no countdown.
-        val card = AlertCard(2, listOf(score()), shownAtMs = START)
-        assertFalse(SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false, countdown = true).countdown)
+    fun `a card's time counts only while it shows, and one that never shows goes stale after 30 s`() {
+        var clock = AlertCardClock().step(START, busy = false)
+        assertEquals(AlertCardClock.Fate.UP, clock.fate(scoreCard, START + 9_999, 10_000L))
+        clock = clock.step(START + 4_000, busy = true)
+        // 26 s under the guide: still 6 s to go once it shows again.
+        clock = clock.step(START + 30_000, busy = false)
+        assertEquals(AlertCardClock.Fate.UP, clock.fate(scoreCard, START + 35_999, 10_000L))
+        assertEquals(AlertCardClock.Fate.TIMED_OUT, clock.fate(scoreCard, START + 36_000, 10_000L))
+        // Never shown: stale at 30 s from being raised.
+        val never = AlertCardClock().step(START + 1_000, busy = true)
+        assertEquals(AlertCardClock.Fate.UP, never.fate(scoreCard, START + 29_999, 10_000L))
+        assertEquals(AlertCardClock.Fate.STALE, never.fate(scoreCard, START + 30_000, 10_000L))
+    }
+
+    @Test
+    fun `a held OK on a card goes back to the screens, a short one acts on its release`() {
+        val press = AlertOkPress()
+        assertEquals(AlertOkPress.Step.TAKE, press.onOk(KeyEvent.ACTION_DOWN, 0, downTime = 100L, cardTakes = true))
+        assertEquals(AlertOkPress.Step.ACT, press.onOk(KeyEvent.ACTION_UP, 0, downTime = 100L, cardTakes = false))
+        // Held until it repeats: handed back (the player menu, the Hold OK sheet); its release is not the card's.
+        assertEquals(AlertOkPress.Step.TAKE, press.onOk(KeyEvent.ACTION_DOWN, 0, downTime = 200L, cardTakes = true))
+        assertEquals(AlertOkPress.Step.HAND_BACK, press.onOk(KeyEvent.ACTION_DOWN, 1, downTime = 200L, cardTakes = false))
+        assertEquals(AlertOkPress.Step.NONE, press.onOk(KeyEvent.ACTION_DOWN, 2, downTime = 200L, cardTakes = false))
+        assertEquals(AlertOkPress.Step.NONE, press.onOk(KeyEvent.ACTION_UP, 0, downTime = 200L, cardTakes = false))
+        // An OK the card does not take is never followed.
+        assertEquals(AlertOkPress.Step.NONE, press.onOk(KeyEvent.ACTION_DOWN, 0, downTime = 300L, cardTakes = false))
+        assertEquals(AlertOkPress.Step.NONE, press.onOk(KeyEvent.ACTION_UP, 0, downTime = 300L, cardTakes = false))
+    }
+
+    // The countdown card
+
+    @Test
+    fun `OK starts a 3 s countdown, Back cancels it, OK on Watch now switches at once`() {
+        val countdown = AlertCountdown.start(scoreCard.id, START)
+        assertEquals(START + 3_000, countdown.endsAtMs)
+        assertEquals(3, countdown.secondsLeft(START))
+        assertEquals(1, countdown.secondsLeft(START + 2_500))
+        assertFalse(countdown.due(START + 2_999))
+        assertTrue(countdown.due(START + 3_000))
+        val expanded = SportsLiveAlertKeys.context(scoreCard, shownAtMs = START, nowMs = START + 1_000, expanded = true)
+        assertEquals(AlertKeyAction.CANCEL, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, expanded))
+        assertEquals(AlertKeyAction.PRESS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, expanded))
+        // It has the keys: nothing reaches the player underneath but the volume.
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, expanded))
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, expanded))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_VOLUME_UP, expanded))
+        // No Watch both (dual screen, browsing, a movie): Left and Right do nothing.
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_RIGHT, expanded))
+        assertEquals(10, AlertCountdown.start(1, START, SportsLiveAlertCards.TIP_OFF_COUNTDOWN_MS).secondsLeft(START))
+    }
+
+    @Test
+    fun `over a sports stream Watch both is offered, and moving to it stops the countdown`() {
+        val expanded = SportsLiveAlertKeys.context(scoreCard, shownAtMs = START, nowMs = START + 1_000, expanded = true, canBoth = true)
+        assertEquals(AlertKeyAction.MOVE, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_RIGHT, expanded))
+        val moved = AlertCountdown.start(scoreCard.id, START).move()
+        assertEquals(AlertChoice.WATCH_BOTH, moved.selected)
+        assertEquals(null, moved.endsAtMs)
+        assertFalse(moved.due(START + 60_000))
+        assertEquals(null, moved.secondsLeft(START + 1_000))
+        // Back to Watch now: the countdown stays stopped, OK switches.
+        assertEquals(AlertChoice.WATCH_NOW, moved.move().selected)
+        assertEquals(null, moved.move().endsAtMs)
+        // Never offered outside the countdown card.
+        assertFalse(SportsLiveAlertKeys.context(scoreCard, START, START + 1_000, expanded = false, canBoth = true).canBoth)
     }
 
     @Test
@@ -252,25 +287,13 @@ class SportsLiveAlertCardsTest {
     }
 
     @Test
-    fun `up on a score card opens both games only while the card takes keys`() {
-        val card = AlertCard(1, listOf(score()), shownAtMs = START)
-        val open = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false, canBoth = true)
-        assertEquals(AlertKeyAction.BOTH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, open))
-        val busy = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = true, canPeek = true, peeking = false, canBoth = true)
-        assertFalse(busy.canBoth)
-        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, busy))
+    fun `with no card every key stays the screen's`() {
+        val none = SportsLiveAlertKeys.context(null, START, START + 5_000)
+        for (code in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_DPAD_DOWN)) {
+            assertEquals("key $code", AlertKeyAction.PASS, SportsLiveAlertKeys.route(code, none))
+        }
     }
 
-    @Test
-    fun `a score card's context is unchanged - actionable only with the screen's overlays closed`() {
-        val card = AlertCard(1, listOf(score()), shownAtMs = START)
-        val open = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false)
-        assertEquals(AlertKeyContext(cardActionable = true, canPeek = true, peeking = false), open)
-        val busy = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = true, canPeek = true, peeking = false)
-        assertEquals(AlertKeyContext(cardActionable = false, canPeek = false, peeking = false), busy)
-        val noSurface = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = null, canPeek = true, peeking = false)
-        assertFalse(noSurface.cardActionable)
-    }
 
     // The peek
 
@@ -339,28 +362,5 @@ class SportsLiveAlertCardsTest {
         // The highlighted pane's game is the one watched: no toast for it.
         assertEquals(0, toasts(SportsLiveWatching(dual = true, playingIds = setOf(pacers.id))))
         assertEquals(0, toasts(SportsLiveWatching()))
-    }
-
-    // The queue
-
-    @Test
-    fun `toasts raised together share one card, a later one joins it, and closing it shows the next`() {
-        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
-        val now = System.currentTimeMillis()
-        alerts.enqueue(listOf(score(pacers), score(lakers)), now)
-        val card = alerts.current.value!!
-        assertEquals(listOf(pacers, lakers), card.alerts.map { it.item })
-        alerts.enqueue(listOf(score(knicks)), now + 1_000)
-        val joined = alerts.current.value!!
-        assertEquals(card.id, joined.id)
-        assertEquals(3, joined.alerts.size)
-        // A kickoff prompt waits for its own card.
-        alerts.enqueue(listOf(SportsLiveAlert.Kickoff(item("Bulls @ Nets", followed = true), null)), now + 2_000)
-        assertEquals(3, alerts.current.value!!.alerts.size)
-        // Closed by the card it read before the join: the card goes by id all the same.
-        alerts.close(card, AlertAnswer.TIMEOUT)
-        val next = alerts.current.value!!
-        assertTrue(next.first is SportsLiveAlert.Kickoff)
-        assertEquals(1, next.alerts.size)
     }
 }

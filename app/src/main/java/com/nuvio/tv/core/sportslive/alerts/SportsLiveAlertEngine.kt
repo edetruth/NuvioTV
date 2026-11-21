@@ -49,7 +49,12 @@ data class SportsLiveWatching(
     /** The mini player plays a game: score toasts show over it as over the full player (#136). */
     val miniPlaying: Boolean = false,
     /** The title playing in the full player, for "you're watching ‹title›". */
-    val playingTitle: String? = null
+    val playingTitle: String? = null,
+    /**
+     * A Sports & Live screen is on (the section, a Game page), not dual screen or the player: no close finish there,
+     * the rows already say "Close late" (live.24).
+     */
+    val sportsLiveScreen: Boolean = false
 )
 
 /** A card the alerts look at: reminded, or a followed team's game, with its delayed ESPN game. */
@@ -65,14 +70,14 @@ data class AlertGame(
 
 /** How a kickoff prompt shows, by what is on screen ([SportsLiveAlertEngine.kickoffStyle]). */
 enum class KickoffStyle {
-    /** Outside the player: the kickoff toast (research Q17: never focused; ▶ or a held OK watch). */
+    /** Outside the player: the kickoff card (live.24: OK Watch · Back Close). */
     FULL,
 
-    /** Over a Sports & Live stream: the small kickoff toast, the same keys. */
-    COMPACT,
-
-    /** Over a movie or show: a toast only. It never takes focus or Back, so OK can never replace that player. */
-    TOAST
+    /**
+     * In the player, over a Sports & Live stream or a movie or show: the small kickoff card, the same keys. Over a movie
+     * OK switches to the game too, after the countdown, the movie's place saved (live.24: no more dead end).
+     */
+    COMPACT
 }
 
 /** One overlay to show. */
@@ -101,8 +106,18 @@ sealed interface SportsLiveAlert {
         val leadChange: Boolean = false
     ) : SportsLiveAlert
 
-    /** A followed team's game ended (#42). [namesOnly]: Hide until focused, no score. */
-    data class FullTime(override val item: SportsLiveItem, val snapshot: ScoreSnapshot, val namesOnly: Boolean) : SportsLiveAlert
+    /**
+     * A followed team's game ended (#42). [namesOnly]: Hide until focused, no score. [resultHidden] (user, live.24, review
+     * M1): the result is protected ("Hide my teams' results", on by default), so the card says only "‹[team]› game is
+     * over · result hidden" and OK plays the replay from the start; never a score, a winner or OT.
+     */
+    data class FullTime(
+        override val item: SportsLiveItem,
+        val snapshot: ScoreSnapshot,
+        val namesOnly: Boolean,
+        val resultHidden: Boolean = false,
+        val team: String? = null
+    ) : SportsLiveAlert
 
     /**
      * Crunch time (#137): a close game late, in My sports, whoever plays ([CrunchTime]). [namesOnly]: Hide until
@@ -263,8 +278,13 @@ class SportsLiveAlertEngine {
     ): SportsLiveAlert.FullTime? {
         if (before.state != ScoreState.IN || event.state != ScoreState.POST || !event.isFinal) return null
         if (!finals.add(event.eventId)) return null
-        // Muted for a spoiler-protected game (#151), as for Scores Off.
-        if (!settings.fullTimeAlerts || mode == ScoresMode.OFF || event.spoilerProtected) return null
+        if (!settings.fullTimeAlerts || mode == ScoresMode.OFF) return null
+        // A spoiler-protected result (#151, the default for my teams): the spoiler-free card (review M1), never silence.
+        if (event.spoilerProtected) {
+            val side = game.followedSides.firstOrNull()?.let { if (it == ScoreSide.HOME) event.home else event.away }
+            val team = side?.let { listOf(it.shortDisplayName, it.displayName, it.name).firstOrNull { name -> !name.isNullOrBlank() } }
+            return SportsLiveAlert.FullTime(game.item, event, namesOnly = true, resultHidden = true, team = team)
+        }
         return SportsLiveAlert.FullTime(game.item, event, namesOnly = mode == ScoresMode.HIDE_UNTIL_FOCUSED)
     }
 
@@ -307,12 +327,9 @@ class SportsLiveAlertEngine {
             listOf(SportsLiveTeams.canonicalise(home), SportsLiveTeams.canonicalise(away)).sorted().joinToString("|")
         }
 
-        /** Full outside the player, small over a Sports & Live stream, a toast only over anything else. */
-        fun kickoffStyle(watching: SportsLiveWatching): KickoffStyle = when {
-            !watching.inPlayer -> KickoffStyle.FULL
-            watching.sportsPlayback -> KickoffStyle.COMPACT
-            else -> KickoffStyle.TOAST
-        }
+        /** Full outside the player, small in it (over a sports stream, a movie or a show). */
+        fun kickoffStyle(watching: SportsLiveWatching): KickoffStyle =
+            if (watching.inPlayer) KickoffStyle.COMPACT else KickoffStyle.FULL
 
         /**
          * [alert] as it may show now, under the current [mode] and [settings] (it may have waited in the
@@ -324,6 +341,7 @@ class SportsLiveAlertEngine {
             is SportsLiveAlert.ScoreChange -> alert.takeIf { settings.scoreAlerts && mode == ScoresMode.SHOW }
             is SportsLiveAlert.FullTime -> when {
                 !settings.fullTimeAlerts || mode == ScoresMode.OFF -> null
+                alert.resultHidden -> alert
                 mode == ScoresMode.HIDE_UNTIL_FOCUSED -> alert.copy(namesOnly = true)
                 else -> alert
             }

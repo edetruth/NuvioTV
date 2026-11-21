@@ -89,6 +89,19 @@ internal object PlayerVideoDecoderRecovery {
     fun compatibilityNoteDue(softwareUrl: String?, currentUrl: String, notedUrl: String?): Boolean =
         currentUrl.isNotBlank() && softwareUrl == currentUrl && notedUrl != currentUrl
 
+    /**
+     * A second decoder runs beside this player (review M3, live.24): a preview or peek ([previews]), or the dual pane
+     * held on until this full player's first frame ([dualHeld]). The held pane counts too, so a failure during the hold
+     * lets it go and retries on the hardware decoder first, never straight to the software one.
+     */
+    fun secondDecoderBeside(previews: Boolean, dualHeld: Boolean): Boolean = previews || dualHeld
+
+    /**
+     * Whether a failure while a second decoder ran marks this TV's decoder limit (#106): only a preview's. The dual
+     * pane held for the hand-over is a moment's overlap dual screen itself proves the TV can run.
+     */
+    fun notesDecoderLimit(errorCode: Int, previews: Boolean): Boolean = previews && showsDecoderLimit(errorCode)
+
     /** Where the retry starts: a live stream rejoins the live edge (0 = default position), anything else resumes. */
     fun resumePositionMs(isLive: Boolean, positionMs: Long): Long =
         if (isLive) 0L else positionMs.coerceAtLeast(0L)
@@ -119,11 +132,13 @@ internal fun PlaybackException.failingVideoAbove1080p(playing: Format?): Boolean
 internal fun PlayerRuntimeController.tryVideoDecoderRecovery(error: PlaybackException): Boolean {
     val url = currentStreamUrl
     if (url.isBlank()) return false
+    val previews = SportsLiveSecondDecoders.active
+    val dualHeld = com.nuvio.tv.ui.screens.sportslive.SportsLiveFullScreenHold.held.value != null
     val action = PlayerVideoDecoderRecovery.decide(
         errorCode = error.errorCode,
         audioRendererFailed = error.failingRendererIsAudio(),
         onExoPlayer = !isUsingMpvEngine(),
-        secondDecoderActive = SportsLiveSecondDecoders.active,
+        secondDecoderActive = PlayerVideoDecoderRecovery.secondDecoderBeside(previews, dualHeld),
         hardwareRetried = videoDecoderHardwareRetriedUrl == url,
         softwareTried = softwareVideoDecoderUrl == url,
         videoAbove1080p = error.failingVideoAbove1080p(_exoPlayer?.videoFormat),
@@ -133,8 +148,10 @@ internal fun PlayerRuntimeController.tryVideoDecoderRecovery(error: PlaybackExce
         PlayerVideoDecoderRecovery.Action.YIELD_AND_RETRY_HARDWARE -> {
             videoDecoderHardwareRetriedUrl = url
             SportsLiveSecondDecoders.yieldAll()
+            // The dual pane held for the hand-over lets its decoder go too (review M3).
+            if (dualHeld) com.nuvio.tv.ui.screens.sportslive.SportsLiveFullScreenHold.release()
             // This TV could not run a preview beside a game: no more peeks over the player (#106).
-            if (PlayerVideoDecoderRecovery.showsDecoderLimit(error.errorCode)) {
+            if (PlayerVideoDecoderRecovery.notesDecoderLimit(error.errorCode, previews)) {
                 SportsLiveDecoderLimit.init(context)
                 SportsLiveDecoderLimit.note()
             }
@@ -162,6 +179,32 @@ internal fun PlayerRuntimeController.tryVideoDecoderRecovery(error: PlaybackExce
         if (positionMs > 0L) {
             _uiState.update { it.copy(pendingSeekPosition = positionMs) }
         }
+        reinitializeCurrentStream(startPaused = paused)
+    }
+    return true
+}
+
+/**
+ * Review L2 (live.24): the full player's request was refused with a connection-limit answer ([responseCode]: 403, 429
+ * or 503) while the dual pane held for it plays the same game, which may hold the source's only connection. The held
+ * pane lets go and the same link is tried once more. True when the stream is being rebuilt.
+ */
+internal fun PlayerRuntimeController.tryHeldPaneConnectionRetry(responseCode: Int?): Boolean {
+    val url = currentStreamUrl
+    if (url.isBlank()) return false
+    val hold = com.nuvio.tv.ui.screens.sportslive.SportsLiveFullScreenHold
+    val heldForThis = hold.covers(contentId)
+    if (!com.nuvio.tv.ui.screens.sportslive.sportsLiveHeldPaneRetry(heldForThis, responseCode, heldPaneRetriedUrl == url)) return false
+    heldPaneRetriedUrl = url
+    hold.release()
+    val line = "[hold] link refused ($responseCode) beside the dual pane held for it: pane released, same link again"
+    Log.i(PlayerRuntimeController.TAG, line)
+    LoggingDataSource.recordEvent(line)
+    val paused = userPausedManually
+    resetErrorRetryState()
+    errorRetryJob = scope.launch {
+        showRecoveryOverlay()
+        releasePlayer(flushPlaybackState = false)
         reinitializeCurrentStream(startPaused = paused)
     }
     return true

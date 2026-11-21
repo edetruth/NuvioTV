@@ -94,6 +94,45 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
+    fun `the end of a period reads End and the period, never a cut 2H End of`() {
+        // TV report #14: Queens–LSU showed "2H End of" (ESPN "End of 2nd Half").
+        val endOfHalf = live.copy(chip = ScoreChip.Live("End of 2nd Half", ChipScore(75, 106)))
+        assertEquals("End 2H", guideRowOf(endOfHalf, strings, null, "NCAAM").time)
+        val endOfQuarter = live.copy(chip = ScoreChip.Live("End of 3rd Quarter", ChipScore(80, 77)))
+        assertEquals("End Q3", guideRowOf(endOfQuarter, strings, null, "NBA").time)
+        val halftime = live.copy(chip = ScoreChip.Live("Halftime", ChipScore(26, 31)))
+        assertEquals("Halftime", guideRowOf(halftime, strings, null, "NCAAM").time)
+    }
+
+    @Test
+    fun `the footer says how long the scores are held for the stream, to 5 s, only under Show`() {
+        // TV report #14: the guide's scores trail ESPN on purpose while the stream plays; it says so.
+        assertEquals("1:15", scoreHoldText(75_000L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertEquals("1:15", scoreHoldText(73_000L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertEquals("1:20", scoreHoldText(77_600L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertEquals("4:05", scoreHoldText(245_000L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        // No hold (nothing playing, Real time), Hide until focused and Off: no line.
+        assertNull(scoreHoldText(null, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertNull(scoreHoldText(0L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        com.nuvio.tv.core.sportslive.scores.ScoresMode.entries.filter { it != com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW }.forEach { mode ->
+            assertNull(mode.name, scoreHoldText(75_000L, mode))
+        }
+        assertNull(scoreHoldText(75_000L, null))
+    }
+
+    @Test
+    fun `the first chip reads My sports whenever My sports is picked, even with nothing hidden`() {
+        // TV report #14: "★ My teams 1 · All 52 · Basketball 4" under My sports, as no game was left out.
+        val base = SportsLiveZapPanelState(rows = emptyList(), currentKey = "x", chips = listOf(SportsLiveUiState.MY_TEAMS_FILTER, null, "Basketball"))
+        assertFalse(base.mySportsScoped)
+        assertTrue(base.copy(mySportsPicked = true).mySportsScoped)
+        assertTrue(base.copy(moreLive = listOf("Soccer" to 3)).mySportsScoped)
+        // The count is left off My sports' chip, as before for a scoped list.
+        assertEquals("My sports", guideChipText(null, "My sports", 52, scoped = true))
+        assertEquals("All 52", guideChipText(null, "All", 52, scoped = false))
+    }
+
+    @Test
     fun `an event or a channel is one title with its suffix, never two teams`() {
         val event = live.copy(
             item = game("t", now).let { it.copy(meta = it.meta.copy(name = "ATP 250 - Stockholm Open")) },

@@ -1672,6 +1672,12 @@ internal fun PlayerRuntimeController.initializePlayer(
                             return
                         }
 
+                        // Review L2: the dual pane held for this player may hold the source's one connection; it lets go
+                        // and the same link is tried once more, before any next-link step.
+                        if (tryHeldPaneConnectionRetry(responseCode)) {
+                            return
+                        }
+
                         // A failed video decoder: a preview lets go of its second one, or the stream plays again
                         // on the hardware or software decoder, once each per link, before anything else.
                         if (tryVideoDecoderRecovery(error)) {

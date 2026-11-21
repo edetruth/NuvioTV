@@ -1080,9 +1080,13 @@ class SportsLiveViewModelTest {
         val played = spoilerSafeReplay(raw, "Suns at Lakers")
 
         try {
-            // A game's player zaps over the list shown; a replay's would zap over the raw replay titles.
+            // A replay's player would zap over the raw replay titles: none, also when its target is not flagged as a replay
+            // (the Stream screen's path, l24-rc: a replay never starts a lineup by any path).
+            SportsLiveZapSession.of(listOf(raw), raw.streamKey, SportsLiveTab.REPLAYS, null, false)?.let { SportsLiveZapSessions.start(it) }
             viewModel.startZapSession(SportsLiveZapTarget(played, playback = null, returnToHomeOnBack = false))
-            assertTrue(SportsLiveZapSessions.current() != null)
+            assertNull(SportsLiveZapSessions.current())
+            viewModel.startZapSession(raw)
+            assertNull(SportsLiveZapSessions.current())
 
             viewModel.startZapSession(SportsLiveZapTarget(played, playback = null, returnToHomeOnBack = false, replay = true))
             assertNull(SportsLiveZapSessions.current())

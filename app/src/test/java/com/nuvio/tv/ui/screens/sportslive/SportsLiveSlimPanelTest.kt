@@ -220,8 +220,59 @@ class SportsLiveSlimPanelTest {
         assertEquals(session.withLineup(rows), session.withFrozenLineup(rows))
     }
 
+    // ---- live.24 (user): channel up and down are predictable ----
+
     @Test
-    fun `the zap order is taken afresh when the panel opens`() {
+    fun `up then down returns to the game you were on, even when the ranking reorders in between`() {
+        val before = lineupOf(all)
+        val first = sessionOn(a, before).withFrozenLineup(before)
+        val up = first.step(false, emptySet())!!
+        // Scores and kickoffs reorder the list (the followed game is no longer first, s2 goes live).
+        val reordered = lineupOf(all.map {
+            when (it) {
+                f -> it.copy(followed = false)
+                s2 -> it.copy(startMs = now - 5 * minute)
+                else -> it
+            }
+        })
+        assertNotEquals(before.map { it.item.streamKey }, reordered.map { it.item.streamKey })
+        val back = up.withFrozenLineup(reordered).step(true, emptySet())!!
+        assertEquals(a.streamKey, back.current.streamKey)
+        // And down then up too.
+        val down = first.withFrozenLineup(reordered).step(true, emptySet())!!
+        assertEquals(a.streamKey, down.withFrozenLineup(reordered).step(false, emptySet())!!.current.streamKey)
+    }
+
+    @Test
+    fun `a game that goes live later joins at the end of the frozen order`() {
+        val before = lineupOf(all)
+        val first = sessionOn(a, before).withFrozenLineup(before)
+        val late = game("late", now - minute)
+        val later = first.withFrozenLineup(lineupOf(all + late))
+        val order = later.zapOrder.map { later.items[it].streamKey }
+        assertEquals(late.streamKey, order.last())
+        assertEquals(first.zapOrder.map { first.items[it].streamKey }, order.dropLast(1))
+    }
+
+    @Test
+    fun `a game that ends is passed over in place, its neighbours keep their places`() {
+        val before = lineupOf(all)
+        val first = sessionOn(a, before).withFrozenLineup(before)
+        val order = first.zapOrder.map { first.items[it].streamKey }
+        // The game right after a ends: it leaves the list.
+        val zappable = before.filter { it.zappable }.map { it.item.streamKey }
+        val gone = zappable[(zappable.indexOf(a.streamKey) + 1) % zappable.size]
+        val after = first.withFrozenLineup(lineupOf(all.filterNot { it.streamKey == gone }))
+        assertEquals(order, after.zapOrder.map { after.items[it].streamKey })
+        assertTrue(gone in after.skipped)
+        val next = after.step(true, emptySet())!!
+        assertEquals(zappable[(zappable.indexOf(a.streamKey) + 2) % zappable.size], next.current.streamKey)
+        // And back again lands on a.
+        assertEquals(a.streamKey, next.step(false, emptySet())!!.current.streamKey)
+    }
+
+    @Test
+    fun `the zap order is taken afresh only when asked (a pick from the guide)`() {
         val before = lineupOf(all)
         SportsLiveZapSessions.start(sessionOn(a, before))
         var rows = before

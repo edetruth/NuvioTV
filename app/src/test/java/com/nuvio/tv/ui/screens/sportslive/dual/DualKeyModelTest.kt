@@ -50,9 +50,29 @@ class DualKeyModelTest {
     }
 
     @Test
-    fun `past the edge, Left on the left pane and Right on the right one, picks the other game`() {
-        assertEquals(DualKeyRoute.PickOtherGame, dualKeyRoute(split, KeyEvent.KEYCODE_DPAD_LEFT))
-        assertEquals(DualKeyRoute.PickOtherGame, dualKeyRoute(split.copy(highlighted = Side.RIGHT), KeyEvent.KEYCODE_DPAD_RIGHT))
+    fun `side by side, past the edge Left and Right stay on that pane and never open the picker`() {
+        // live.23 TV report: the picker opened from Left on the left pane; it is Hold OK's Change the other game now.
+        assertEquals(DualKeyRoute.Highlight(Side.LEFT), dualKeyRoute(split, KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(DualKeyRoute.Highlight(Side.RIGHT), dualKeyRoute(split.copy(highlighted = Side.RIGHT), KeyEvent.KEYCODE_DPAD_RIGHT))
+    }
+
+    @Test
+    fun `big and small, Left and Right swap which game is big, and the sound follows the big one`() {
+        assertEquals(DualKeyRoute.SwapBig, dualKeyRoute(bigSmall, KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(DualKeyRoute.SwapBig, dualKeyRoute(bigSmall, KeyEvent.KEYCODE_DPAD_RIGHT))
+        // From the small pane too (an alert may ring it): never the picker, never only the ring.
+        assertEquals(DualKeyRoute.SwapBig, dualKeyRoute(bigSmall.copy(highlighted = Side.RIGHT), KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(DualKeyRoute.SwapBig, dualKeyRoute(bigSmall.copy(left = starting), KeyEvent.KEYCODE_DPAD_RIGHT))
+        val swapped = bigSmall.reduce(DualAction.Swap)
+        assertEquals(b, swapped.left.item)
+        assertEquals(Side.LEFT, swapped.highlighted)
+        assertEquals(Side.LEFT, swapped.audibleSide)
+        // OK: full screen on the big game.
+        assertEquals(DualOk.FULL_SCREEN, dualOkRoute(swapped))
+        // Swapped back: the first game is big again, with the sound.
+        val back = swapped.reduce(DualAction.Swap)
+        assertEquals(a, back.left.item)
+        assertEquals(Side.LEFT, back.audibleSide)
     }
 
     @Test
@@ -157,6 +177,25 @@ class DualKeyModelTest {
     }
 
     @Test
+    fun `a pane's error or end card owns OK and Back wherever it sits, the small pane of big and small too (audit G1)`() {
+        val error = DualPane(b, dualStream("b"), PaneStatus.Error)
+        // The ring stays on the big game; the small pane's game failed.
+        val state = bigSmall.copy(right = error)
+        assertEquals(Side.RIGHT, dualKeySide(state))
+        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(state))
+        // An end card on the small pane: OK presses its button.
+        val ended = bigSmall.copy(right = ended(next = true).copy(item = b))
+        assertEquals(Side.RIGHT, dualKeySide(ended))
+        assertEquals(DualOk.CARD_BUTTON, dualOkRoute(ended))
+        // Split too: the card names OK, so OK is the card's.
+        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(split.copy(right = error)))
+        // The ringed pane's own card goes first; with no card anywhere, OK is full screen as before.
+        assertEquals(Side.LEFT, dualKeySide(bigSmall.copy(left = starting, right = error)))
+        assertEquals(Side.LEFT, dualKeySide(bigSmall))
+        assertEquals(DualOk.FULL_SCREEN, dualOkRoute(bigSmall))
+    }
+
+    @Test
     fun `OK on a pane card presses its button, on the error card it offers the streams`() {
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = starting)))
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = ended(next = true))))
@@ -184,12 +223,17 @@ class DualKeyModelTest {
     }
 
     @Test
-    fun `the Hold OK menu offers the other layout, Swap panes, Change the other game and Full screen`() {
+    fun `the Hold OK menu offers Report a problem first, then the other layout, Swap, Change the other game and Full screen`() {
         assertEquals(
-            listOf(DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.SWAP, DualMenuEntry.CHANGE_OTHER_GAME, DualMenuEntry.FULL_SCREEN),
+            listOf(
+                DualMenuEntry.REPORT_PROBLEM, DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.SWAP,
+                DualMenuEntry.CHANGE_OTHER_GAME, DualMenuEntry.FULL_SCREEN
+            ),
             dualMenuEntries(split)
         )
-        assertEquals(DualMenuEntry.LAYOUT_SIDE_BY_SIDE, dualMenuEntries(bigSmall).first())
+        assertEquals(DualMenuEntry.LAYOUT_SIDE_BY_SIDE, dualMenuEntries(bigSmall)[1])
+        // Six at most (user, live.24).
+        assertEquals(true, dualMenuEntries(split).size <= 6 && dualMenuEntries(bigSmall).size <= 6)
     }
 
     @Test
@@ -228,13 +272,22 @@ class DualKeyModelTest {
     // The keys hint
 
     @Test
-    fun `the keys hint names the D-pad model and what OK and Hold OK do here`() {
-        assertEquals(listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_MORE), dualKeyHints(split))
-        assertEquals(listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_MORE), dualKeyHints(bigSmall))
+    fun `the keys hint names three keys, what Left and Right do in this layout, OK and Hold OK`() {
+        // Big + small: "Swap big · OK Full screen · Hold OK More".
+        assertEquals(listOf(DualHint.SWAP_BIG, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_MORE), dualKeyHints(bigSmall))
+        assertEquals(listOf(DualHint.MOVE, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_MORE), dualKeyHints(split))
         assertEquals(
-            listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_MAKE_BIG, DualHint.HOLD_OK_MORE),
+            listOf(DualHint.SWAP_BIG, DualHint.OK_MAKE_BIG, DualHint.HOLD_OK_MORE),
             dualKeyHints(bigSmall.copy(highlighted = Side.RIGHT))
         )
+    }
+
+    @Test
+    fun `the keys hint shows on the first three entries only`() {
+        assertEquals(true, shouldShowDualKeysHint(0))
+        assertEquals(true, shouldShowDualKeysHint(2))
+        assertEquals(false, shouldShowDualKeysHint(3))
+        assertEquals(false, shouldShowDualKeysHint(40))
     }
 
     // Back from a full screen opened out of dual (coordinator decision 1)

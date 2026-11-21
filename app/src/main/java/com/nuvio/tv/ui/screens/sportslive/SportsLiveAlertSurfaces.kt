@@ -10,6 +10,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.ExoPlayer
 import com.nuvio.tv.core.sportslive.alerts.AlertKeyAction
 import com.nuvio.tv.core.sportslive.alerts.AlertKeyContext
+import com.nuvio.tv.core.sportslive.alerts.AlertOkPress
 import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -25,19 +26,22 @@ import kotlinx.coroutines.flow.asStateFlow
  * screen register one while they show ([RegisterSportsLiveAlertSurface]).
  */
 internal interface SportsLiveAlertSurface {
-    /** OK on a card: [item] plays here. False when it cannot here (the host then plays it as Watch on a prompt). */
+    /** Watch on a card: [item] plays here. False when it cannot here (the host then plays it as Watch on a kickoff). */
     fun watch(item: SportsLiveItem): Boolean
 
-    /** The screen's own overlays are up (controls, the live games panel, a dialog, a starting card): OK is theirs. */
+    /**
+     * The screen's own overlays are up (controls, the live games panel, a dialog, a starting card): a card waits under
+     * them (live.24), so whenever a card shows, OK is free to be its.
+     */
     fun busy(): Boolean
 
-    /** The full player, which can peek (#136); null elsewhere. */
+    /** The full player, which could peek (#136; no alert offers it since live.24); null elsewhere. */
     val peek: SportsLivePeekHost?
 
-    /** ▲ Both: dual screen can open here with this screen's game and another (the full player only). */
+    /** Watch both: dual screen can open here with this screen's game and another (the full player only). */
     fun offersBoth(): Boolean = false
 
-    /** ▲ Both on a card for [item]: dual screen with the game playing (its link and sound) and [item], muted. */
+    /** Watch both on a card for [item]: dual screen with the game playing (its link and sound) and [item], muted. */
     fun watchBoth(item: SportsLiveItem): Boolean = false
 }
 
@@ -57,9 +61,10 @@ internal interface SportsLivePeekHost {
 }
 
 /**
- * The screens alerts can act on (#136), and the key dispatcher: [MainActivity][com.nuvio.tv.MainActivity]
- * hands every key here first, so a card takes OK, ▼ and Back only while it is up and actionable, and a
- * peek takes every key but the volume. Main thread only.
+ * The screens alerts can act on (#136), and the key dispatcher: [MainActivity][com.nuvio.tv.MainActivity] hands every
+ * key here first, so a card that shows "OK" takes a plain OK and Back, and the countdown card every key but the volume
+ * (live.24). A held OK is never a card's: it is handed back to the screens from its start ([takeReplay]). Main thread
+ * only.
  */
 internal object SportsLiveAlertSurfaces {
     private val _surface = MutableStateFlow<SportsLiveAlertSurface?>(null)
@@ -108,32 +113,58 @@ internal object SportsLiveAlertSurfaces {
         backTakenAtMs = SystemClock.uptimeMillis()
     }
 
+    /** A card's OK, held back to tell a short press (the card's) from a hold (the screen's). */
+    private val okPress = AlertOkPress()
+
+    /** A held OK handed back: its first press, for the screens before the repeat that showed it was held. */
+    private var replay: KeyEvent? = null
+
     /** True when an alert took [event] (see [SportsLiveAlertKeys.route]). */
     fun dispatch(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.downTime <= backTakenAtMs) return true
-        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) {
-            // A held OK (research Q17): its first repeat may watch an alert's game; the rest of the press is taken.
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 1 && event.keyCode !in taken) {
-                val handler = keys ?: return false
-                val action = SportsLiveAlertKeys.route(event.keyCode, handler.context(), held = true)
-                if (action == AlertKeyAction.PASS) return false
-                taken += event.keyCode
-                handler.onAction(action)
-                return true
+        val fresh = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
+        if (SportsLiveAlertKeys.isOk(event.keyCode) && !fresh) {
+            when (okPress.onOk(event.action, event.repeatCount, event.downTime, cardTakes = false)) {
+                AlertOkPress.Step.TAKE -> return true
+                AlertOkPress.Step.ACT -> {
+                    // A short press: the card's OK, on its release.
+                    taken -= event.keyCode
+                    keys?.onAction(AlertKeyAction.OK)
+                    return true
+                }
+                AlertOkPress.Step.HAND_BACK -> {
+                    // Held (#218): Hold OK keeps its meaning everywhere; the screens get the press from its start.
+                    taken -= event.keyCode
+                    replay = KeyEvent(
+                        event.downTime, event.downTime, KeyEvent.ACTION_DOWN, event.keyCode, 0,
+                        event.metaState, event.deviceId, event.scanCode, event.flags, event.source
+                    )
+                    return false
+                }
+                AlertOkPress.Step.NONE -> Unit
             }
+        }
+        if (!fresh) {
             if (event.keyCode !in taken) return false
             if (event.action == KeyEvent.ACTION_UP) taken -= event.keyCode
             return true
         }
         // A fresh press: a release lost earlier must not swallow this one's.
         taken -= event.keyCode
-        val handler = keys ?: return false
-        val action = SportsLiveAlertKeys.route(event.keyCode, handler.context())
-        if (action == AlertKeyAction.PASS) return false
+        val handler = keys
+        val action = handler?.let { SportsLiveAlertKeys.route(event.keyCode, it.context()) } ?: AlertKeyAction.PASS
+        if (SportsLiveAlertKeys.isOk(event.keyCode)) {
+            // A plain OK on a card acts on its release, so a hold can still go to the screens.
+            okPress.onOk(event.action, event.repeatCount, event.downTime, cardTakes = action == AlertKeyAction.OK)
+        }
+        if (handler == null || action == AlertKeyAction.PASS) return false
         taken += event.keyCode
-        handler.onAction(action)
+        if (action != AlertKeyAction.OK) handler.onAction(action)
         return true
     }
+
+    /** The first press of a held OK handed back ([dispatch]), once: the screens get it before the repeat. */
+    fun takeReplay(): KeyEvent? = replay.also { replay = null }
 }
 
 internal interface AlertKeyHandler {

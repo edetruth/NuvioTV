@@ -26,17 +26,27 @@ object DualGeometry {
     fun tile(side: Side, layout: DualLayout, width: Dp, height: Dp): DualTile = when (layout) {
         DualLayout.SPLIT -> {
             val tileWidth = (width - Size.DualSideMargin * 2 - Size.DualGap) / 2
-            val top = ((height - tileWidth * 9f / 16f - Size.DualCaption) / 2).coerceAtLeast(0.dp)
+            val top = ((height - tileWidth * 9f / 16f - Size.DualCaption) / 2).coerceAtLeast(Size.DualSafeTop)
             val start = if (side == Side.LEFT) Size.DualSideMargin else Size.DualSideMargin + tileWidth + Size.DualGap
             DualTile(start, top, tileWidth)
         }
         DualLayout.BIG_SMALL -> {
             val row = width - Size.DualBigMargin * 2 - Size.DualGap
             val big = row * 3f / 4f
-            val top = ((height - big * 9f / 16f - Size.DualCaption) / 2).coerceAtLeast(0.dp)
+            val top = ((height - big * 9f / 16f - Size.DualCaption) / 2).coerceAtLeast(Size.DualSafeTop)
             if (side == Side.LEFT) DualTile(Size.DualBigMargin, top, big)
             else DualTile(Size.DualBigMargin + big + Size.DualGap, top, row - big)
         }
+    }
+
+    /**
+     * Big + small (live.24, design audit A4): the free column under the small tile, from the end of its two-line caption
+     * down to the big tile's bottom; the small game's keys hint and game info live there. Null in split.
+     */
+    fun smallColumn(layout: DualLayout, width: Dp, height: Dp): DualTile? {
+        if (layout != DualLayout.BIG_SMALL) return null
+        val small = tile(Side.RIGHT, layout, width, height)
+        return DualTile(small.start, small.bottom + Size.DualCaptionStacked, small.width)
     }
 
     /**

@@ -47,7 +47,9 @@ data class SportsLiveHomeNav(
     /** Opens the Game page on the request just put in [SportsLiveGameRequests] (a Catch up card's menu). */
     val onOpenSportsLiveGame: () -> Unit = {},
     /** OK on a Catch up card (#58): its replay plays at once ([SportsLivePlayViewModel.playReplay]), titled by ESPN's matchup. */
-    val onPlayCatchUpReplay: (replays: List<SportsLiveItem>, title: String) -> Unit = { _, _ -> }
+    val onPlayCatchUpReplay: (replays: List<SportsLiveItem>, title: String) -> Unit = { _, _ -> },
+    /** Dual screen, on the session just put in SportsLiveDualSessions (a Live now card's Watch with another game, G10). */
+    val onOpenSportsLiveDual: () -> Unit = {}
 )
 
 /** Home's click routing for the Sports & Live rows. */
@@ -55,10 +57,14 @@ internal class SportsLiveHomeRouter(
     private val viewModel: HomeViewModel,
     private val catchUpViewModel: SportsLiveCatchUpViewModel,
     private val context: Context,
-    menuKey: MutableState<String?>
+    menuKey: MutableState<String?>,
+    liveMenuKey: MutableState<String?>
 ) {
     /** The Catch up card whose menu is open. */
     var catchUpMenuKey: String? by menuKey
+
+    /** The Live now card (its id) whose menu is open (audit G10). */
+    var liveNowMenuId: String? by liveMenuKey
 
     fun onResume() {
         catchUpViewModel.onOpened()
@@ -66,13 +72,17 @@ internal class SportsLiveHomeRouter(
 
     /** True when the long press is the Sports & Live rows' (upstream's poster options are skipped). */
     fun onLongPress(item: MetaPreview, addonBaseUrl: String): Boolean {
-        // Live now cards have no poster options; a long press on them does nothing. A Catch up card's
-        // offers Game stats (score behind Reveal) and Mark as watched.
+        // A Catch up card's offers Game stats (score behind Reveal) and Mark as watched. A Live now card's is the
+        // section's game menu (audit G10), never upstream's poster options.
         if (SportsLiveCatchUpHomeRow.isCatchUpRow(addonBaseUrl)) {
             catchUpMenuKey = SportsLiveCatchUpHomeRow.eventIdOf(item.id)
             return true
         }
-        return SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)
+        if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
+            liveNowMenuId = item.id
+            return true
+        }
+        return false
     }
 
     /** True when the card is the Sports & Live rows' (it opens the Sports & Live item, not an addon detail page). */
@@ -138,8 +148,20 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
     val replayResume by catchUpViewModel.resume.collectAsStateWithLifecycle()
     val catchUpContext = LocalContext.current
     val catchUpMenuKey = remember { mutableStateOf<String?>(null) }
+    val liveNowMenuKey = remember { mutableStateOf<String?>(null) }
     val router = remember(viewModel, catchUpViewModel, catchUpContext) {
-        SportsLiveHomeRouter(viewModel, catchUpViewModel, catchUpContext, catchUpMenuKey)
+        SportsLiveHomeRouter(viewModel, catchUpViewModel, catchUpContext, catchUpMenuKey, liveNowMenuKey)
+    }
+    // Hold OK on a Live now card (audit G10): the section's game menu.
+    router.liveNowMenuId?.let(viewModel::findLiveNowItem)?.let { item ->
+        SportsLiveHomeCardMenu(
+            item = item,
+            all = viewModel.liveNowAllItems,
+            ended = uiState.liveNowEnded,
+            scoresViewModel = liveScoresViewModel,
+            nav = nav,
+            onDismiss = { router.liveNowMenuId = null }
+        )
     }
     LaunchedEffect(catchUpItems) { viewModel.setCatchUpItems(catchUpItems) }
     // P14: the row under Continue Watching never changes title as it loads: its place is held while it loads. The

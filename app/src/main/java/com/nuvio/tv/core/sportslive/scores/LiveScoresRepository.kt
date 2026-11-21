@@ -189,6 +189,14 @@ class LiveScoresRepository internal constructor(
      */
     val watchedScores: StateFlow<Map<String, ScoreSnapshot>> = watchedOutput.asStateFlow()
 
+    private val holdOutput = MutableStateFlow<Long?>(null)
+
+    /**
+     * How long every score is held back now for the stream playing ([ScoreWatch.delayMs], TV report #14: the guide's
+     * scores trail ESPN by this on purpose, and say so); null while nothing plays, under Real time or Scores Off.
+     */
+    val scoreHoldMs: StateFlow<Long?> = holdOutput.asStateFlow()
+
     private val protectionState = MutableStateFlow(SpoilerProtection())
 
     /** The active profile's spoiler protection (#151), as the scores were last stamped with it. */
@@ -1206,6 +1214,7 @@ class LiveScoresRepository internal constructor(
             nextRelease.value = null
             output.value = emptyMap()
             watchedOutput.value = emptyMap()
+            holdOutput.value = null
             return
         }
         // Nothing before the profile's spoiler settings are known (live.23): a protected score must never flash.
@@ -1216,6 +1225,7 @@ class LiveScoresRepository internal constructor(
         }
         // Read against the clock now, so a protection's 7 days run out without a settings change.
         val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
+        holdOutput.value = delay.takeIf { playing.isNotEmpty() && it > 0L }
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
         val delayed = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
         saveKept(keepable(delayed))

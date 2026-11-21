@@ -1126,11 +1126,6 @@ class SportsLiveViewModel internal constructor(
     }
 
     /**
-     * Before [item] is played: the player may zap through this tab, the filter's games first. On Live
-     * now the session has every game of the tab, whatever the filter, so the player's panel opens on
-     * All (#68); other tabs keep the list shown. With no session to start, any earlier one ends.
-     */
-    /**
      * [target]'s player is opening: its zap session, as [startZapSession]; none for a replay (G4), which plays alone
      * under its clean title (no ▲▼ over the Replays list's raw titles, no live guide, no mini player on Back).
      */
@@ -1138,7 +1133,17 @@ class SportsLiveViewModel internal constructor(
         if (target.replay) SportsLiveZapSessions.clear() else startZapSession(target.item)
     }
 
+    /**
+     * Before [item] is played: the player may zap through this tab, the filter's games first. On Live
+     * now the session has every game of the tab, whatever the filter, so the player's panel opens on
+     * All (#68); other tabs keep the list shown. With no session to start, any earlier one ends. A replay starts
+     * none, by whatever path it is played (the Stream screen too: G4, never a frozen lineup over replays' raw titles).
+     */
     fun startZapSession(item: SportsLiveItem) {
+        if (item.kind == SportsLiveKind.REPLAY) {
+            SportsLiveZapSessions.clear()
+            return
+        }
         val state = uiState.value
         // More live's games are zapped only among themselves, when one of them is played (user 2026-11-21).
         val moreLive = state.moreLive.flatMap { it.items }
@@ -1148,11 +1153,16 @@ class SportsLiveViewModel internal constructor(
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
         }
+        val (items, tab) = if (moreLive.any { it.streamKey == item.streamKey }) {
+            moreLive to state.selectedTab
+        } else {
+            sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
+        }
         val session = SportsLiveZapSession.of(
-            items = if (moreLive.any { it.streamKey == item.streamKey }) moreLive else state.zapItems,
+            items = items,
             itemKey = item.streamKey,
-            tab = state.selectedTab,
-            filter = state.selectedFilter,
+            tab = tab,
+            filter = state.selectedFilter.takeIf { tab == state.selectedTab },
             returnToHomeOnBack = false
         )
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()

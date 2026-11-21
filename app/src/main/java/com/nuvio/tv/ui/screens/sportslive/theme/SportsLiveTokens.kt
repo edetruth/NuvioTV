@@ -197,16 +197,23 @@ object SportsLiveTokens {
         val SettingsRow = 36.dp
 
         /**
-         * Dual screen (V2 board ①): split tiles 912 px wide, 32 px apart, so 32 px side margins; the score strip
-         * under each tile (its row, with the gap above it).
+         * Dual screen (V2 board ①): split tiles 32 px apart; the score strip under each tile (its row, with the gap
+         * above it). Live.24 (design audit A4): every tile inside the TV safe area, 96 / 54 px at 1080p.
          */
-        val DualSideMargin = 16.dp
+        val DualSideMargin = 48.dp
         val DualGap = 16.dp
         val DualCaption = 32.dp
+        /** The TV safe area's top and bottom (54 px at 1080p): no tile or caption above or below it. */
+        val DualSafeTop = 27.dp
+        /**
+         * Big + small (live.24, design audit A4): the small game's caption in the free column under its tile, on two
+         * lines (codes and score, then clock and tag), so it is never cut.
+         */
+        val DualCaptionStacked = 56.dp
         /** Split: the room kept under the strips for the game info overlay (#139), so the tiles sit a little high. */
         val DualInfoRoom = 84.dp
-        /** Big + small (#123): side margins; the large tile takes 3/4 of the row, the small one 1/4. */
-        val DualBigMargin = 24.dp
+        /** Big + small (#123): side margins (the safe area); the large tile takes 3/4 of the row, the small one 1/4. */
+        val DualBigMargin = 48.dp
     }
 
     /**

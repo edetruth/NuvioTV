@@ -42,6 +42,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Review L2 (live.24): whether the full player's failure is retried on the same link once the held dual pane lets go:
+ * a pane is held for this player ([heldForThis]), the source refused with a connection-limit answer ([responseCode]
+ * 403, 429 or 503), and this link was not retried so already ([retried]).
+ */
+internal fun sportsLiveHeldPaneRetry(heldForThis: Boolean, responseCode: Int?, retried: Boolean): Boolean =
+    heldForThis && !retried && responseCode in CONNECTION_LIMIT_CODES
+
+private val CONNECTION_LIMIT_CODES = setOf(403, 429, 503)
+
 /** What a held picture does next (#39). */
 internal enum class SportsLiveHoldStep {
     /** The full player has no first frame yet: the held player keeps playing, its picture over the full player. */

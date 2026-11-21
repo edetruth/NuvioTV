@@ -250,10 +250,10 @@ class SportsLiveAlertEngineTest {
     // Review fixes
 
     @Test
-    fun `over a movie or show the kickoff is a toast only, never a focused prompt`() {
+    fun `the kickoff card is full outside the player and small in it, over a movie too (live24 - OK switches there)`() {
         assertEquals(KickoffStyle.FULL, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching()))
         assertEquals(KickoffStyle.COMPACT, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching(inPlayer = true, sportsPlayback = true)))
-        assertEquals(KickoffStyle.TOAST, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching(inPlayer = true, sportsPlayback = false)))
+        assertEquals(KickoffStyle.COMPACT, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching(inPlayer = true, sportsPlayback = false)))
     }
 
     @Test

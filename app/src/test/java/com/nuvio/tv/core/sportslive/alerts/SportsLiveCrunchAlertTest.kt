@@ -42,9 +42,23 @@ class SportsLiveCrunchAlertTest {
     }
 
     @Test
-    fun `a crunch alert is a big moment and groups with other toasts`() {
-        assertTrue(SportsLiveAlertCards.isBigMoment(alert))
-        assertTrue(SportsLiveAlertCards.groupable(alert))
+    fun `a close finish takes OK, ranks last of the alerts and stays the actionable ten seconds`() {
+        assertTrue(SportsLiveAlertCards.actionable(alert))
+        assertEquals(3, SportsLiveAlertCards.priority(alert))
+        assertEquals(SportsLiveAlertCards.ACTIONABLE_MS, SportsLiveAlertCards.durationMs(alert))
+    }
+
+    @Test
+    fun `close finish is limited - big games only, never over my team's game, a movie or a Sports and Live screen`() {
+        fun candidate(key: String, big: Double) = com.nuvio.tv.core.sportslive.scores.CrunchCandidate(key, alert.snapshot, big, watching = false)
+        assertEquals(listOf("big"), SportsLiveAlerts.bigGamesOnly(listOf(candidate("small", 1.0), candidate("big", com.nuvio.tv.core.sportslive.scores.BigGame.BIG))).map { it.key })
+        assertTrue(SportsLiveAlerts.crunchMayShow(SportsLiveWatching(inPlayer = true, sportsPlayback = true), watchingFollowed = false))
+        assertTrue(SportsLiveAlerts.crunchMayShow(SportsLiveWatching(), watchingFollowed = false))
+        assertTrue(!SportsLiveAlerts.crunchMayShow(SportsLiveWatching(inPlayer = true, sportsPlayback = true), watchingFollowed = true))
+        assertTrue(!SportsLiveAlerts.crunchMayShow(SportsLiveWatching(inPlayer = true, sportsPlayback = false), watchingFollowed = false))
+        assertTrue(!SportsLiveAlerts.crunchMayShow(SportsLiveWatching(sportsLiveScreen = true), watchingFollowed = false))
+        // At most one every 15 minutes.
+        assertEquals(15 * 60_000L, com.nuvio.tv.core.sportslive.scores.CrunchAlerts.GAP_MS)
     }
 
     @Test
