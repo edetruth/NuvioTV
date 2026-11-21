@@ -35,7 +35,7 @@ class SportsLiveTokensTest {
     @Test
     fun `rows, columns and frame are the board's in dp`() {
         assertEquals(listOf(112, 96, 72, 80).map(SportsLiveTokens::pxToDp), listOf(Size.RowLive, Size.RowSoon, Size.RowChannel, Size.RowJustEnded))
-        assertEquals(listOf(160, 376, 96, 150).map(SportsLiveTokens::pxToDp), listOf(Size.ColumnLeague, Size.ColumnNames, Size.ColumnScores, Size.ColumnStatus))
+        assertEquals(listOf(160, 376, 96, 176).map(SportsLiveTokens::pxToDp) /* status column 88 dp (live.24 design audit: 26 px floor) */, listOf(Size.ColumnLeague, Size.ColumnNames, Size.ColumnScores, Size.ColumnStatus))
         assertEquals(SportsLiveTokens.pxToDp(720), Size.StageWidth)
         assertEquals(SportsLiveTokens.pxToDp(80), Size.HeaderHeight)
         assertEquals(SportsLiveTokens.pxToDp(54), Size.SafeTop)
