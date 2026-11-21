@@ -469,7 +469,8 @@ fun SportsLiveDualScreen(
             // Not before the layout is known: a pane view is first laid out at its real tile (see layoutReady).
             if (layoutReady) Side.entries.forEach { side ->
                 val tile = DualGeometry.tile(side, dual.layout, maxWidth, maxHeight)
-                val pane = dual.pane(side)
+                // An ended pane's card reads the game's latest final (live.23 TV test: it said Game over only).
+                val pane = dual.pane(side).withLatestEndScore(scores[dual.pane(side).item.streamKey], scoresMode)
                 DualPaneView(
                     pane = pane,
                     handoff = handoffFrame?.takeIf { dualShowsHandoffFrame(it.atMs, handoffKey, pane, System.currentTimeMillis()) }?.image,
