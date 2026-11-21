@@ -78,11 +78,19 @@ class TeamIdentifier internal constructor(
     private var cricketAt: Long? = null
 
     /**
+     * The cricket labels given (#204), by [TeamIdentityBook.pairKey] of name keys: the game and until when it holds.
+     * A label lasts while ESPN's scorepanel lists that game in progress: confirmed again before it runs out, and
+     * taken back from the book [CRICKET_LABEL_MS] after the last confirmation (release review: never the whole session).
+     */
+    private val cricketLabels = HashMap<String, Pair<Game, Long>>()
+
+    /**
      * Queues the two-team games of [items] whose sport is unknown and that are live or start today, and soccer games
      * naming no competition (item 3) that are live or start within 3 h. Cheap
      * and non-blocking: the lookups run on the worker.
      */
     fun offer(items: List<SportsLiveItem>) {
+        expireCricketLabels()
         if (items.isEmpty()) return
         val at = now()
         val zoneId = zone()
@@ -123,8 +131,11 @@ class TeamIdentifier internal constructor(
     }
 
     private fun offerCricket(first: String, second: String) {
-        if (book.has(first, second)) return
         val key = TeamIdentityBook.pairKey(TeamIdentityRules.nameKey(first), TeamIdentityRules.nameKey(second))
+        val until = synchronized(cricketLabels) { cricketLabels[key]?.second }
+        // Answered otherwise (a stored identity): left alone. A cricket label: confirmed again once it nears its end.
+        if (until == null && book.has(first, second)) return
+        if (until != null && until - now() > CRICKET_REFRESH_MS) return
         synchronized(cricketPending) {
             if (key in cricketPending || cricketPending.size >= MAX_PENDING) return
             cricketPending[key] = Game(first, second)
@@ -226,9 +237,25 @@ class TeamIdentifier internal constructor(
         }
         for (game in games) {
             val key = TeamIdentityBook.pairKey(SportsLiveNations.key(game.first), SportsLiveNations.key(game.second))
-            if (key in cricketPairs) book.put(game.first, game.second, GameIdentity(CRICKET, "", null to null))
+            if (key in cricketPairs) {
+                book.put(game.first, game.second, GameIdentity(CRICKET, "", null to null))
+                val label = TeamIdentityBook.pairKey(TeamIdentityRules.nameKey(game.first), TeamIdentityRules.nameKey(game.second))
+                synchronized(cricketLabels) { cricketLabels[label] = game to now() + CRICKET_LABEL_MS }
+            }
         }
         synchronized(cricketPending) { games.forEach { game -> cricketPending.values.remove(game) } }
+    }
+
+    /** Takes back the cricket labels not confirmed in [CRICKET_LABEL_MS]: their game is no longer in progress. */
+    private fun expireCricketLabels() {
+        val at = now()
+        val expired = synchronized(cricketLabels) {
+            if (cricketLabels.isEmpty()) return
+            val gone = cricketLabels.filterValues { (_, until) -> until <= at }
+            gone.keys.forEach { cricketLabels.remove(it) }
+            gone.values.map { it.first }
+        }
+        expired.forEach { game -> book.remove(game.first, game.second) }
     }
 
     /** Answers recorded so far: a pass that recorded one moved on (a request alone does not). */
@@ -313,6 +340,8 @@ class TeamIdentifier internal constructor(
         private const val CRICKET = "cricket"
         /** How long ESPN's cricket scorepanel answer is used before it is asked again (#204). */
         internal const val CRICKET_REFRESH_MS = 10 * 60_000L
+        /** How long a cricket label holds after ESPN last listed its game in progress (release review). */
+        internal const val CRICKET_LABEL_MS = 3 * CRICKET_REFRESH_MS
         private const val STORE_PATH = "sportslive/team_identity.json"
         private const val LOG_TAG = "NuvioIdentify"
         /** Games queued at most; later offers come back on the next rebuild. */

@@ -42,6 +42,13 @@ class TeamIdentityBook(private val maxGames: Int = MAX_GAMES) {
         return synchronized(answers) { answers.containsKey(key) }
     }
 
+    /** Forgets the answer for [first] against [second] (a cricket label whose game is over); lists rebuild without it. */
+    internal fun remove(first: String, second: String) {
+        val key = pairKey(TeamIdentityRules.nameKey(first), TeamIdentityRules.nameKey(second))
+        val removed = synchronized(answers) { answers.remove(key) }
+        if (removed?.identity != null) _revision.update { it + 1 }
+    }
+
     /** Stores the answer for [first] against [second]; [identity]'s badges are in that order. */
     internal fun put(first: String, second: String, identity: GameIdentity?) {
         val a = TeamIdentityRules.nameKey(first)
