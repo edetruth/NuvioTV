@@ -185,7 +185,7 @@ class SportsLiveAlertEngineTest {
         val delayMs = 30_000L
         val shown = { at: Long, raw: ScoreSnapshot -> delay.apply(mapOf(card.streamKey to raw), delayMs, at).getValue(card.streamKey) }
         var at = START + 10 * MINUTE
-        // Seen live: the score is withheld for the delay, then shows.
+        // Seen live: the score shows at once (live.23); only later changes wait.
         step(at, shown(at, live(10, 8)), reminded = false)
         at += delayMs
         step(at, shown(at, live(10, 8)), reminded = false)

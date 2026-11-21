@@ -565,14 +565,14 @@ class LiveScoresRepositoryTest {
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         val key = pacersCard.streamKey
-        // First seen live: shown without a score until the delay has passed.
+        // First seen live: its score shows at once (live.23).
         repo.scores.value.getValue(key).let {
             assertEquals(ScoreState.IN, it.state)
-            assertNull(it.homeScore)
-            assertNull(it.clockText)
+            assertEquals(50, it.homeScore)
+            assertEquals("Q2 5:00", it.clockText)
         }
         latest = game(ScoreState.IN, 53, 48, "Q2 4:40").let { it.copy(home = it.home.copy(displayName = "Sixers")) }
-        advanceTimeBy(30_000); runCurrent() // fetched at 30 s; the first version is now due
+        advanceTimeBy(30_000); runCurrent() // fetched at 30 s: the new name at once, the score still the first one
         repo.scores.value.getValue(key).let {
             assertEquals(50, it.homeScore)
             assertEquals("Q2 5:00", it.clockText)
@@ -586,7 +586,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a game first seen already final is held for the delay when it may have just ended`() = runTest {
+    fun `a game first seen already final shows at once even when it may have just ended`() = runTest {
         settings.value = ScoreSettings(delaySeconds = 30)
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.POST, 110, 100, "Final"))) }
         // Three hours after the start: ESPN gives no end time, so it may have ended a moment ago.
@@ -594,12 +594,7 @@ class LiveScoresRepositoryTest {
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
-        val key = pacersCard.streamKey
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(29_000); runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(1_000); runCurrent()
-        assertEquals(110, repo.scores.value.getValue(key).homeScore)
+        assertEquals(110, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
     @Test
@@ -640,8 +635,9 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `turning the delay on mid-game shows no score until the delay has passed`() = runTest {
-        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+    fun `turning the delay on mid-game keeps the score shown and holds the next change`() = runTest {
+        var home = 50
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, home, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
@@ -650,11 +646,13 @@ class LiveScoresRepositoryTest {
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
         settings.value = ScoreSettings(delaySeconds = 60)
         advanceTimeBy(1_000); runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(58_000); runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(1_000); runCurrent()
+        // live.23: first seen under the delay, so it stays; only changes from now on wait.
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        home = 53
+        advanceTimeBy(30_000); runCurrent() // fetched
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(53, repo.scores.value.getValue(key).homeScore)
     }
 
     @Test
@@ -1110,7 +1108,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a warm copy is held back by the score delay like any first-seen live game`() = runTest {
+    fun `a warm copy shows at once like any first-seen live game`() = runTest {
         settings.value = ScoreSettings(delaySeconds = 30)
         provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38)), receivedAtMs = ms("2026-11-15T18:59:30Z")) }
         provider.gate = CompletableDeferred()
@@ -1118,7 +1116,7 @@ class LiveScoresRepositoryTest {
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
-        assertNull(repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        assertEquals(40, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
     @Test
@@ -1273,8 +1271,8 @@ class LiveScoresRepositoryTest {
     fun `with a score delay each poll is released the delay after it arrived, without leaving the screen (#81)`() = runTest {
         var score = 50
         val (repo, key) = undatedLiveGame({ score }, delaySeconds = 30)
-        // First seen live: withheld for the delay.
-        assertNull(repo.scores.value.getValue(key).homeScore)
+        // First seen live: at once (live.23).
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
         score = 53
         advanceTimeBy(30_000); runCurrent()
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
@@ -1326,16 +1324,22 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `while video plays other games' scores wait at least 60 s, then show`() = runTest {
-        val (repo, key) = undatedLiveGame({ 50 })
+    fun `while video plays other games keep their score and changes wait at least 60 s`() = runTest {
+        var score = 50
+        val (repo, key) = undatedLiveGame({ score })
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
-        // Another game plays: this one is no longer known from 60 s ago, so it waits.
+        // Another game plays: this one keeps the score it shows (live.23); its next change waits 60 s.
         watching.watch("player", setOf("another card"), "addon-a")
         runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        assertFalse(repo.scores.value.getValue(key).watched)
-        advanceTimeBy(ScoreWatch.MIN_PLAYING_DELAY_MS); runCurrent()
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        assertFalse(repo.scores.value.getValue(key).watched)
+        score = 53
+        advanceTimeBy(30_000); runCurrent() // fetched at 30 s
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(ScoreWatch.MIN_PLAYING_DELAY_MS - 1_000); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(53, repo.scores.value.getValue(key).homeScore)
     }
 
     @Test

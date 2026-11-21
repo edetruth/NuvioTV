@@ -927,7 +927,8 @@ class LiveScoresRepository internal constructor(
         }
         // Read against the clock now, so a protection's 7 days run out without a settings change.
         val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
-        val shown = scoreDelay.apply(raw, delay, now())
+        // A game first seen shows its score at once, except the games being watched (their picture runs behind).
+        val shown = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
         // The games being watched: no score and no clock from us; the broadcast shows its own (Q18).
         val watched = ScoreWatch.watchedEvents(playing, shown)
         val served = if (watched.isEmpty()) shown else shown.mapValues { (_, event) -> if (event.eventId in watched) ScoreWatch.masked(event) else event }

@@ -5,11 +5,17 @@ package com.nuvio.tv.core.sportslive.scores
  * it happens on screen. Every change to a game's score, clock or state is kept with the time it
  * arrived, and the version from the delay ago is shown. Everything else (names, logos, start time,
  * league) is always the newest. The game situation (down and distance, count, runners, last play)
- * is held back with the score. A game first seen while live shows with its score, clock and scorers
- * withheld until the delay has passed (enabling the delay, app start, first visit, a re-track), so the
- * newest score never leaks. So is a game first seen already final that may have just ended: ESPN's
- * scoreboard gives no end time, so a final whose start is within [RECENT_START_MS] is held for the
- * delay too ([mayHaveJustEnded]). One first seen before play, or long over, shows as it is.
+ * is held back with the score.
+ *
+ * A game first seen (app start, first visit, a re-track, the delay turned on) shows its score at once,
+ * live or just ended: nothing on screen is ahead of it yet, and a blank card for a minute on every
+ * app open read as broken (live.23). Only the changes after that wait out the delay.
+ *
+ * The exception is a game being watched ([apply]'s `holdFirstSeen`: the player's game, each dual pane,
+ * the mini player): until a version of it is known from the delay ago, it shows with its score, clock
+ * and scorers withheld when it is live, or a final that may have just ended ([mayHaveJustEnded]: ESPN's
+ * scoreboard gives no end time, so a final whose start is within [RECENT_START_MS]). Its picture runs
+ * behind, so its newest score would leak. A game first seen before play, or long over, shows as it is.
  *
  * Adapted from SportsScoreDelay in homelessbrian/NuvioPlusIPTV (GPL-3.0, as this project).
  */
@@ -44,10 +50,16 @@ internal class ScoreDelay {
 
     /**
      * Records [raw] (newest data, by card key) and returns what to show with [delayMs]. Off (0) passes
-     * [raw] through and forgets the history.
+     * [raw] through and forgets the history. [holdFirstSeen] are the event ids of the games being watched:
+     * they keep the first-seen hold (see the class KDoc).
      */
     @Synchronized
-    fun apply(raw: Map<String, ScoreSnapshot>, delayMs: Long, now: Long): Map<String, ScoreSnapshot> {
+    fun apply(
+        raw: Map<String, ScoreSnapshot>,
+        delayMs: Long,
+        now: Long,
+        holdFirstSeen: Set<String> = emptySet()
+    ): Map<String, ScoreSnapshot> {
         if (delayMs <= 0) {
             history.clear()
             nextChangeAt = null
@@ -63,19 +75,17 @@ internal class ScoreDelay {
             entry.lastSeen = now
             val versions = entry.versions
             val last = versions.lastOrNull()
-            if (last == null && (snapshot.state == ScoreState.IN || mayHaveJustEnded(snapshot, now))) {
-                // First seen live, or final but maybe only just: nothing is known from [delayMs] ago,
-                // so the score waits that long.
-                versions.addLast(Version(now, withheld(snapshot)))
-            }
             if (last == null || live(last.snapshot) != live(snapshot)) versions.addLast(Version(now, snapshot))
-            // The newest version old enough to show; older ones are no longer needed.
+            // The newest version old enough to show; older ones are no longer needed. With none old enough
+            // yet, the first one seen shows.
             while (versions.size > 1 && versions[1].at <= cutoff) versions.removeFirst()
-            versions.getOrNull(1)?.let { pending ->
-                val due = pending.at + delayMs
-                if (next == null || due < next!!) next = due
-            }
-            shownByEvent[snapshot.eventId] = withLive(snapshot, versions.first().snapshot)
+            val first = versions.first()
+            // A game being watched with nothing known from the delay ago: its score waits.
+            val held = snapshot.eventId in holdFirstSeen && first.at > cutoff &&
+                (first.snapshot.state == ScoreState.IN || mayHaveJustEnded(first.snapshot, now))
+            val due = if (held) first.at + delayMs else versions.getOrNull(1)?.let { it.at + delayMs }
+            if (due != null && (next == null || due < next!!)) next = due
+            shownByEvent[snapshot.eventId] = withLive(snapshot, if (held) withheld(first.snapshot) else first.snapshot)
         }
         // By age, not presence: a game that drops out for a moment (a paused feed, a re-track) keeps its history.
         history.values.removeAll { now - it.lastSeen > FORGET_AFTER_MS }
