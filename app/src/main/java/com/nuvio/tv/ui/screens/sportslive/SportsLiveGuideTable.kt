@@ -213,6 +213,17 @@ internal fun guideChipStep(chips: List<String?>, selected: String?, delta: Int):
     return next.takeIf { it in chips.indices && it != at }
 }
 
+/**
+ * A sport chip's words: its [name], with ★ only on "My teams" (★ means your team, nowhere else: coordinator decision 4,
+ * so "My sports" has none), then its [count] of live games, except on My sports scoping the guide ([scoped], the
+ * mockup's bare "My sports").
+ */
+internal fun guideChipText(chip: String?, name: String, count: Int?, scoped: Boolean): String {
+    val label = if (chip == SportsLiveUiState.MY_TEAMS_FILTER) "★ $name" else name
+    val shown = count?.takeIf { !(chip == null && scoped) }
+    return if (shown != null) "$label $shown" else label
+}
+
 /** The chips drawn: at most [max] around [selected] of [count], so the picked one always shows. */
 internal fun guideChipWindow(count: Int, selected: Int, max: Int = GUIDE_MAX_CHIPS): IntRange {
     if (count <= max) return 0 until count

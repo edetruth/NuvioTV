@@ -208,6 +208,15 @@ class SportsLiveGuideTableTest {
         assertEquals(2 until 6, guideChipWindow(6, 5))
     }
 
+    @Test
+    fun `the star is only on My teams, My sports reads bare, and the other chips carry their counts`() {
+        assertEquals("My sports", guideChipText(null, "My sports", 12, scoped = true))
+        assertEquals("All 25", guideChipText(null, "All", 25, scoped = false))
+        assertEquals("★ My teams 2", guideChipText(SportsLiveUiState.MY_TEAMS_FILTER, "My teams", 2, scoped = true))
+        assertEquals("All sports 25", guideChipText(SportsLiveUiState.ALL_SPORTS_FILTER, "All sports", 25, scoped = true))
+        assertEquals("Soccer", guideChipText("Soccer", "Soccer", null, scoped = true))
+    }
+
     // ---- Keys ----
 
     private val keys = SportsLiveGuideKeys(longPressMs = 500L, repeatGateMs = 100L)

@@ -334,15 +334,13 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
         for (at in window) {
             val chip = chips[at]
             val name = when (chip) {
-                null -> if (scoped) "★ " + stringResource(R.string.sports_live_filter_my_sports) else stringResource(R.string.sports_live_filter_all)
-                SportsLiveUiState.MY_TEAMS_FILTER -> "★ " + stringResource(R.string.sports_live_filter_my_teams)
+                null -> stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
+                SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
                 SportsLiveUiState.ALL_SPORTS_FILTER -> stringResource(R.string.sports_live_filter_all_sports)
                 else -> sportFilterLabel(chip)
             }
-            // My sports reads best bare (the mockup); every other chip carries its count of live games.
-            val count = state.counts[chip]?.takeIf { !(chip == null && scoped) }
             GuideChip(
-                text = if (count != null) "$name $count" else name,
+                text = guideChipText(chip, name, state.counts[chip], scoped),
                 selected = at == selected,
                 gold = chip == SportsLiveUiState.MY_TEAMS_FILTER
             )
