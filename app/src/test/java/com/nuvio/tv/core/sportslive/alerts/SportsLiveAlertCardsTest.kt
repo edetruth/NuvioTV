@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.final
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.item
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.live
 import com.nuvio.tv.core.sportslive.scores.ProtectedGame
+import com.nuvio.tv.core.sportslive.scores.ResultSeen
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -188,6 +189,30 @@ class SportsLiveAlertCardsTest {
         assertTrue(shown.resultHidden)
         assertTrue(shown.namesOnly)
         assertEquals(fullTime.snapshot, shown.snapshot)
+    }
+
+    @Test
+    fun `a full time's result counts as seen only when its card shows the score`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(otherScore()), now)
+        val card = alerts.current.value!!
+        val hiddenLater = SportsLiveAlert.FullTime(pacers, final(101, 99).copy(eventId = "seen-hidden-$now"), namesOnly = false)
+        alerts.enqueue(listOf(hiddenLater), now + 1_000)
+        // Waiting behind the card up: not seen yet.
+        assertFalse(hiddenLater.snapshot.eventId in ResultSeen.shared.known.value)
+        alerts.onProtection(SpoilerProtection(myTeamsResults = true, followed = sixers))
+        alerts.close(card, AlertAnswer.TIMEOUT)
+        // It showed as "result hidden": the result is still not known, so its replay stays in Catch up.
+        assertTrue((alerts.current.value!!.alert as SportsLiveAlert.FullTime).resultHidden)
+        assertFalse(hiddenLater.snapshot.eventId in ResultSeen.shared.known.value)
+        alerts.close(alerts.current.value!!, AlertAnswer.TIMEOUT)
+
+        val shownNow = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val fullTime = SportsLiveAlert.FullTime(lakers, final(101, 99).copy(eventId = "seen-shown-$now"), namesOnly = false)
+        shownNow.enqueue(listOf(fullTime), now)
+        assertEquals(fullTime, shownNow.current.value!!.alert)
+        assertTrue(fullTime.snapshot.eventId in ResultSeen.shared.known.value)
     }
 
     @Test

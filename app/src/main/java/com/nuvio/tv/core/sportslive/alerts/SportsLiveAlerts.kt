@@ -340,8 +340,6 @@ class SportsLiveAlerts @Inject constructor(
             val (held, shown) = raised.partition { it is SportsLiveAlert.Kickoff && SportsLiveAlerts.holdsFirst(it) }
             if (held.isNotEmpty()) holdsScope.launch { holdsLock.withLock { held.forEach { holds.hold(it as SportsLiveAlert.Kickoff) } } }
             if (shown.isNotEmpty()) enqueue(shown, nowMs)
-            // A Full time alert with its score: the result is known (live.20 1c).
-            shown.forEach { if (it is SportsLiveAlert.FullTime && !it.namesOnly) ResultSeen.shared.finalScoreShown(it.snapshot.eventId) }
         }
         return games.mapNotNull { game ->
             game.snapshot?.takeIf {
@@ -474,6 +472,10 @@ class SportsLiveAlerts @Inject constructor(
             // dated from when it was raised.
             val from = if (next is SportsLiveAlert.Kickoff || next is SportsLiveAlert.FullTime) nowMs else raisedAt
             currentFlow.value = AlertCard(++cardCount, next, from)
+            // A Full time card showing its score: the result is known (live.20 1c). Recorded as it shows, never as it is
+            // raised (l24 polish): a waiting one may still show as "result hidden" or not at all, and a known result
+            // takes its replay out of Catch up and Your teams.
+            if (next is SportsLiveAlert.FullTime && !next.namesOnly) ResultSeen.shared.finalScoreShown(next.snapshot.eventId)
             return
         }
         currentFlow.value = null
