@@ -131,7 +131,8 @@ class PlayerZapController(
         }
         if (inFlight && item.streamKey == base.current.streamKey) return true
         SportsLiveSpeedClock.action("pick")
-        return zapTo(base.pickFromPanel(item, panelItems) ?: return false)
+        // A pick from the guide takes the zap order afresh (user, live.24): the next CH± follows the guide as it is now.
+        return zapTo(base.pickFromPanel(item, panelItems)?.copy(lineup = null) ?: return false)
     }
 
     /**
@@ -153,8 +154,10 @@ class PlayerZapController(
     }
 
     /**
-     * The live games panel opened over the player showing [contentId]: the zap order is taken afresh from the list
-     * it shows (BUG6/Q10: until then CH± keep the order frozen at the first zap). Nothing changes while a lookup runs.
+     * The zap order of the player showing [contentId] is taken afresh at the next zap, from the list the panel shows
+     * (BUG6/Q10: until then CH± keep the order frozen at the first zap). Nothing changes while a lookup runs. Since
+     * live.24 opening the guide no longer does this (▲ then ▼ must return to the game you were on); a pick from the guide
+     * takes the order afresh by itself ([pick]).
      */
     fun thaw(contentId: String?) {
         if (job?.isActive == true) return
@@ -181,7 +184,8 @@ class PlayerZapController(
     /**
      * [session] on the panel's ordered list, when it is known (#142), frozen once taken (BUG6/Q10): later list changes
      * add new games at the end and pass over games gone, but never move a game, so ▲/▼ and the banner's names stay
-     * true. The order is taken afresh when the panel opens ([thaw]) or a chip is picked ([pickChip]).
+     * true. The order is taken afresh only when a game or a chip is picked in the guide ([pick], [pickChip]), or a new
+     * session starts (the player left and opened again).
      */
     internal fun ordered(session: SportsLiveZapSession): SportsLiveZapSession =
         lineup()?.let(session::withFrozenLineup) ?: session

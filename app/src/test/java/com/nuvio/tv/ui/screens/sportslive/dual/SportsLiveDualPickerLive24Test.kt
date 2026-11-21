@@ -128,4 +128,67 @@ class SportsLiveDualPickerLive24Test {
         assertEquals(b, state.left.item)
         assertEquals(Side.LEFT, state.audibleSide)
     }
+
+    // ▲ ▼ in a pane (user TV report 2026-11-21 ~14:10: zapping cycled the 3 games of a basketball filter, BYU lost)
+
+    @Test
+    fun `a pane zaps through every ranked live game and can always get back to a game it played`() = runTest(mainDispatcherRule.dispatcher) {
+        val byu = dualItem("byu")
+        val d = dualItem("d")
+        val viewModel = SportsLiveDualViewModel(
+            resolve = { item -> dualStream(item.id) },
+            endedKeys = { emptySet() },
+            // Opened under a basketball-only filter, with BYU (football) in the left pane.
+            session = SportsLiveDualSession(byu, a, listOf(a, b, c), filter = "Basketball", tab = SportsLiveTab.LIVE_NOW),
+            liveGames = MutableStateFlow(listOf(a, b, c, d))
+        )
+        runCurrent()
+        assertTrue(viewModel.zap(forward = true))
+        runCurrent()
+        // Past BYU (last) to the first ranked game not in the other pane.
+        assertEquals(b, viewModel.state.value!!.left.item)
+        assertTrue(viewModel.zap(forward = false))
+        runCurrent()
+        assertEquals(byu, viewModel.state.value!!.left.item)
+        // Onwards it reaches every ranked game, not only the filter's three.
+        val seen = (1..4).map {
+            viewModel.zap(forward = true)
+            runCurrent()
+            viewModel.state.value!!.left.item
+        }
+        assertEquals(listOf(b, c, d, byu), seen)
+    }
+
+    @Test
+    fun `the pane's zap order is frozen - up then down returns, new games join at the end, ended ones are passed in place`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val d = dualItem("d")
+            val e = dualItem("e")
+            var ended = emptySet<String>()
+            val live = MutableStateFlow(listOf(a, b, c, d))
+            val viewModel = SportsLiveDualViewModel(
+                resolve = { item -> dualStream(item.id) },
+                endedKeys = { ended },
+                session = SportsLiveDualSession(c, a, listOf(a, b, c, d), null, SportsLiveTab.LIVE_NOW),
+                liveGames = live
+            )
+            runCurrent()
+            assertTrue(viewModel.zap(forward = false))
+            runCurrent()
+            assertEquals(b, viewModel.state.value!!.left.item)
+            // The ranking reorders, and e goes live.
+            live.value = listOf(d, c, e, b, a)
+            runCurrent()
+            assertTrue(viewModel.zap(forward = true))
+            runCurrent()
+            assertEquals(c, viewModel.state.value!!.left.item)
+            // d ends: passed over in place; e, new, comes after it at the end.
+            ended = setOf(d.streamKey)
+            assertTrue(viewModel.zap(forward = true))
+            runCurrent()
+            assertEquals(e, viewModel.state.value!!.left.item)
+            assertTrue(viewModel.zap(forward = false))
+            runCurrent()
+            assertEquals(c, viewModel.state.value!!.left.item)
+        }
 }

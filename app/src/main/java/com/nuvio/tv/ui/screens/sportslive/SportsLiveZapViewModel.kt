@@ -1117,8 +1117,8 @@ class SportsLiveZapViewModel internal constructor(
         focusedRowKey = null
         // #164: the order is taken afresh as the panel opens, then kept while it is open.
         frozenOrder = null
-        // BUG6/Q10: CH± follow the order the panel shows from now on.
-        controller.thaw(contentId)
+        // CH± keep the zap order frozen at the session's first zap (user, live.24: ▲ then ▼ always returns to the game
+        // you were on); opening the guide no longer re-takes it, picking a game from it does ([PlayerZapController.pick]).
         lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null

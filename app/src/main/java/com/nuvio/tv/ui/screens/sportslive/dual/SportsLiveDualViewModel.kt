@@ -139,6 +139,22 @@ internal fun dualPickerCandidates(
     }
 }
 
+/**
+ * The games dual screen's ▲ ▼ step through (live.24): [frozen], the order taken at the first zap, kept as it is (an
+ * ended or unavailable game is skipped in place by the zap, never removed, so its neighbours never shift); then the
+ * games of [now] it does not hold yet, at the end: games that started since, and every game played in this session
+ * (so a game zapped away from is always reachable again). Each game once. With nothing frozen yet: [now] in its order.
+ */
+internal fun dualZapLineup(frozen: List<SportsLiveItem>, now: List<SportsLiveItem>): List<SportsLiveItem> {
+    val taken = HashSet<String>()
+    return (frozen + now).filter { item ->
+        val keys = item.sourceKeys()
+        val keep = keys.none { it in taken }
+        if (keep) taken += keys
+        keep
+    }
+}
+
 /** Dual screen is offered on Live now and Channels only. */
 internal fun SportsLiveTab.offersDual(): Boolean = this == SportsLiveTab.LIVE_NOW || this == SportsLiveTab.CHANNELS
 
@@ -321,6 +337,9 @@ class SportsLiveDualViewModel internal constructor(
 
     private val jobs = mutableMapOf<Side, Job>()
 
+    /** Every game a pane has played this session, by stream key, in order: ▲ ▼ can always get back to one (live.24). */
+    private val played = LinkedHashMap<String, SportsLiveItem>()
+
     /** Stream keys of the games whose decoder failure has had its one retry. */
     private val deviceLimitRetried = mutableSetOf<String>()
 
@@ -429,12 +448,20 @@ class SportsLiveDualViewModel internal constructor(
     fun openPairPicker(side: Side = Side.RIGHT) {
         val state = _state.value ?: return
         pickerSide = side
-        val ranked = liveGamesNow
-        val listed = if (tab == SportsLiveTab.CHANNELS || ranked.isEmpty()) items else emptyList()
-        val pool = ranked + listed
+        val pool = rankedPool()
         val over = finishedKeys + overKeys(pool, scoresMode == ScoresMode.OFF)
         _pairHint.value = null
         _pairPicker.value = dualPickerCandidates(pool, state.left.item.sourceKeys() + state.right.item.sourceKeys(), over, endedKeys())
+    }
+
+    /**
+     * Every live game of My sports and followed teams in importance order (live.24); a Channels session's channels after
+     * them, and the session's list while the ranked one has not loaded.
+     */
+    private fun rankedPool(): List<SportsLiveItem> {
+        val ranked = liveGamesNow
+        val listed = if (tab == SportsLiveTab.CHANNELS || ranked.isEmpty()) items else emptyList()
+        return ranked + listed
     }
 
     fun closePairPicker() {
@@ -908,8 +935,24 @@ class SportsLiveDualViewModel internal constructor(
         }
     }
 
+    /**
+     * The games ▲ ▼ step through (live.24, user TV report: zapping only cycled the 3 games of the filter dual opened
+     * under, and a game zapped away from could not be reached again): the picker's ranked games, then every game played
+     * in this session ([dualZapLineup]).
+     */
+    private fun zapLineup(): List<SportsLiveItem> =
+        dualZapLineup(zapOrder, rankedPool() + played.values).also { zapOrder = it }
+
+    /**
+     * ▲ ▼'s order, frozen at the first zap (user, live.24: ▲ then ▼ always returns to the game you were on, whatever the
+     * ranking does meanwhile); games that start later join at the end.
+     */
+    private var zapOrder: List<SportsLiveItem> = emptyList()
+
     private fun zapTarget(current: SportsLiveItem, other: SportsLiveItem, forward: Boolean): SportsLiveItem? {
+        val items = zapLineup()
         if (items.isEmpty()) return null
+        val over = finishedKeys + overKeys(items, scoresMode == ScoresMode.OFF)
         val ended = endedKeys()
         val failed = triedGames.ids()
         val noStream = sportsLiveNoStreamIds(items, readiness, workingLinks)
@@ -925,6 +968,7 @@ class SportsLiveDualViewModel internal constructor(
                 val skip = candidate.sharesSourceWith(current) ||
                     candidate.sharesSourceWith(other) ||
                     candidate.hasEnded(ended) ||
+                    candidate.sourceKeys().any { it in over } ||
                     (skipDead && dead)
                 if (!skip) return candidate
             }
@@ -938,6 +982,7 @@ class SportsLiveDualViewModel internal constructor(
     /** [delayMs]: wait this long before the lookup (a retry). */
     private fun load(side: Side, item: SportsLiveItem, delayMs: Long = 0L) {
         jobs.remove(side)?.cancel()
+        played.putIfAbsent(item.streamKey, item)
         gameWatch?.watch(item)
         dispatch(DualAction.ZapRequested(side, item))
         jobs[side] = viewModelScope.launch {
