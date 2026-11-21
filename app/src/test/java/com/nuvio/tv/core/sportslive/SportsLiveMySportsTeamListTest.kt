@@ -60,12 +60,20 @@ class SportsLiveMySportsTeamListTest {
     }
 
     @Test
-    fun `a list not loaded yet hides nothing`() {
+    fun `a game whose league cannot be told is listed under All sports only`() {
         val soccerOnly = loaded(premierLeague)
-        // The NBA list is not there: the basketball game cannot be told, so it shows.
-        assertTrue(SportsLiveMySportsScope.shows(game("Duke vs Kansas", "Basketball"), picked, soccerOnly))
+        // J3: the NBA list is not there, so the basketball game cannot be placed: not under My sports.
+        assertFalse(SportsLiveMySportsScope.shows(game("Duke vs Kansas", "Basketball"), picked, soccerOnly))
         assertFalse(SportsLiveMySportsScope.shows(game("Beltinci vs Celje", "Football"), picked, soccerOnly))
-        assertTrue(SportsLiveMySportsScope.shows(game("Beltinci vs Celje", "Football"), picked, TeamDirectory()))
+        assertFalse(SportsLiveMySportsScope.shows(game("Beltinci vs Celje", "Football"), picked, TeamDirectory()))
+        // The TV report's games: soccer of an unknown league, with leagues named for soccer.
+        assertFalse(SportsLiveMySportsScope.shows(game("Khor Fakkan vs Al-Jazira", "Soccer"), picked, both))
+        assertFalse(SportsLiveMySportsScope.shows(game("Csikszereda Miercurea Ciuc vs Corvinul Hunedoara", "Soccer"), picked, TeamDirectory()))
+        // A placed game of a named league still shows before every list is in.
+        assertTrue(SportsLiveMySportsScope.shows(game("Arsenal vs Chelsea", "Football"), picked, soccerOnly))
+        // A sport picked whole keeps them all.
+        val wholeSoccer = MySports(mapOf(MySport.SOCCER to emptySet()))
+        assertTrue(SportsLiveMySportsScope.shows(game("Khor Fakkan vs Al-Jazira", "Soccer"), wholeSoccer, TeamDirectory()))
     }
 
     @Test

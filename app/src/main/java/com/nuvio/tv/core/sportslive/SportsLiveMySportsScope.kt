@@ -22,7 +22,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
  *   only choose the Results feeds). With leagues named, a game whose league is known must be one of them. A
  *   game whose league is unknown (a bare "Basketball" or "Football") is told by its teams (#159): hidden when
  *   neither is a team of a named league, by those leagues' ESPN team lists ([MyLeague.teamList], kept in the
- *   [TeamDirectory]); shown while a list is not loaded yet, or when no named league has one (Internationals).
+ *   [TeamDirectory]); hidden too while a list is not loaded yet or the game names no two sides (J3, live.23: an
+ *   unplaced game is listed under All sports only), shown only when no named league has a list (Internationals).
  */
 object SportsLiveMySportsScope {
 
@@ -117,7 +118,10 @@ object SportsLiveMySportsScope {
         if (EspnLeagueMap.collegeFallbackFor(item) == null && routed.isNotEmpty()) {
             return routed.any { league -> named.any { it.coversLeague(league) } }
         }
-        return teamsInNamed(item, named, directory) != false
+        // J3 (live.23): a game whose league cannot be told is listed only under All sports, never under named leagues;
+        // only named leagues with no team list at all (Internationals) cannot rule a game out.
+        if (named.none { it.teamList != null }) return true
+        return teamsInNamed(item, named, directory) == true
     }
 
     /**

@@ -119,17 +119,18 @@ class SportsLiveMySportsScopeTest {
     }
 
     @Test
-    fun `with leagues named, a game of a known league must be one of them, and an unknown league shows`() {
+    fun `with leagues named, a game of a known league must be one of them, and an unplaced one is left to All sports`() {
         val nbaOnly = MySports(mapOf(MySport.BASKETBALL to setOf(MyLeague.NBA)))
         assertTrue(SportsLiveMySportsScope.shows(nba, nbaOnly))
         assertFalse(SportsLiveMySportsScope.shows(game("Duke vs North Carolina", sport = "NCAAM"), nbaOnly))
-        // A bare "Basketball" may be either: shown.
-        assertTrue(SportsLiveMySportsScope.shows(game("Duke vs North Carolina", sport = "Basketball"), nbaOnly))
+        // A bare "Basketball" may be either, and no team list places it: All sports only (J3).
+        assertFalse(SportsLiveMySportsScope.shows(game("Duke vs North Carolina", sport = "Basketball"), nbaOnly))
 
         val premierOnly = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.PREMIER_LEAGUE)))
         assertTrue(SportsLiveMySportsScope.shows(game("Arsenal vs Chelsea", sport = "Premier League"), premierOnly))
         assertFalse(SportsLiveMySportsScope.shows(game("Bayern vs Dortmund", sport = "Bundesliga"), premierOnly))
-        assertTrue(SportsLiveMySportsScope.shows(game("Arsenal vs Chelsea", sport = "Soccer"), premierOnly))
+        // No team list loaded: a bare "Soccer" game cannot be placed in the Premier League yet (J3).
+        assertFalse(SportsLiveMySportsScope.shows(game("Arsenal vs Chelsea", sport = "Soccer"), premierOnly, TeamDirectory()))
     }
 
     @Test
