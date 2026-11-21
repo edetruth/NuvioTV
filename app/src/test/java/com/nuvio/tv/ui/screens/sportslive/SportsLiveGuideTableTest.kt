@@ -5,6 +5,7 @@ import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
+import com.nuvio.tv.core.sportslive.SportsLiveGuideStyle
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ChipScore
@@ -13,7 +14,6 @@ import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
-import com.nuvio.tv.data.local.SPORTS_LIVE_GUIDE_TABLE_DEFAULT
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -301,15 +301,24 @@ class SportsLiveGuideTableTest {
         assertEquals(0f, start.translationX, 0f)
         assertEquals(0f, start.translationY, 0f)
         assertEquals(guideSqueezeTransform(1f, 1920f, 1080f), guideSqueezeTransform(3f, 1920f, 1080f))
-        // The comparison build flips this; the branch ships the smooth one.
-        assertEquals(GuideSqueezeMode.SCALE, GUIDE_SQUEEZE_MODE)
+        // One build compares both on the TV: the setting picks the squeeze; the side panel has none.
+        assertNull(guideSqueezeModeOf(SportsLiveGuideStyle.PANEL))
+        assertEquals(GuideSqueezeMode.SCALE, guideSqueezeModeOf(SportsLiveGuideStyle.TABLE_SMOOTH))
+        assertEquals(GuideSqueezeMode.JUMP, guideSqueezeModeOf(SportsLiveGuideStyle.TABLE_JUMP))
+        assertEquals(GUIDE_SQUEEZE_MS, guideFadeMs(GuideSqueezeMode.SCALE))
+        assertEquals(GUIDE_FADE_MS, guideFadeMs(GuideSqueezeMode.JUMP))
     }
 
     // ---- The setting ----
 
     @Test
-    fun `the new guide is off by default and its switch is stored per profile`() = runTest {
-        assertFalse(SPORTS_LIVE_GUIDE_TABLE_DEFAULT)
+    fun `the guide setting is Off, the side panel, by default and its choice is stored per profile`() = runTest {
+        assertEquals(SportsLiveGuideStyle.PANEL, SportsLiveGuideStyle.DEFAULT)
+        assertFalse(SportsLiveGuideStyle.DEFAULT.table)
+        assertTrue(SportsLiveGuideStyle.TABLE_SMOOTH.table && SportsLiveGuideStyle.TABLE_JUMP.table)
+        assertEquals(SportsLiveGuideStyle.PANEL, SportsLiveGuideStyle.fromStored("SOMETHING_ELSE"))
+        // A three-way picker in Settings, not an On/Off switch.
+        assertFalse(com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GUIDE_TABLE.isSwitch)
         val store1 = TestPreferencesStore()
         val store2 = TestPreferencesStore()
         val active = MutableStateFlow(1)
@@ -319,11 +328,11 @@ class SportsLiveGuideTableTest {
         }
         val profiles = mockk<ProfileManager> { every { activeProfileId } returns active }
         val prefs = SportsLivePreferencesDataStore(factory, profiles)
-        assertFalse(prefs.guideTable.first())
-        prefs.setGuideTable(true)
-        assertTrue(prefs.guideTable.first())
+        assertEquals(SportsLiveGuideStyle.PANEL, prefs.guideStyle.first())
+        prefs.setGuideStyle(SportsLiveGuideStyle.TABLE_JUMP)
+        assertEquals(SportsLiveGuideStyle.TABLE_JUMP, prefs.guideStyle.first())
         active.value = 2
-        assertFalse(prefs.guideTable.first())
+        assertEquals(SportsLiveGuideStyle.PANEL, prefs.guideStyle.first())
     }
 
     private val strings = GameStatusStrings(

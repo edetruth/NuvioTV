@@ -660,12 +660,15 @@ private fun GuideLegendItem(mark: GuideMark, text: Int) {
 @Composable
 fun sportsLiveGuideSqueeze(zap: SportsLiveZapViewModel): Modifier {
     if (!zap.hasSession) return Modifier
-    val table by zap.guideTable.collectAsState()
+    val style by zap.guideStyle.collectAsState()
     val open by zap.panelOpen.collectAsState()
-    val squeezed = table && open
-    return when (GUIDE_SQUEEZE_MODE) {
+    // The setting may change between openings; the animation state below is kept for either.
+    val mode = guideSqueezeModeOf(style)
+    val squeezed = mode != null && open
+    val progress = remember { Animatable(0f) }
+    return when (mode) {
+        null -> Modifier
         GuideSqueezeMode.SCALE -> {
-            val progress = remember { Animatable(0f) }
             LaunchedEffect(squeezed) {
                 progress.animateTo(if (squeezed) 1f else 0f, tween(GUIDE_SQUEEZE_MS, easing = FastOutSlowInEasing))
             }

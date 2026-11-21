@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
+import com.nuvio.tv.core.sportslive.SportsLiveGuideStyle
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGuideKey.CONSUMED
@@ -364,15 +365,22 @@ internal class SportsLiveGuideIdle(
 // ---- The video squeeze ----
 
 /**
- * How the video goes to its window as the guide opens (to compare on the onn TV): [SCALE] animates a graphics-layer
+ * How the video goes to its window as the guide opens (to compare on the onn TV, [SportsLiveGuideStyle]): [SCALE] animates a graphics-layer
  * scale and move of the same video container over [GUIDE_SQUEEZE_MS] (no layout change, so the surface keeps its
  * size); [JUMP] resizes the container's layout once, at once, and only the guide fades in. Neither re-attaches the
  * surface nor touches the player.
  */
 internal enum class GuideSqueezeMode { SCALE, JUMP }
 
-/** The mode in use: flip to [GuideSqueezeMode.JUMP] to compare on the TV. */
-internal val GUIDE_SQUEEZE_MODE = GuideSqueezeMode.SCALE
+/** The squeeze of a guide [style] (live.21: one build compares both on the TV); null for the side panel. */
+internal fun guideSqueezeModeOf(style: SportsLiveGuideStyle): GuideSqueezeMode? = when (style) {
+    SportsLiveGuideStyle.PANEL -> null
+    SportsLiveGuideStyle.TABLE_SMOOTH -> GuideSqueezeMode.SCALE
+    SportsLiveGuideStyle.TABLE_JUMP -> GuideSqueezeMode.JUMP
+}
+
+/** How long the guide fades in and out with [mode]: with the smooth squeeze, as long as the video moves. */
+internal fun guideFadeMs(mode: GuideSqueezeMode?): Int = if (mode == GuideSqueezeMode.JUMP) GUIDE_FADE_MS else GUIDE_SQUEEZE_MS
 
 internal const val GUIDE_SQUEEZE_MS = 200
 internal const val GUIDE_FADE_MS = 150

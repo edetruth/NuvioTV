@@ -267,11 +267,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
     // B2: the guide stays open while its Hold OK menu is up, and its idle wait starts again once the menu goes.
     LaunchedEffect(menu != null) { viewModel.onGuideMenu(held = menu != null) }
     if (guideTable) {
-        val fadeMs = if (com.nuvio.tv.ui.screens.sportslive.GUIDE_SQUEEZE_MODE == com.nuvio.tv.ui.screens.sportslive.GuideSqueezeMode.SCALE) {
-            com.nuvio.tv.ui.screens.sportslive.GUIDE_SQUEEZE_MS
-        } else {
-            com.nuvio.tv.ui.screens.sportslive.GUIDE_FADE_MS
-        }
+        val guideStyle by viewModel.guideStyle.collectAsState()
+        val fadeMs = com.nuvio.tv.ui.screens.sportslive.guideFadeMs(com.nuvio.tv.ui.screens.sportslive.guideSqueezeModeOf(guideStyle))
         AnimatedVisibility(
             visible = panelOpen,
             enter = fadeIn(tween(fadeMs)),

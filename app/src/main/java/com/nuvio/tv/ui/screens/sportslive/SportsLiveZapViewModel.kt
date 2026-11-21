@@ -44,6 +44,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveMyGames
 import com.nuvio.tv.core.sportslive.SportsLiveStillWatching
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
+import com.nuvio.tv.core.sportslive.SportsLiveGuideStyle
 import com.nuvio.tv.core.sportslive.SportsLiveOkOnLive
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
@@ -180,8 +181,8 @@ class SportsLiveZapViewModel internal constructor(
     private val identify: (List<SportsLiveItem>) -> Unit = {},
     // #172, TV QA: Hold OK → More… → Report a problem saves a report by its trigger ([SportsLiveReporter.report]).
     private val report: (String) -> Unit = {},
-    // live.21 B2: "In-player guide: New table (beta)"; OK opens it and it closes by itself when idle.
-    guideTableSetting: Flow<Boolean> = flowOf(false)
+    // live.21 B2: "In-player guide (beta)": the side panel, or the new table (smooth or jump); OK opens the table.
+    guideStyleSetting: Flow<SportsLiveGuideStyle> = flowOf(SportsLiveGuideStyle.DEFAULT)
 ) : ViewModel() {
 
     @Inject constructor(
@@ -212,14 +213,17 @@ class SportsLiveZapViewModel internal constructor(
         nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 },
         identify = { items -> identifier?.offer(items) },
         report = { trigger -> reporter?.report(trigger) },
-        guideTableSetting = prefs?.guideTable ?: flowOf(false)
+        guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.DEFAULT)
     )
 
     /**
      * The in-player guide is the new table (live.21, design B2) rather than the side panel: the same panel state, drawn
      * as [SportsLiveGuideTable] with the video squeezed to a corner.
      */
-    val guideTable: StateFlow<Boolean> = guideTableSetting.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val guideStyle: StateFlow<SportsLiveGuideStyle> = guideStyleSetting.stateIn(viewModelScope, SharingStarted.Eagerly, SportsLiveGuideStyle.DEFAULT)
+
+    /** The new table is the guide ([guideStyle], either squeeze). */
+    val guideTable: StateFlow<Boolean> = guideStyle.map { it.table }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // B2: OK opens the guide (on its release); the guide closes itself after GUIDE_IDLE_CLOSE_MS with no key.
     private val guideOk = SportsLiveGuideOkKey()

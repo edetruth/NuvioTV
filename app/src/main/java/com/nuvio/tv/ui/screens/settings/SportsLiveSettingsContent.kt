@@ -112,7 +112,7 @@ internal fun SportsLiveSettingsContent(
     val remindedTeams by viewModel.remindedTeams.collectAsStateWithLifecycle()
     val gameEndAction by viewModel.gameEndAction.collectAsStateWithLifecycle()
     val okOnLive by viewModel.okOnLive.collectAsStateWithLifecycle()
-    val guideTable by viewModel.guideTable.collectAsStateWithLifecycle()
+    val guideStyle by viewModel.guideStyle.collectAsStateWithLifecycle()
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
     val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
     val clockMs by rememberSportsLiveClockMs()
@@ -246,7 +246,6 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.MY_TEAMS_SPOILERS -> state.scoresChoice.myTeamsOnly
                 SportsLiveSetting.REAL_TIME_SCORES -> state.scores.realTime
                 SportsLiveSetting.HOVER_PREVIEW -> state.hoverPreview
-                SportsLiveSetting.GUIDE_TABLE -> guideTable
                 else -> state.dataSaver
             }
             // A row switched off by another setting reads Off; the help line says why.
@@ -268,6 +267,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.OPEN_GAME -> openGameLabel(state.openGame) to { picker = ScorePicker.OPEN_GAME }
                 SportsLiveSetting.GAME_END -> gameEndLabel(gameEndAction) to { picker = ScorePicker.GAME_END }
                 SportsLiveSetting.OK_ON_LIVE -> okOnLiveLabel(okOnLive) to { picker = ScorePicker.OK_ON_LIVE }
+                SportsLiveSetting.GUIDE_TABLE -> guideStyleLabel(guideStyle) to { picker = ScorePicker.GUIDE_STYLE }
                 SportsLiveSetting.TIP_OFF -> tipOffLabel(alerts.tipOff) to { picker = ScorePicker.TIP_OFF }
                 SportsLiveSetting.REMINDED_TEAMS -> (summarise(remindedTeams.map { it.name })
                     ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.RemindedTeams, null) }
@@ -512,6 +512,17 @@ internal fun SportsLiveSettingsContent(
             },
             onDismiss = { picker = null }
         )
+        ScorePicker.GUIDE_STYLE -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_guide_table),
+            subtitle = stringResource(R.string.sports_live_setting_guide_table_help),
+            options = com.nuvio.tv.core.sportslive.SportsLiveGuideStyle.entries.map { SettingsPickerOption(it, guideStyleLabel(it)) },
+            selectedValue = guideStyle,
+            onOptionSelected = { value ->
+                picker = null
+                viewModel.setGuideStyle(value)
+            },
+            onDismiss = { picker = null }
+        )
         ScorePicker.TIP_OFF -> SettingsSingleChoiceDialog(
             title = stringResource(R.string.sports_live_setting_tip_off),
             subtitle = stringResource(R.string.sports_live_setting_tip_off_help),
@@ -604,7 +615,7 @@ private const val LEAGUES_PREFIX = "leagues:"
 private val PageSaver = Saver<SportsLiveSettingsPage, String>(save = { it.token }, restore = ::sportsLiveSettingsPageOf)
 
 /** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
-private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, OK_ON_LIVE, TIP_OFF, STATUS }
+private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, OK_ON_LIVE, GUIDE_STYLE, TIP_OFF, STATUS }
 
 /** Asked for the first row of a page, once it has composed. */
 private const val FIRST_ROW = "\u0000first"
@@ -716,6 +727,15 @@ private fun openGameLabel(openGame: SportsLiveOpenGame): String = stringResource
     when (openGame) {
         SportsLiveOpenGame.PLAY_BEST -> R.string.sports_live_open_game_play_best
         SportsLiveOpenGame.LET_ME_CHOOSE -> R.string.sports_live_open_game_let_me_choose
+    }
+)
+
+@Composable
+private fun guideStyleLabel(value: com.nuvio.tv.core.sportslive.SportsLiveGuideStyle): String = stringResource(
+    when (value) {
+        com.nuvio.tv.core.sportslive.SportsLiveGuideStyle.PANEL -> R.string.sports_live_guide_style_panel
+        com.nuvio.tv.core.sportslive.SportsLiveGuideStyle.TABLE_SMOOTH -> R.string.sports_live_guide_style_smooth
+        com.nuvio.tv.core.sportslive.SportsLiveGuideStyle.TABLE_JUMP -> R.string.sports_live_guide_style_jump
     }
 )
 

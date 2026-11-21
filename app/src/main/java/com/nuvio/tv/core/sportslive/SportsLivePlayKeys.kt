@@ -16,6 +16,24 @@ enum class SportsLiveOkOnLive {
 }
 
 /**
+ * "In-player guide (beta)" (live.21, design B2), a temporary three-way setting so one build compares both squeezes on
+ * the TV: [PANEL] (default) the side panel; [TABLE_SMOOTH] the new table with the video scaled to its corner over
+ * 200 ms; [TABLE_JUMP] the new table with the video resized at once and only the guide fading in.
+ */
+enum class SportsLiveGuideStyle {
+    PANEL, TABLE_SMOOTH, TABLE_JUMP;
+
+    /** The new table, either squeeze. */
+    val table: Boolean get() = this != PANEL
+
+    companion object {
+        val DEFAULT = PANEL
+
+        fun fromStored(value: String?): SportsLiveGuideStyle = entries.firstOrNull { it.name == value } ?: DEFAULT
+    }
+}
+
+/**
  * "At tip-off" (research Q17): what a reminded or followed game's kickoff does. [REMIND] (default): a toast that never
  * takes focus, "▶ or hold OK to watch"; [SWITCH]: the same toast counts down 10 s and then plays the game (Back
  * cancels), only where it cannot hurt (never over a live game being watched).

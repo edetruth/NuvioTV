@@ -6,6 +6,7 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
+import com.nuvio.tv.core.sportslive.SportsLiveGuideStyle
 import com.nuvio.tv.core.sportslive.SportsLiveOkOnLive
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -170,7 +171,7 @@ class SportsLiveGuideViewModelTest {
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, mockk<DirectDebridResolver>(relaxed = true),
             profiles, repo, scores, mainDispatcherRule.dispatcher,
             okOnLive = flowOf(okOnLive),
-            guideTableSetting = flowOf(guide)
+            guideStyleSetting = flowOf(if (guide) SportsLiveGuideStyle.TABLE_SMOOTH else SportsLiveGuideStyle.PANEL)
         )
     }
 

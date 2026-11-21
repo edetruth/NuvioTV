@@ -64,7 +64,7 @@ internal enum class SportsLiveSetting(
     HOVER_PREVIEW(SportsLiveSettingsSection.HOME_AND_ROWS, R.string.sports_live_setting_hover_preview, R.string.sports_live_setting_hover_preview_subtitle),
     RUN_SETUP(SportsLiveSettingsSection.SETUP, R.string.sports_live_setting_run_setup, R.string.sports_live_setting_run_setup_subtitle),
     SCORES_STATUS(SportsLiveSettingsSection.STATUS, R.string.sports_live_setting_scores_status, R.string.sports_live_setting_scores_status_subtitle),
-    /** "In-player guide: New table (beta)" (live.21, design B2): off by default, so the user can compare it with the panel. */
+    /** "In-player guide (beta)" (live.21, design B2): Off (side panel) / Table (smooth) / Table (jump), a picker; Off by default. */
     GUIDE_TABLE(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_guide_table, R.string.sports_live_setting_guide_table_help),
     DATA_SAVER(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_data_saver, R.string.sports_live_setting_data_saver_subtitle),
     /** "Real-time scores" (live.20 Q18, #85): opt-in, every score delay off, also while video plays. */
@@ -105,7 +105,7 @@ internal enum class SportsLiveSetting(
     private companion object {
         val SWITCHES = setOf(
             REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
-            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS, REAL_TIME_SCORES, GUIDE_TABLE
+            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS, REAL_TIME_SCORES
         )
     }
 }

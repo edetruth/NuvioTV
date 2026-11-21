@@ -167,13 +167,12 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.CLOSE_GAME_ALERTS -> viewModelScope.launch { prefs.setCloseGameAlerts(on) }
             SportsLiveSetting.MY_TEAMS_SPOILERS -> viewModelScope.launch { prefs.updateScoresChoice { it.withMyTeamsOnly(on) } }
             SportsLiveSetting.REAL_TIME_SCORES -> viewModelScope.launch { prefs.setRealTimeScores(on) }
-            SportsLiveSetting.GUIDE_TABLE -> viewModelScope.launch { prefs.setGuideTable(on) }
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
             SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.RUN_SETUP, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS,
             SportsLiveSetting.GAME_END, SportsLiveSetting.REMINDED_TEAMS, SportsLiveSetting.TIP_OFF, SportsLiveSetting.OK_ON_LIVE,
-            SportsLiveSetting.REPORT_PROBLEM -> Unit
+            SportsLiveSetting.REPORT_PROBLEM, SportsLiveSetting.GUIDE_TABLE -> Unit
         }
     }
 
@@ -234,9 +233,13 @@ class SportsLiveSettingsViewModel @Inject constructor(
         }
     }
 
-    /** "In-player guide: New table (beta)" (live.21 B2). */
-    val guideTable: StateFlow<Boolean> = prefs.guideTable
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nuvio.tv.data.local.SPORTS_LIVE_GUIDE_TABLE_DEFAULT)
+    /** "In-player guide (beta)" (live.21 B2). */
+    val guideStyle: StateFlow<com.nuvio.tv.core.sportslive.SportsLiveGuideStyle> = prefs.guideStyle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nuvio.tv.core.sportslive.SportsLiveGuideStyle.DEFAULT)
+
+    fun setGuideStyle(value: com.nuvio.tv.core.sportslive.SportsLiveGuideStyle) {
+        viewModelScope.launch { prefs.setGuideStyle(value) }
+    }
 
     /** "OK on live" (research Q19). */
     val okOnLive: StateFlow<com.nuvio.tv.core.sportslive.SportsLiveOkOnLive> = prefs.okOnLive
