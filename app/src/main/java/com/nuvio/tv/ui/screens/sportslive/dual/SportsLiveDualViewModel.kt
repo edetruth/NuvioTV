@@ -773,6 +773,15 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /**
+     * How far [item]'s pane is behind its live edge (G7): its side reports it to the score hold, as the full player
+     * does, so other games' scores wait for the pane furthest behind instead of a fixed minute.
+     */
+    fun onBehindLive(item: SportsLiveItem, ms: Long?) {
+        val side = _state.value?.sideOf(item) ?: return
+        WatchingNow.shared.behindLive(dualWatchOwner(side), ms)
+    }
+
+    /**
      * [item]'s pane player showed its first frame of [stream] (null: whatever the pane plays). A late
      * first frame of a link the pane already left (Try next link, a recovery) is ignored (#138).
      */

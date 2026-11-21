@@ -1130,6 +1130,14 @@ class SportsLiveViewModel internal constructor(
      * now the session has every game of the tab, whatever the filter, so the player's panel opens on
      * All (#68); other tabs keep the list shown. With no session to start, any earlier one ends.
      */
+    /**
+     * [target]'s player is opening: its zap session, as [startZapSession]; none for a replay (G4), which plays alone
+     * under its clean title (no ▲▼ over the Replays list's raw titles, no live guide, no mini player on Back).
+     */
+    fun startZapSession(target: SportsLiveZapTarget) {
+        if (target.replay) SportsLiveZapSessions.clear() else startZapSession(target.item)
+    }
+
     fun startZapSession(item: SportsLiveItem) {
         val state = uiState.value
         // More live's games are zapped only among themselves, when one of them is played (user 2026-11-21).

@@ -80,6 +80,15 @@ data class SportsLiveTeamUiState(
 
     /** The last results' W/L and scores: Show, or once revealed. */
     val showsResults: Boolean get() = TeamPageSpoilers.showsResults(mode, revealed)
+
+    /** One of the last results is spoiler-protected (#151): whatever sums it up would give it away. */
+    val hasProtectedResult: Boolean get() = data?.recent.orEmpty().any { protection.protects(it) }
+
+    /**
+     * The header's record · standing · streak line (G5): as [showsRecord], never while one of the last results is
+     * protected ("L1" would tell yesterday's loss), whatever the page's Reveal, as the result row itself.
+     */
+    val showsRecordLine: Boolean get() = showsRecord && !hasProtectedResult
 }
 
 /**

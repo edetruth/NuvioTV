@@ -117,6 +117,8 @@ class SportsLivePlayViewModelTest {
         assertEquals(1, events.size)
         val play = events.single() as SportsLivePlayEvent.Play
         assertEquals(MERGED, play.target.item)
+        // A game is not a replay: its player zaps (G4).
+        assertFalse(play.target.replay)
         assertEquals(STREAM.url, play.target.playback?.url)
         // A stream the user picked is not announced.
         assertNull(play.source)
@@ -491,6 +493,8 @@ class SportsLivePlayViewModelTest {
         val play = events.single() as SportsLivePlayEvent.Play
         assertEquals(STREAM.url, play.target.playback?.url)
         assertEquals("Away at Home", play.target.item.meta.name)
+        // G4: marked a replay, so the section starts no zap session over the Replays list for it.
+        assertTrue(play.target.replay)
         assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
     }
 
@@ -511,6 +515,7 @@ class SportsLivePlayViewModelTest {
         advanceUntilIdle()
         val play = events.single() as SportsLivePlayEvent.Play
         assertEquals("replay-2", play.target.item.id)
+        assertTrue(play.target.replay)
     }
 
     @Test

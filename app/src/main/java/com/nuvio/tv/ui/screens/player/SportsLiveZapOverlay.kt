@@ -75,6 +75,7 @@ import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.LiveWindow
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
+import com.nuvio.tv.ui.screens.sportslive.behindLiveForScores
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePausedLive
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
@@ -519,7 +520,7 @@ private fun BoxScope.BehindLiveIndicator(
     LaunchedEffect(Unit) {
         while (true) {
             window = liveWindow()
-            onBehind(window?.takeIf { it.isDynamic }?.behindEdgeMs)
+            onBehind(behindLiveForScores(window))
             delay(500)
         }
     }

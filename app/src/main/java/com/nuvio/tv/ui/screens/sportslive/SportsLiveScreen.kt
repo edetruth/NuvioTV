@@ -312,7 +312,7 @@ fun SportsLiveScreen(
         },
         onPlayTarget = { target ->
             previewPlayer.release()
-            viewModel.startZapSession(target.item)
+            viewModel.startZapSession(target)
             onPlayTarget(target)
         }
     )

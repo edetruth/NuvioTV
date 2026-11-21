@@ -129,7 +129,12 @@ data class SportsLiveZapTarget(
     /** "Choose stream" (#140): the item's Stream screen opens to pick from, with no autoplay. */
     val manualSelection: Boolean = false,
     /** Live now's Resume (#148): the player starts at the live edge, never at a saved position. */
-    val liveEdge: Boolean = false
+    val liveEdge: Boolean = false,
+    /**
+     * A replay (catch up, Results, Replays) under its clean title (G4): it starts no zap session, so no ▲▼ over other
+     * replays' raw addon titles (they can carry the result), no live guide over it and no mini player on Back.
+     */
+    val replay: Boolean = false
 )
 
 sealed interface SportsLiveZapEvent {
