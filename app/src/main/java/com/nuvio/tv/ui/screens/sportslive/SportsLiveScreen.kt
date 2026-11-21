@@ -2,7 +2,11 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import android.os.SystemClock
 import kotlinx.coroutines.withTimeoutOrNull
+import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowse
+import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowseKind
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelList
+import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
@@ -148,6 +152,7 @@ fun SportsLiveScreen(
     onOpenTeam: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val channelBrowse by viewModel.channelBrowse.collectAsStateWithLifecycle()
     // While Sports Live shows, the mini player stays docked in its stage on every tab (#157).
     val miniSection = remember { Any() }
     DisposableEffect(miniSection) {
@@ -502,7 +507,17 @@ fun SportsLiveScreen(
             onRevealResult = scoresViewModel::revealResult,
             onBrowsing = viewModel::setBrowsing,
             onShowNewRows = viewModel::showNewRows,
-            onToggleChannelFavorite = viewModel::toggleChannelFavorite
+            onToggleChannelFavorite = viewModel::toggleChannelFavorite,
+            channelBrowse = channelBrowse,
+            channelActions = remember(viewModel) {
+                SportsLiveChannelActions(
+                    onOpenBrowse = viewModel::openChannelBrowse,
+                    onCloseBrowse = viewModel::closeChannelBrowse,
+                    onBrowseKind = viewModel::setChannelBrowseKind,
+                    onQuery = viewModel::setChannelQuery,
+                    onCountries = viewModel::setChannelCountries
+                )
+            }
         )
     }
 }
@@ -627,7 +642,10 @@ private fun SportsLiveContent(
     /** "N new" on Refresh (TV QA Q5): the rows that waited while Live now was browsed. */
     onShowNewRows: () -> Unit = {},
     /** Hold OK → Add to / Remove from favorites on a Channels row (phase 1): the channel, and whether it is one now. */
-    onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> }
+    onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> },
+    /** Channels' browse view (phase 2); null while the tab shows its own sections. */
+    channelBrowse: SportsLiveChannelBrowse? = null,
+    channelActions: SportsLiveChannelActions = SportsLiveChannelActions()
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -648,13 +666,15 @@ private fun SportsLiveContent(
     // from a game, Details or the player restores the position saved with the back stack entry.
     // The board for this tab and filter (#71): until it is built, the list waits (a frame or two), never
     // holding the main thread.
-    val shownBoard = board?.takeIf { it.shows(uiState.selectedTab, uiState.selectedFilter) }
+    // Channels (phase 2): a board of the view shown, the tab's sections or a browse kind.
+    val channelViewKey = SportsLiveChannelSummary.viewKey(channelBrowse).takeIf { uiState.selectedTab == SportsLiveTab.CHANNELS }
+    val shownBoard = board?.takeIf { it.shows(uiState.selectedTab, uiState.selectedFilter) && (channelViewKey == null || it.channels?.view == channelViewKey) }
     val boardPending = shownBoard == null
     // V2 (#132): Live now and Upcoming are the Scoreboard + stage; Channels and Replays list cards.
     val scoreboard = shownBoard?.rows != null
     // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.
     val agenda = shownBoard?.agenda
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}" + channelViewKey?.let { "|$it" }.orEmpty()
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val liveLabel = stringResource(R.string.sports_live_live_pill)
@@ -690,6 +710,24 @@ private fun SportsLiveContent(
     // The Scoreboard's rows come ready from the view model (#71), grouped LIVE → STARTING SOON → CHANNELS → JUST ENDED.
     val boardRowOf = shownBoard?.rowOf.orEmpty()
     val items = shownBoard?.items.orEmpty()
+    // Channels phase 2: the browse view's bar, its letters (◂ ▸ jump between them) and the panels it opens.
+    val channelSummary = shownBoard?.channels
+    val channelBarShown = channelViewKey != null && channelBrowse != null
+    val channelBarFocusRequester = remember { FocusRequester() }
+    var channelBarHasFocus by remember { mutableStateOf(false) }
+    val channelLetters = if (channelBarShown && channelBrowse?.kind != SportsLiveChannelBrowseKind.POPULAR) {
+        items.map { boardRowOf[it.listKey]?.section.orEmpty() }
+    } else {
+        null
+    }
+    var countriesOpen by remember { mutableStateOf(false) }
+    var findOpen by remember { mutableStateOf(false) }
+    // Opening or leaving the browse view puts focus on the new list's first row once its board is drawn.
+    var channelFocusPending by remember { mutableStateOf(false) }
+    val openChannelBrowse: (SportsLiveChannelBrowseKind) -> Unit = { kind ->
+        channelFocusPending = true
+        channelActions.onOpenBrowse(kind)
+    }
     // The tab and filter the list was last opened on: until the change below resets [focusedCardKey], it names a row
     // of the list before.
     var listedFilterKey by rememberSaveable { mutableStateOf(filterKey) }
@@ -893,7 +931,7 @@ private fun SportsLiveContent(
     BackHandler(enabled = dayBarHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
-    val contentEntryFocusRequester = when (liveNowEntry) {
+    val contentEntryFocusRequester = if (channelBarShown) channelBarFocusRequester else when (liveNowEntry) {
         LiveNowEntry.RESUME -> resumeFocusRequester
         LiveNowEntry.STRIP -> catchUpFocusRequester
         LiveNowEntry.LIST -> dayBarFocusRequester ?: entryCardFocusRequester
@@ -951,7 +989,12 @@ private fun SportsLiveContent(
     val resultsFilterShown = showingResults && results.status == ResultsStatus.READY && results.sports.isNotEmpty()
     // #146: while My sports hides games, All sports is offered (on Live now too, as its only option).
     val allSportsOffered = SportsLiveUiState.ALL_SPORTS_FILTER in uiState.filters
-    val filterShown = if (showingResults) resultsFilterShown else sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size, allSportsOffered)
+    // Channels phase 2: no region dropdown; the browse view's Countries panel filters instead.
+    val filterShown = if (showingResults) {
+        resultsFilterShown
+    } else {
+        uiState.selectedTab != SportsLiveTab.CHANNELS && sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size, allSportsOffered)
+    }
     val filterFocusRequester = remember { FocusRequester() }
     // The columns (#170, [sportsLiveColumnTarget]): Up from the list column's top goes to the selected tab, on
     // every tab, never to the control above it on the right.
@@ -960,6 +1003,7 @@ private fun SportsLiveContent(
     val controlsFocusRequester = remember { FocusRequester() }
     var resultsStageShown by remember { mutableStateOf(false) }
     val aboveListFocusRequester = when {
+        channelBarShown -> channelBarFocusRequester
         catchUpShown -> catchUpFocusRequester
         resumeShown -> resumeFocusRequester
         else -> aboveContentFocusRequester
@@ -1360,6 +1404,32 @@ private fun SportsLiveContent(
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
+    // Channels phase 2: Back from the browse view goes back to the tab's sections (composed later, so it wins).
+    BackHandler(enabled = channelBarShown && (listHasFocus || channelBarHasFocus)) {
+        channelFocusPending = true
+        channelActions.onCloseBrowse()
+    }
+    LaunchedEffect(channelFocusPending, shownBoard) {
+        if (!channelFocusPending || shownBoard == null) return@LaunchedEffect
+        repeat(2) { withFrameNanos { } }
+        val first = items.firstOrNull()
+        runCatching { (if (first != null) cardFocusRequester(first) else if (channelBarShown) channelBarFocusRequester else activeTabFocusRequester).requestFocus() }
+        channelFocusPending = false
+    }
+    if (countriesOpen && channelSummary != null) {
+        SportsLiveCountriesSheet(summary = channelSummary, onSave = channelActions.onCountries, onDismiss = { countriesOpen = false })
+    }
+    if (findOpen && channelBrowse != null) {
+        SportsLiveFindChannelSheet(
+            query = channelBrowse.query,
+            matches = items.size,
+            onQuery = channelActions.onQuery,
+            onDismiss = {
+                findOpen = false
+                channelFocusPending = true
+            }
+        )
+    }
     // F6, TV QA BUG7 / Q5: once the user moves into Live now's content (the list, the strip, the Resume row, the stage)
     // nothing moves under them, on the tabs too (no row leaves, none re-orders, new ones wait behind "N new" on
     // Refresh); Refresh, another tab or leaving the screen lets it go. Before that (the first loads) rows land freely.
@@ -1648,6 +1718,35 @@ private fun SportsLiveContent(
             YourTeamsStrip(stageShown = false, modifier = Modifier.padding(top = NuvioTheme.spacing.sm))
         }
         Spacer(modifier = Modifier.height(SportsLiveTokens.Size.HeaderBottomGap))
+        if (channelBarShown && channelBrowse != null) {
+            SportsLiveChannelBrowseBar(
+                browse = channelBrowse,
+                summary = channelSummary,
+                shownCount = items.size,
+                firstFocus = channelBarFocusRequester,
+                upFocus = activeTabFocusRequester,
+                downFocus = entryCardFocusRequester,
+                onCountries = { countriesOpen = true },
+                onKind = { kind ->
+                    channelFocusPending = true
+                    channelActions.onBrowseKind(kind)
+                },
+                onFind = { findOpen = true },
+                modifier = Modifier.onFocusChanged { channelBarHasFocus = it.hasFocus }
+            )
+            if (!boardPending && items.isEmpty()) {
+                Text(
+                    text = if (channelBrowse.query.isBlank()) {
+                        stringResource(R.string.sports_live_state_no_channels)
+                    } else {
+                        stringResource(R.string.sports_live_channels_no_match, channelBrowse.query.trim())
+                    },
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                    color = SportsLiveTokens.Colors.TextMuted
+                )
+                return@Column
+            }
+        }
 
         // The board is being built (#71): nothing to draw for a moment, and never "nothing here".
         if (boardPending && uiState.visibleItems.isNotEmpty()) return@Column
@@ -1974,11 +2073,12 @@ private fun SportsLiveContent(
                     // Recreated per tab and filter, so its focus restorer never brings back another list's card.
                     key(filterKey) {
                         SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
+                          // Channels phase 2: the browse list keeps room at its right edge for its letter.
+                          Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
+                                    .fillMaxSize()
                                     .sportsLiveFadingEdges(listState, LIST_FADE)
                                     .onFocusChanged {
                                         listHasFocus = it.hasFocus
@@ -1986,7 +2086,12 @@ private fun SportsLiveContent(
                                     }
                                     .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
                                     .dpadRepeatThrottle(),
-                                contentPadding = PaddingValues(horizontal = LIST_FOCUS_ROOM, vertical = LIST_FOCUS_ROOM),
+                                contentPadding = PaddingValues(
+                                    start = LIST_FOCUS_ROOM,
+                                    end = LIST_FOCUS_ROOM + if (channelLetters != null) LETTER_RAIL_WIDTH else 0.dp,
+                                    top = LIST_FOCUS_ROOM,
+                                    bottom = LIST_FOCUS_ROOM
+                                ),
                                 verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
                             ) {
                                 itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
@@ -1995,11 +2100,12 @@ private fun SportsLiveContent(
                                     Column {
                                         if (channelsTab) {
                                             val section = boardRow.section
-                                            // Phase 1: under All regions with no favorite listed, the Favorites heading and its hint lead.
-                                            val favoritesHint = uiState.selectedFilter == null && SportsLiveChannelFavorites.FAVORITES !in sectionCounts
+                                            // Phase 1: on the tab's own view with no favorite listed, the Favorites heading and its hint lead.
+                                            val favoritesHint = channelBrowse == null && uiState.selectedFilter == null &&
+                                                SportsLiveChannelFavorites.FAVORITES !in sectionCounts
                                             if (index == 0 && favoritesHint) SportsLiveFavoritesHint()
-                                            val headed = sectionCounts.size > 1 || favoritesHint || SportsLiveChannelFavorites.isPickSection(section)
-                                            if (section != null && headed && (index == 0 || boardRowOf[items[index - 1].listKey]?.section != section)) {
+                                            // Phase 2: every section is headed (Favorites, Recent, Popular now, a letter); no region headings.
+                                            if (section != null && (index == 0 || boardRowOf[items[index - 1].listKey]?.section != section)) {
                                                 SportsLiveSectionHeader(channelSectionLabel(section, otherRegionLabel), sectionCounts[section] ?: 0)
                                             }
                                         } else if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
@@ -2023,6 +2129,52 @@ private fun SportsLiveContent(
                                                     right = watchFocusRequester
                                                     if (index == 0) up = aboveListFocusRequester
                                                 }
+                                                .onPreviewKeyEvent { event ->
+                                                    // Channels phase 2: ◂ ▸ on a browse row jump to the previous or next letter.
+                                                    val letters = channelLetters ?: return@onPreviewKeyEvent false
+                                                    val native = event.nativeKeyEvent
+                                                    val forward = when (native.keyCode) {
+                                                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+                                                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> false
+                                                        else -> return@onPreviewKeyEvent false
+                                                    }
+                                                    if (native.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent true
+                                                    val target = SportsLiveChannelList.jump(letters, index, forward) ?: return@onPreviewKeyEvent true
+                                                    val targetItem = items.getOrNull(target) ?: return@onPreviewKeyEvent true
+                                                    liveNowScope.launch {
+                                                        scrollToCard(targetItem.listKey, target, onlyIfHidden = false)
+                                                        withFrameNanos { }
+                                                        runCatching { cardFocusRequester(targetItem).requestFocus() }
+                                                    }
+                                                    true
+                                                }
+                                        )
+                                    }
+                                }
+                                // Channels phase 2: the entry rows under the tab's sections open the browse view.
+                                val summary = channelSummary
+                                if (channelsTab && channelBrowse == null && uiState.selectedFilter == null && summary != null && !summary.fallback) {
+                                    if (summary.popularTotal > summary.popularShown) {
+                                        item(key = CHANNEL_POPULAR_KEY) {
+                                            SportsLiveChannelEntryLine(
+                                                text = stringResource(R.string.sports_live_channels_see_all_popular, summary.popularTotal),
+                                                onClick = { openChannelBrowse(SportsLiveChannelBrowseKind.POPULAR) },
+                                                modifier = Modifier.focusProperties { right = watchFocusRequester }
+                                            )
+                                        }
+                                    }
+                                    item(key = CHANNEL_SPORTS_KEY) {
+                                        SportsLiveChannelEntryLine(
+                                            text = stringResource(R.string.sports_live_channels_sports_entry, summary.sports),
+                                            onClick = { openChannelBrowse(SportsLiveChannelBrowseKind.SPORTS) },
+                                            modifier = Modifier.focusProperties { right = watchFocusRequester }
+                                        )
+                                    }
+                                    item(key = CHANNEL_ALL_KEY) {
+                                        SportsLiveChannelEntryLine(
+                                            text = stringResource(R.string.sports_live_channels_all_entry, summary.all),
+                                            onClick = { openChannelBrowse(SportsLiveChannelBrowseKind.ALL) },
+                                            modifier = Modifier.focusProperties { right = watchFocusRequester }
                                         )
                                     }
                                 }
@@ -2038,6 +2190,13 @@ private fun SportsLiveContent(
                                     }
                                 }
                             }
+                            val railLetters = channelLetters?.takeIf { listHasFocus }?.let { letters ->
+                                SportsLiveChannelList.around(letters, items.indexOfFirst { it.listKey == focusedCardKey })
+                            }
+                            if (railLetters != null) {
+                                SportsLiveChannelLetterRail(railLetters, Modifier.align(Alignment.CenterEnd))
+                            }
+                          }
                         }
                     }
                 }
@@ -2121,6 +2280,11 @@ private fun SportsLiveContent(
 }
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
+
+/** Channels phase 2: the entry rows' list keys (never a channel's `addonId|id`). */
+private const val CHANNEL_POPULAR_KEY = "\u0000channels:popular"
+private const val CHANNEL_SPORTS_KEY = "\u0000channels:sports"
+private const val CHANNEL_ALL_KEY = "\u0000channels:all"
 private const val RETURN_FOCUS_FRAMES = 10
 
 /** How long Back's return waits for the strip card it left from to be listed again (BUG9). */

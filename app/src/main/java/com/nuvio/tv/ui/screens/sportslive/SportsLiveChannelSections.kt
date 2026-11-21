@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import java.util.Locale
@@ -26,11 +27,13 @@ import kotlinx.coroutines.flow.take
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun <T> sportsLiveFrozenOn(takes: Flow<*>, source: Flow<T>): Flow<T> = takes.flatMapLatest { source.take(1) }
 
-/** A Channels section's heading text: ★ Favorites, Recent, or the region in words ([channelRegionLabel]). */
+/** A Channels section's heading text: ★ Favorites, Recent, Popular now, a browse letter, or a region in words. */
 @Composable
-internal fun channelSectionLabel(section: String, other: String): String = when (section) {
-    SportsLiveChannelFavorites.FAVORITES -> stringResource(R.string.sports_live_channels_favorites)
-    SportsLiveChannelFavorites.RECENT -> stringResource(R.string.sports_live_channels_recent)
+internal fun channelSectionLabel(section: String, other: String): String = when {
+    section == SportsLiveChannelFavorites.FAVORITES -> stringResource(R.string.sports_live_channels_favorites)
+    section == SportsLiveChannelFavorites.RECENT -> stringResource(R.string.sports_live_channels_recent)
+    section == SportsLiveChannelList.POPULAR -> stringResource(R.string.sports_live_channels_popular)
+    section.startsWith(SportsLiveChannelList.LETTER) -> section.removePrefix(SportsLiveChannelList.LETTER)
     else -> channelRegionLabel(section, other)
 }
 

@@ -43,6 +43,9 @@ import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
+import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowse
+import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowseKind
+import com.nuvio.tv.core.sportslive.SportsLiveChannelCountries
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
 import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
@@ -159,7 +162,13 @@ class SportsLiveViewModel internal constructor(
     /** Channels' favorites and recent plays of the profile (phase 1). */
     channelPicks: Flow<SportsLiveChannelPicks> = flowOf(SportsLiveChannelPicks.NONE),
     /** Saves a change of the profile's channel picks. */
-    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {}
+    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {},
+    /** Channels phase 2: the countries chosen for the profile (null: the viewer's own). */
+    channelCountries: Flow<Set<String>?> = flowOf(null),
+    /** Saves the countries chosen (null: back to the viewer's own). */
+    private val saveChannelCountries: suspend (Set<String>?) -> Unit = {},
+    /** This TV's region, a viewer's own country (phase 2); null in tests. */
+    tvRegion: String? = null
 ) : ViewModel() {
 
     @Inject
@@ -227,7 +236,10 @@ class SportsLiveViewModel internal constructor(
         prefetchHooks = SportsLivePrefetchHooks.of(resolver),
         report = reporter::report,
         channelPicks = prefs.channelPicks,
-        updateChannelPicks = prefs::updateChannelPicks
+        updateChannelPicks = prefs::updateChannelPicks,
+        channelCountries = prefs.channelCountries,
+        saveChannelCountries = prefs::setChannelCountries,
+        tvRegion = SportsLiveChannelCountries.tvRegion()
     )
 
     private data class Selection(
@@ -506,10 +518,45 @@ class SportsLiveViewModel internal constructor(
     // a favorite added or removed never moves a row under focus; the ★ follows the picks at once.
     private val channelOrderTakes = MutableStateFlow(0)
     private val storedChannelPicks: Flow<SportsLiveChannelPicks> = channelPicks.catch { emit(SportsLiveChannelPicks.NONE) }
+    private val channelBrowseState = MutableStateFlow<SportsLiveChannelBrowse?>(null)
+
+    /** Channels' browse view (phase 2): null while the tab shows its own sections. */
+    val channelBrowse: StateFlow<SportsLiveChannelBrowse?> = channelBrowseState
+
     private val channelLists: Flow<SportsLiveChannelLists> =
-        combine(sportsLiveFrozenOn(channelOrderTakes, storedChannelPicks), storedChannelPicks) { order, now ->
-            SportsLiveChannelLists(order, now.favorites)
+        combine(
+            sportsLiveFrozenOn(channelOrderTakes, storedChannelPicks),
+            storedChannelPicks,
+            channelBrowseState,
+            channelCountries.catch { emit(null) }
+        ) { order, now, browse, countries ->
+            SportsLiveChannelLists(order, now.favorites, browse, countries, tvRegion)
         }.distinctUntilChanged()
+
+    /** "Sports ›", "All channels ›" or "See all popular ›" on Channels (phase 2): the browse view of that kind. */
+    fun openChannelBrowse(kind: SportsLiveChannelBrowseKind) {
+        channelBrowseState.value = SportsLiveChannelBrowse(kind)
+    }
+
+    /** Back from the browse view, or its All / Sports only switch (null kind: back to the tab's sections). */
+    fun closeChannelBrowse() {
+        channelBrowseState.value = null
+    }
+
+    /** The browse view's All / Sports only switch. */
+    fun setChannelBrowseKind(kind: SportsLiveChannelBrowseKind) {
+        channelBrowseState.update { it?.copy(kind = kind) ?: SportsLiveChannelBrowse(kind) }
+    }
+
+    /** Find a channel (phase 2): the browse view lists the channels matching [query]. */
+    fun setChannelQuery(query: String) {
+        channelBrowseState.update { it?.copy(query = query) ?: SportsLiveChannelBrowse(SportsLiveChannelBrowseKind.ALL, query) }
+    }
+
+    /** The countries panel's Back (phase 2): saves the countries ticked ([SportsLiveChannelCountries.ALL]; null: yours). */
+    fun setChannelCountries(countries: Set<String>?) {
+        viewModelScope.launch { runCatching { saveChannelCountries(countries) } }
+    }
 
     private fun takeChannelOrder() = channelOrderTakes.update { it + 1 }
 
@@ -521,7 +568,8 @@ class SportsLiveViewModel internal constructor(
     /** A channel started from the section (Channels phase 1): first in Recent. */
     fun onChannelPlayed(item: SportsLiveItem) {
         if (!item.isChannel) return
-        viewModelScope.launch { runCatching { updateChannelPicks { SportsLiveChannelFavorites.played(it, item) } } }
+        val at = nowMs()
+        viewModelScope.launch { runCatching { updateChannelPicks { SportsLiveChannelFavorites.played(it, item, at) } } }
     }
 
     /** Builds a board; tests swap it to see where it runs. */
@@ -648,7 +696,7 @@ class SportsLiveViewModel internal constructor(
         // F23: focus coming back to the tab already selected changes nothing (it used to clear the selection, and the
         // stage jumped to the addon's first item).
         if (!changed) return
-        if (tab == SportsLiveTab.CHANNELS) takeChannelOrder()
+        if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
         selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false) }
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).

@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.compose.ui.unit.dp
 import com.nuvio.tv.core.sportslive.SportsLiveBroadcasters
+import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -92,14 +93,19 @@ class SportsLiveV2P4Test {
     }
 
     @Test
-    fun `Channels rows group by region and keep each region's channels as listed`() {
+    fun `Channels with no picks and no popular brand list the viewer's countries A to Z, no region headings`() {
+        // Channels phase 2 (was: grouped by region): regions survive as the country filter and the row's tag.
         val items = listOf(
-            channel("US 1", "US"), channel("Mystery", "NOW"), channel("UK 1", "UK"), channel("US 2", "US"), channel("UK 2", "UK")
+            channel("US 2", "US"), channel("Mystery", "NOW"), channel("UK 1", "UK"), channel("US 1", "US"), channel("UK 2", "UK")
         )
-        val board = SportsLiveBoard.build(boardInputs(SportsLiveTab.CHANNELS, items), zone)
+        val inputs = boardInputs(SportsLiveTab.CHANNELS, items).copy(
+            channelLists = com.nuvio.tv.core.sportslive.SportsLiveChannelLists(tvRegion = "US")
+        )
+        val board = SportsLiveBoard.build(inputs, zone) { false }
         val rows = board.rows!!
-        assertEquals(listOf("UK 1", "UK 2", "US 1", "US 2", "Mystery"), rows.map { it.item.meta.name })
-        assertEquals(listOf("UK", "UK", "US", "US", SportsLiveChannelRegions.OTHER), rows.map { it.section })
+        assertEquals(listOf("Mystery", "US 1", "US 2"), rows.map { it.item.meta.name })
+        assertEquals(listOf("M", "U", "U").map { SportsLiveChannelList.LETTER + it }, rows.map { it.section })
+        assertTrue(board.channels!!.fallback)
         assertTrue(rows.all { it.group == ScoreboardGroup.CHANNELS && it.chip == null })
         // The list is the board's: focus and the stage follow the rows' order.
         assertEquals(rows.map { it.item }, board.items)

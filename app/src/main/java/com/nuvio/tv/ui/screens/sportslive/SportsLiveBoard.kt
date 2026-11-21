@@ -10,7 +10,9 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
+import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
+import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -58,7 +60,7 @@ data class SportsLiveBoardInputs(
     val logoRevision: Int,
     /** Standings by league (#137): Upcoming's big games read them; empty on the other tabs. */
     val standings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap(),
-    /** Channels' favorites and recent plays (phase 1); none on the other tabs. */
+    /** Channels' favorites, recent plays, browse view and countries (phases 1 and 2); none on the other tabs. */
     val channelLists: SportsLiveChannelLists = SportsLiveChannelLists.NONE
 )
 
@@ -78,7 +80,9 @@ data class SportsLiveBoard(
     /** Each item's drawn card by `addonId|id` (null: the addon's art). */
     val arts: Map<String, GameArt?>,
     /** Upcoming's Agenda (V2, P3) or Replays' days (P4): [rows] by day; null on the other tabs. */
-    val agenda: SportsLiveAgenda? = null
+    val agenda: SportsLiveAgenda? = null,
+    /** Channels (phase 2): its view, counts and countries; null on the other tabs. */
+    val channels: SportsLiveChannelSummary? = null
 ) {
     /** True when this board shows [tab] with [filter]. */
     fun shows(tab: SportsLiveTab, filter: String?): Boolean = this.tab == tab && this.filter == filter
@@ -112,9 +116,28 @@ data class SportsLiveBoard(
             row.copy(bigGame = rating.copy(reasons = reasons, eventId = event.eventId))
         }
 
-        /** Builds the board for [inputs]: pure, and slow for a large list, so callers run it off the main thread. */
-        fun build(inputs: SportsLiveBoardInputs, zone: ZoneId = ZoneId.systemDefault()): SportsLiveBoard {
+        /**
+         * Builds the board for [inputs]: pure but for [channelDead] (Channels' Popular now leaves out channels whose
+         * links all failed this session), and slow for a large list, so callers run it off the main thread.
+         */
+        fun build(
+            inputs: SportsLiveBoardInputs,
+            zone: ZoneId = ZoneId.systemDefault(),
+            channelDead: (SportsLiveItem) -> Boolean = SportsLiveChannelList::deadByMarks
+        ): SportsLiveBoard {
             val tab = inputs.tab
+            val channelView = if (tab == SportsLiveTab.CHANNELS) {
+                channelBoard(
+                    items = inputs.items,
+                    lists = inputs.channelLists,
+                    sections = inputs.filter == null,
+                    nowMs = inputs.clockMs,
+                    followed = inputs.followed,
+                    dead = channelDead
+                )
+            } else {
+                null
+            }
             val scores = inputs.scores
             val rows = if (isScoreboard(tab)) {
                 scoreboardRows(
@@ -131,9 +154,9 @@ data class SportsLiveBoard(
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
             } else {
                 when (tab) {
-                    // V2 P4: Channels by region, Replays under their spoiler-free titles, by day.
-                    // Phase 1: favorites and recent lead under All regions; a region picked lists that region alone.
-                    SportsLiveTab.CHANNELS -> channelRows(inputs.items, inputs.channelLists, sections = inputs.filter == null)
+                    // Channels (phases 1 and 2): Favorites, Recent and Popular now, or the browse view; Replays under
+                    // their spoiler-free titles, by day (V2 P4).
+                    SportsLiveTab.CHANNELS -> channelView?.rows
                     SportsLiveTab.REPLAYS -> replayRows(inputs.items)
                     else -> null
                 }
@@ -153,7 +176,7 @@ data class SportsLiveBoard(
             for (item in items) {
                 if (item.streamKey !in arts) arts[item.streamKey] = GameArt.of(item, scores.scores[item.streamKey])
             }
-            return SportsLiveBoard(tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda)
+            return SportsLiveBoard(tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda, channels = channelView?.summary)
         }
     }
 }

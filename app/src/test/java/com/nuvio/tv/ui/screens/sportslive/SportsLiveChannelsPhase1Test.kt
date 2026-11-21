@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
@@ -47,26 +48,27 @@ class SportsLiveChannelsPhase1Test {
                 excitement = emptyMap(), followed = emptyList(), clockMs = 0L, logoRevision = 0, channelLists = lists
             ),
             ZoneId.of("UTC")
-        )
+        ) { false }
 
     @Test
-    fun `favorites lead, then recent, then the regions without them, and focus opens on the first favorite`() {
+    fun `favorites lead, then recent, and focus opens on the first favorite`() {
+        // Phase 2 drops the region list from the tab (no popular brand here, so nothing follows Recent).
         val picks = SportsLiveChannelPicks(favorites = refs("US 3", "UK 1"), recent = refs("UK 1", "US 2"))
         val built = board(SportsLiveChannelLists(order = picks, favorites = picks.favorites))
         val rows = built.rows!!
-        assertEquals(listOf("US 3", "UK 1", "US 2", "UK 2", "US 1"), rows.map { it.item.id })
+        assertEquals(listOf("US 3", "UK 1", "US 2"), rows.map { it.item.id })
         assertEquals(
-            listOf(SportsLiveChannelFavorites.FAVORITES, SportsLiveChannelFavorites.FAVORITES, SportsLiveChannelFavorites.RECENT, "UK", "US"),
+            listOf(SportsLiveChannelFavorites.FAVORITES, SportsLiveChannelFavorites.FAVORITES, SportsLiveChannelFavorites.RECENT),
             rows.map { it.section }
         )
-        assertEquals(listOf(true, true, false, false, false), rows.map { it.favorite })
+        assertEquals(listOf(true, true, false), rows.map { it.favorite })
         // The list is the board's: the way into it and the stage start on its first row.
         assertEquals(rows.map { it.item }, built.items)
         assertEquals("US 3", sportsLiveStageKey(built.items.map { it.streamKey }, focusedKey = null, miniKey = null)?.substringAfter('|'))
     }
 
     @Test
-    fun `with no favorites, recent leads, and with neither the regions are as before`() {
+    fun `with no favorites, recent leads, and with neither every channel is listed A to Z`() {
         val recentOnly = board(SportsLiveChannelLists(order = SportsLiveChannelPicks(recent = refs("US 2"))))
         assertEquals("US 2", recentOnly.rows!!.first().item.id)
         assertEquals(SportsLiveChannelFavorites.RECENT, recentOnly.rows!!.first().section)
@@ -103,7 +105,7 @@ class SportsLiveChannelsPhase1Test {
         val rows = board(SportsLiveChannelLists(order = picks, favorites = picks.favorites), filter = "US", items = us).rows!!
         assertEquals(listOf("US 1", "US 2", "US 3"), rows.map { it.item.id })
         assertEquals(listOf(false, false, true), rows.map { it.favorite })
-        assertTrue(rows.all { it.section == "US" })
+        assertTrue(rows.all { it.section == SportsLiveChannelList.LETTER + "U" })
     }
 
     @Test
@@ -111,8 +113,7 @@ class SportsLiveChannelsPhase1Test {
         val gone = SportsLiveChannelFavorites.refOf(channel("Gone", "US"))
         val picks = SportsLiveChannelPicks(favorites = listOf(gone) + refs("UK 1"))
         val rows = board(SportsLiveChannelLists(order = picks, favorites = picks.favorites)).rows!!
-        assertEquals(listOf("UK 1", "UK 2", "US 1", "US 2", "US 3"), rows.map { it.item.id })
-        assertEquals(channels.size, rows.size)
+        assertEquals(listOf("UK 1"), rows.map { it.item.id })
     }
 
     @Test
