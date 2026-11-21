@@ -664,6 +664,13 @@ class SportsLiveViewModel internal constructor(
      */
     private val boardCache = SportsLiveBoardCache()
 
+    /** Upcoming's last pre-game matches (live.23 RC upshift): a board built before its feeds answer again keeps its sections. */
+    private val knownMatches = SportsLiveKnownMatches()
+
+    /** The standings the last board read, for Upcoming built ahead (same inputs as its normal build). */
+    @Volatile
+    private var lastStandings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap()
+
     /** Debug timing (#143): the tab just selected and when, until its first board is shown. */
     @Volatile
     private var tabOpening: Pair<SportsLiveTab, Long>? = null
@@ -700,25 +707,18 @@ class SportsLiveViewModel internal constructor(
             val (profile, profileId, protection) = profileIdAndProtection
             val (claimed, sports, hidden) = profile
             boardCache.scopeTo(SportsLiveBoardScope(profileId, claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode, protection))
-            val tab = state.selectedTab
-            val live = tab == SportsLiveTab.LIVE_NOW
-            SportsLiveBoardInputs(
-                tab = tab,
+            lastStandings = books
+            sportsLiveBoardInputsOf(
+                state = state,
+                tab = state.selectedTab,
                 filter = state.selectedFilter,
                 items = state.visibleItems,
                 scores = scores,
-                ended = if (live) state.justEnded else emptyMap(),
-                noStreams = if (live) state.noStreams else emptySet(),
-                unmatched = if (live) unmatched else emptySet(),
-                excitement = if (live) state.whyTags else emptyMap(),
-                otherEvents = if (live && state.moreLiveOpen) state.moreLiveOther else emptySet(),
-                moreLive = if (live && state.moreLiveOpen) state.moreLiveGroupOf else emptyMap(),
                 followed = followed,
-                clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
                 logoRevision = revision,
-                // Upcoming's big games (#137) read them.
-                standings = if (tab == SportsLiveTab.UPCOMING) books else emptyMap(),
-                channelLists = if (tab == SportsLiveTab.CHANNELS) lists else SportsLiveChannelLists.NONE
+                standings = books,
+                channelLists = lists,
+                unmatched = unmatched
             )
         }
             .distinctUntilChanged()
@@ -731,12 +731,15 @@ class SportsLiveViewModel internal constructor(
             ) { inputs ->
                 val generation = boardCache.generation
                 withContext(computeDispatcher) {
+                    // Live.23 RC upshift: Upcoming's matches as last seen, so a board built before its feeds answer again
+                    // keeps its Games to watch and times ([SportsLiveKnownMatches]).
+                    knownMatches.learn(inputs.scores.scores, generation)
                     // Nothing it reads changed since it was built (back on a tab within the minute): no build at all. Not
                     // Channels, whose Popular now also reads the links found dead this session (outside the inputs).
                     if (inputs.tab != SportsLiveTab.CHANNELS) boardCache.reusable(inputs)?.let { return@withContext it }
                     val startedAt = System.nanoTime()
                     // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
-                    buildBoard(inputs).reusingRows(boardCache.shownFor(inputs)).also {
+                    buildBoard(knownMatches.fill(inputs)).reusingRows(boardCache.shownFor(inputs)).also {
                         boardCache.putIfCurrent(generation, inputs, it)
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
@@ -787,19 +790,22 @@ class SportsLiveViewModel internal constructor(
             // Once per load (RC regression): a kept board dropped by a scope change is not built ahead again for it.
             if (items.isEmpty() || items === prewarmedItems) return@launch
             prewarmedItems = items
-            val inputs = SportsLiveBoardInputs(
+            // The same inputs as Upcoming's normal build (live.23 RC upshift): its scores as known, followed teams and
+            // standings, so the board shown on open has the sections (Games to watch) the fresh one will have.
+            val inputs = sportsLiveBoardInputsOf(
+                state = state,
                 tab = SportsLiveTab.UPCOMING,
                 filter = null,
                 items = items,
                 scores = boardScores.value,
-                ended = emptyMap(),
-                excitement = emptyMap(),
                 followed = followedTeams.value,
-                clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
-                logoRevision = PREWARM_LOGO_REVISION
+                logoRevision = PREWARM_LOGO_REVISION,
+                standings = lastStandings,
+                channelLists = SportsLiveChannelLists.NONE,
+                unmatched = emptySet()
             )
             val startedAt = System.nanoTime()
-            val built = withContext(computeDispatcher) { buildBoard(inputs) }
+            val built = withContext(computeDispatcher) { buildBoard(knownMatches.fill(inputs)) }
             if (!boardCache.has(SportsLiveTab.UPCOMING, null)) boardCache.putIfCurrent(generation, inputs, built)
             SportsLiveDebugTiming.log { "sportsOpen stage=prewarm ms=${(System.nanoTime() - startedAt) / 1_000_000} tab=UPCOMING items=${items.size}" }
         }

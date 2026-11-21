@@ -73,6 +73,46 @@ data class SportsLiveBoardInputs(
 )
 
 /**
+ * The inputs of [tab]'s board with [filter] over [items], as the view model builds them from [state] and the screen's
+ * [scores] (live.23 RC upshift): the one place they are made, so Upcoming built ahead ([SportsLiveViewModel] prewarm)
+ * reads what its normal build reads (scores, followed teams, standings) and lays out the same sections.
+ */
+internal fun sportsLiveBoardInputsOf(
+    state: SportsLiveUiState,
+    tab: SportsLiveTab,
+    filter: String?,
+    items: List<SportsLiveItem>,
+    scores: SportsLiveBoardScores,
+    followed: List<FollowedTeam>,
+    logoRevision: Int,
+    standings: Map<EspnLeague, Map<String, TeamStanding>>,
+    channelLists: SportsLiveChannelLists,
+    unmatched: Set<String>
+): SportsLiveBoardInputs {
+    val live = tab == SportsLiveTab.LIVE_NOW
+    return SportsLiveBoardInputs(
+        tab = tab,
+        filter = filter,
+        items = items,
+        scores = scores,
+        ended = if (live) state.justEnded else emptyMap(),
+        noStreams = if (live) state.noStreams else emptySet(),
+        unmatched = if (live) unmatched else emptySet(),
+        excitement = if (live) state.whyTags else emptyMap(),
+        otherEvents = if (live && state.moreLiveOpen) state.moreLiveOther else emptySet(),
+        moreLive = if (live && state.moreLiveOpen) state.moreLiveGroupOf else emptyMap(),
+        followed = followed,
+        clockMs = state.nowMs / SPORTS_LIVE_BOARD_MINUTE_MS * SPORTS_LIVE_BOARD_MINUTE_MS,
+        logoRevision = logoRevision,
+        // Upcoming's big games (#137) read them.
+        standings = if (tab == SportsLiveTab.UPCOMING) standings else emptyMap(),
+        channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE
+    )
+}
+
+private const val SPORTS_LIVE_BOARD_MINUTE_MS = 60_000L
+
+/**
  * What the list draws for one tab and filter (#71): the items in the order shown, the Scoreboard's rows
  * (Live now and Upcoming, V2: one view per tab) and each card's drawn art. Built in the view model on its
  * compute dispatcher, never in composition, so a large list (60 games on Upcoming) opens without holding
@@ -347,5 +387,54 @@ internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
         private const val MORE_LIVE_VIEW = "moreLive"
 
         private fun viewOf(tab: SportsLiveTab, filter: String?, browse: String?): String = "${tab.name}|${filter.orEmpty()}|${browse.orEmpty()}"
+    }
+}
+
+/**
+ * Upcoming's ESPN matches as last seen (live.23 RC, TV report: "coming from Channels back to Upcoming it loads, then
+ * shifts to say Games to watch"). The screen tracks scores only for the tab on screen, so on the way back Upcoming's
+ * games have no match until their feeds answer again; the board built in that gap lost its big games (Games to watch),
+ * ESPN's start times and logos, and the next one put them back above the time slots. Each Upcoming card with no match
+ * now is given its last pre-game one, so the board comes back as it was left and later builds only update rows.
+ * Pre-game only: no score is ever kept (a game in play or over forgets its card), nothing under Scores Off, and a drop
+ * of every board (profile or setting change, [SportsLiveBoardCache.generation]) forgets them all.
+ */
+internal class SportsLiveKnownMatches(private val max: Int = MAX_KEPT) {
+    private val pre = object : LinkedHashMap<String, ScoreSnapshot>(64, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ScoreSnapshot>?): Boolean = size > max
+    }
+    private var generation = 0
+
+    /** Learns [scores]' pre-game matches, by card key, for the boards of [generation]. */
+    @Synchronized
+    fun learn(scores: Map<String, ScoreSnapshot>, generation: Int) {
+        if (generation != this.generation) {
+            pre.clear()
+            this.generation = generation
+        }
+        for ((key, snapshot) in scores) {
+            if (snapshot.state == ScoreState.PRE) pre[key] = snapshot else pre.remove(key)
+        }
+    }
+
+    /** [inputs] with each Upcoming card that has no match now given its last pre-game one; any other board as it is. */
+    @Synchronized
+    fun fill(inputs: SportsLiveBoardInputs): SportsLiveBoardInputs {
+        val scores = inputs.scores
+        if (inputs.tab != SportsLiveTab.UPCOMING || scores.mode == null || scores.mode == ScoresMode.OFF || pre.isEmpty()) return inputs
+        var filled: HashMap<String, ScoreSnapshot>? = null
+        for (item in inputs.items) {
+            val key = item.streamKey
+            if (key in scores.scores) continue
+            val known = pre[key] ?: continue
+            val into = filled ?: HashMap(scores.scores).also { filled = it }
+            into[key] = known
+        }
+        return filled?.let { inputs.copy(scores = scores.copy(scores = it)) } ?: inputs
+    }
+
+    companion object {
+        /** Upcoming holds ~2,500 games on the user's My sports; room for all of them. */
+        const val MAX_KEPT = 5_000
     }
 }
