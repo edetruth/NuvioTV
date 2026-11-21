@@ -426,7 +426,8 @@ private fun GuideNowPlaying(row: GuideRow, art: GameArt?, selected: Boolean) {
                 .background(Colors.FocusWhite, RoundedCornerShape(2.dp))
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // As wide as the names (TV test: a long gap before "LIVE"): score · time follows right after them.
+        Column(modifier = Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             when (row.kind) {
                 GuideRowKind.GAME -> {
                     val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
@@ -442,7 +443,7 @@ private fun GuideNowPlaying(row: GuideRow, art: GameArt?, selected: Boolean) {
                 }
             }
         }
-        GuideScoreTime(row, GuideType.NowScore, Modifier.padding(start = 12.dp))
+        GuideScoreTime(row, GuideType.NowScore, Modifier.padding(start = GUIDE_NOW_SCORE_GAP))
     }
 }
 
@@ -786,4 +787,5 @@ private val GUIDE_LOGO = 24.dp
 private val GUIDE_LOGO_GAP = 7.dp
 private val GUIDE_NOW_LOGO = 26.dp
 private val GUIDE_NOW_HEIGHT = 50.dp
+private val GUIDE_NOW_SCORE_GAP = 20.dp
 private val GUIDE_CHIP_HEIGHT = 28.dp
