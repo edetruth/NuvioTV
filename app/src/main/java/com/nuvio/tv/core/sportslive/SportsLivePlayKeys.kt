@@ -27,7 +27,8 @@ enum class SportsLiveGuideStyle {
     val table: Boolean get() = this != PANEL
 
     companion object {
-        val DEFAULT = PANEL
+        /** live.23 (user 2026-11-21): the table is the default, no longer a beta; the side panel stays a choice. */
+        val DEFAULT = TABLE_SMOOTH
 
         fun fromStored(value: String?): SportsLiveGuideStyle = entries.firstOrNull { it.name == value } ?: DEFAULT
     }

@@ -184,7 +184,7 @@ class SportsLiveZapViewModel internal constructor(
     // #172, TV QA: Hold OK → More… → Report a problem saves a report by its trigger ([SportsLiveReporter.report]).
     private val report: (String) -> Unit = {},
     // live.21 B2: "In-player guide (beta)": the side panel, or the new table (smooth or jump); OK opens the table.
-    guideStyleSetting: Flow<SportsLiveGuideStyle> = flowOf(SportsLiveGuideStyle.DEFAULT),
+    guideStyleSetting: Flow<SportsLiveGuideStyle> = flowOf(SportsLiveGuideStyle.PANEL), // no settings (tests): the side panel
     // #218: Hold OK in the player takes the report's snapshot at once ([SportsLiveReporter.capture]); the function it
     // returns saves it when the menu's Report a problem is picked.
     private val captureReport: (String) -> (() -> Unit) = { trigger -> { report(trigger) } }
@@ -218,7 +218,7 @@ class SportsLiveZapViewModel internal constructor(
         nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 },
         identify = { items -> identifier?.offer(items) },
         report = { trigger -> reporter?.report(trigger) },
-        guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.DEFAULT),
+        guideStyleSetting = prefs?.guideStyle ?: flowOf(SportsLiveGuideStyle.PANEL),
         captureReport = { trigger -> reporter?.capture(trigger) ?: {} }
     )
 

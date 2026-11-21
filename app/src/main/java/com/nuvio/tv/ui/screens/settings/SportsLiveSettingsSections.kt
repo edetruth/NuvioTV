@@ -64,7 +64,7 @@ internal enum class SportsLiveSetting(
     HOVER_PREVIEW(SportsLiveSettingsSection.HOME_AND_ROWS, R.string.sports_live_setting_hover_preview, R.string.sports_live_setting_hover_preview_subtitle),
     RUN_SETUP(SportsLiveSettingsSection.SETUP, R.string.sports_live_setting_run_setup, R.string.sports_live_setting_run_setup_subtitle),
     SCORES_STATUS(SportsLiveSettingsSection.STATUS, R.string.sports_live_setting_scores_status, R.string.sports_live_setting_scores_status_subtitle),
-    /** "In-player guide (beta)" (live.21, design B2): Off (side panel) / Table (smooth) / Table (jump), a picker; Off by default. */
+    /** "In-player guide" (live.21 design B2, out of beta in live.23): Side panel / Table (smooth) / Table (jump), a picker; Table (smooth) by default. */
     GUIDE_TABLE(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_guide_table, R.string.sports_live_setting_guide_table_help),
     DATA_SAVER(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_data_saver, R.string.sports_live_setting_data_saver_subtitle),
     /** "Real-time scores" (live.20 Q18, #85): opt-in, every score delay off, also while video plays. */

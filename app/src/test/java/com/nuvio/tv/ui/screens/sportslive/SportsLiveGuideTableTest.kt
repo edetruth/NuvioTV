@@ -453,11 +453,12 @@ class SportsLiveGuideTableTest {
     // ---- The setting ----
 
     @Test
-    fun `the guide setting is Off, the side panel, by default and its choice is stored per profile`() = runTest {
-        assertEquals(SportsLiveGuideStyle.PANEL, SportsLiveGuideStyle.DEFAULT)
-        assertFalse(SportsLiveGuideStyle.DEFAULT.table)
+    fun `the guide setting is the smooth table by default and its choice is stored per profile`() = runTest {
+        assertEquals(SportsLiveGuideStyle.TABLE_SMOOTH, SportsLiveGuideStyle.DEFAULT)
+        assertTrue(SportsLiveGuideStyle.DEFAULT.table)
         assertTrue(SportsLiveGuideStyle.TABLE_SMOOTH.table && SportsLiveGuideStyle.TABLE_JUMP.table)
-        assertEquals(SportsLiveGuideStyle.PANEL, SportsLiveGuideStyle.fromStored("SOMETHING_ELSE"))
+        assertEquals(SportsLiveGuideStyle.TABLE_SMOOTH, SportsLiveGuideStyle.fromStored("SOMETHING_ELSE"))
+        assertEquals(SportsLiveGuideStyle.PANEL, SportsLiveGuideStyle.fromStored("PANEL"))
         // A three-way picker in Settings, not an On/Off switch.
         assertFalse(com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GUIDE_TABLE.isSwitch)
         val store1 = TestPreferencesStore()
@@ -469,11 +470,11 @@ class SportsLiveGuideTableTest {
         }
         val profiles = mockk<ProfileManager> { every { activeProfileId } returns active }
         val prefs = SportsLivePreferencesDataStore(factory, profiles)
-        assertEquals(SportsLiveGuideStyle.PANEL, prefs.guideStyle.first())
+        assertEquals(SportsLiveGuideStyle.TABLE_SMOOTH, prefs.guideStyle.first())
         prefs.setGuideStyle(SportsLiveGuideStyle.TABLE_JUMP)
         assertEquals(SportsLiveGuideStyle.TABLE_JUMP, prefs.guideStyle.first())
         active.value = 2
-        assertEquals(SportsLiveGuideStyle.PANEL, prefs.guideStyle.first())
+        assertEquals(SportsLiveGuideStyle.TABLE_SMOOTH, prefs.guideStyle.first())
     }
 
     private val strings = GameStatusStrings(
