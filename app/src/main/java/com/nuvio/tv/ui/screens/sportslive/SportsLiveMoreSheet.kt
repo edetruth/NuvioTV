@@ -148,6 +148,8 @@ internal fun SportsLiveCardMenu(
     /** "Watch later (no spoilers)" (#151), or "Reveal result" when [savedForLater]; null hides it. */
     onWatchLater: (() -> Unit)? = null,
     savedForLater: Boolean = false,
+    /** "Reveal all for this day" (Results, results redesign): every hidden result of the day shows; null hides it. */
+    onRevealDay: (() -> Unit)? = null,
     /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
     onScoresAhead: (() -> Unit)? = null,
     /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; last unless [reportFirst]; null hides it. */
@@ -245,6 +247,9 @@ internal fun SportsLiveCardMenu(
                 onClick = onWatchLater,
                 modifier = first()
             )
+        }
+        if (onRevealDay != null) {
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_results_reveal_day), onClick = onRevealDay, modifier = first())
         }
         when (teamPages.size) {
             0 -> Unit
