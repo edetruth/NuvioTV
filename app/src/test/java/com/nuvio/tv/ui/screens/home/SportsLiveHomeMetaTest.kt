@@ -80,6 +80,29 @@ class SportsLiveHomeMetaTest {
     }
 
     @Test
+    fun `a live card with no score says No score yet under Show, as Live Now's rows do`() {
+        assertEquals(
+            DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("No score yet")),
+            SportsLiveHomeMeta.cardFooter(null, ScoresMode.SHOW, strings, "Live", noScoreYet = "No score yet")
+        )
+        // Scores Off: nothing was looked up, so nothing reads as missing.
+        assertEquals(DrawnCardFooter(lead = "Live", live = true), SportsLiveHomeMeta.cardFooter(null, ScoresMode.OFF, strings, "Live", noScoreYet = "No score yet"))
+    }
+
+    @Test
+    fun `a game the feed says has not started reads its start, never Live`() {
+        assertEquals(
+            DrawnCardFooter(lead = "Starts 7:00 PM"),
+            SportsLiveHomeMeta.cardFooter(null, ScoresMode.SHOW, strings, "Live", noScoreYet = "No score yet", startsAt = "Starts 7:00 PM")
+        )
+        // Spoiler rules first: Hide until focused keeps one chip for scheduled and live games alike.
+        assertEquals(
+            DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("Score hidden")),
+            SportsLiveHomeMeta.cardFooter(ScoreChip.Hidden, ScoresMode.HIDE_UNTIL_FOCUSED, strings, "Live", startsAt = "Starts 7:00 PM")
+        )
+    }
+
+    @Test
     fun `a clock without a score shows no score`() {
         val footer = SportsLiveHomeMeta.cardFooter(ScoreChip.Live("78'", null), ScoresMode.SHOW, strings, "Live")
         assertEquals(DrawnCardFooter(lead = "78'", live = true), footer)

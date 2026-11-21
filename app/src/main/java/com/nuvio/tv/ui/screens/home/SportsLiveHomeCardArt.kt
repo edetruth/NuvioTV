@@ -15,10 +15,12 @@ import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnEventCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnGameCard
+import com.nuvio.tv.ui.screens.sportslive.kickoffText
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveReadyMark
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 import com.nuvio.tv.ui.screens.sportslive.liveNowItemTag
@@ -41,6 +43,7 @@ internal fun rememberLiveNowCardArt(
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
     val listedWord = stringResource(R.string.sports_live_listed_live)
+    val startsFormat = stringResource(R.string.sports_live_waiting_starts)
     // Live Now's tag words (RC TV finding): the same league tag as its row, else the sport word, never a catalog's name.
     val context = androidx.compose.ui.platform.LocalContext.current
     val sportWord: (com.nuvio.tv.core.sportslive.SportsLiveSportKind) -> String = remember(context) {
@@ -49,7 +52,7 @@ internal fun rememberLiveNowCardArt(
     // #207: the lookup changes with the cards only, never with a score. Every card on Home reads it, so a new one on
     // each score update redrew them all; each drawn card reads its own game's score instead, and only a card whose game
     // changed is drawn again.
-    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, sportWord) {
+    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, startsFormat, sportWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
@@ -57,16 +60,22 @@ internal fun rememberLiveNowCardArt(
             val card: @Composable () -> Unit = {
                 val snapshot by remember { derivedStateOf { scores.value[item.streamKey] } }
                 val confirmedUnmatched by remember { derivedStateOf { item.streamKey in unmatched.value } }
+                val art = remember(snapshot) { GameArt.of(item, snapshot) }
+                // l24 polish P2: a game the score feed says has not started reads its start ("Starts 7:00 PM"), as Live
+                // Now's rows show its kickoff; never "● Live".
+                val scheduled = remember(snapshot) { ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.PRE }
+                val kickoff = if (scheduled) art?.let { kickoffText(it) } else null
                 // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
-                val footer = remember(snapshot, confirmedUnmatched) {
+                val footer = remember(snapshot, confirmedUnmatched, kickoff) {
                     // #215: listed live by its addon, not found by ESPN ([listedLiveOnly]).
                     val listed = item.isLive && !item.isChannel && SportsLiveHomeMeta.listedLiveOnly(mode, confirmedUnmatched, ScoreChips.matchedEvent(item, snapshot) != null)
                     SportsLiveHomeMeta.cardFooter(
                         ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed },
-                        halves = com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves(snapshot?.league)
+                        halves = com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves(snapshot?.league),
+                        noScoreYet = listedWord,
+                        startsAt = kickoff?.let { String.format(startsFormat, it) }
                     )
                 }
-                val art = remember(snapshot) { GameArt.of(item, snapshot) }
                 val tag = remember(snapshot) { liveNowItemTag(item, snapshot, sportWord).ifEmpty { null } }
                 val ready = rememberSportsLiveReadyMark(item) == SportsLiveReadyMark.READY
                 if (art != null) {

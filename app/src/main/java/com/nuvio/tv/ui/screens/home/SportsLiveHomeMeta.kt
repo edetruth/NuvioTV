@@ -34,7 +34,14 @@ internal object SportsLiveHomeMeta {
         liveWord: String,
         listedLive: String? = null,
         /** Men's college basketball's halves, for the game grammar's clock ("2H 9:51"). */
-        halves: Boolean = false
+        halves: Boolean = false,
+        /** "No score yet": under Show, a live card with no score of ours says so, as Live Now's rows do (l24 polish P2). */
+        noScoreYet: String? = null,
+        /**
+         * "Starts 7:00 PM" when the score feed says the game has not started (l24 polish P2): the card reads its start,
+         * never "● Live", as Live Now's rows show its kickoff.
+         */
+        startsAt: String? = null
     ): DrawnCardFooter = when (chip) {
         is ScoreChip.Live -> {
             // The game grammar's one clock line (live.24): "Q4 4:12", period first.
@@ -52,11 +59,19 @@ internal object SportsLiveHomeMeta {
         )
         is ScoreChip.Status -> DrawnCardFooter(lead = chip.text ?: strings.postponed)
         // #215, live.24 grammar: a live game with no score of ours reads "● Live · No score yet", never "Listed live".
-        null -> if (listedLive != null) DrawnCardFooter(lead = liveWord, live = true, trailing = DrawnCardTrailing.Note(listedLive)) else DrawnCardFooter(
-            lead = liveWord,
-            live = true,
-            trailing = if (mode == ScoresMode.HIDE_UNTIL_FOCUSED) DrawnCardTrailing.Note(strings.hidden) else null
-        )
+        null -> when {
+            startsAt != null -> DrawnCardFooter(lead = startsAt)
+            listedLive != null -> DrawnCardFooter(lead = liveWord, live = true, trailing = DrawnCardTrailing.Note(listedLive))
+            else -> DrawnCardFooter(
+                lead = liveWord,
+                live = true,
+                trailing = when {
+                    mode == ScoresMode.HIDE_UNTIL_FOCUSED -> DrawnCardTrailing.Note(strings.hidden)
+                    mode == ScoresMode.SHOW && noScoreYet != null -> DrawnCardTrailing.Note(noScoreYet)
+                    else -> null
+                }
+            )
+        }
     }
 
     /**
