@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** P4 B3: an unrouted two-team card takes the one league both its teams name, never a guess. */
@@ -468,5 +469,64 @@ class SportsLiveSportInferenceTest {
             put(EspnLeague("soccer", "uefa.champions"), bundesliga, 0L)
         }
         assertNull(SportsLiveSportInference.heldSport(card("Bayern vs Köln", sport = "Soccer"), dir))
+    }
+
+    // ---- live.23: titles not placed (a catch-all "OTHER" tag, a league no inference list held) ----
+
+    private val championship = listOf(
+        team("Burnley", "Burnley", "Burnley", "BUR"),
+        team("Blackburn Rovers", "Blackburn", "Blackburn Rovers", "BLB"),
+        team("Norwich City", "Norwich", "Norwich City", "NOR")
+    )
+    private val eredivisie = listOf(
+        team("Feyenoord Rotterdam", "Feyenoord", "Feyenoord Rotterdam", "FEY"),
+        team("Excelsior", "Excelsior", "Excelsior", "EXC"),
+        team("FC Groningen", "Groningen", "FC Groningen", "GRO"),
+        team("SC Heerenveen", "Heerenveen", "SC Heerenveen", "HEE")
+    )
+    private val bundesliga2 = listOf(
+        team("1. FC Kaiserslautern", "Kaiserslautern", "1. FC Kaiserslautern", "FCK"),
+        team("Dynamo Dresden", "Dresden", "Dynamo Dresden", "SGD")
+    )
+    private val laLiga2 = listOf(team("Castellón", "Castellón", "Castellón", "CAS"), team("Eldense", "Eldense", "Eldense", "ELD"))
+    private val leagueTwo = listOf(team("Gillingham", "Gillingham", "Gillingham", "GIL"), team("Crewe Alexandra", "Crewe", "Crewe Alexandra", "CRE"))
+    private val premiership = listOf(team("Celtic", "Celtic", "Celtic", "CEL"), team("St. Mirren", "St Mirren", "St. Mirren", "STM"))
+
+    @Test
+    fun `untagged games of the leagues addons file under Other are placed by their teams`() {
+        val dir = directory(
+            EspnLeague("soccer", "eng.2") to championship, EspnLeague("soccer", "ned.1") to eredivisie,
+            EspnLeague("soccer", "ger.2") to bundesliga2, EspnLeague("soccer", "esp.2") to laLiga2,
+            EspnLeague("soccer", "eng.4") to leagueTwo, EspnLeague("soccer", "sco.1") to premiership
+        )
+        val cases = listOf(
+            "Burnley vs Blackburn Rovers" to EspnLeague("soccer", "eng.2"),
+            "Feyenoord vs Excelsior" to EspnLeague("soccer", "ned.1"),
+            "FC Groningen vs SC Heerenveen" to EspnLeague("soccer", "ned.1"),
+            "1. FC Kaiserslautern vs SG Dynamo Dresden" to EspnLeague("soccer", "ger.2"),
+            "CD Castellón vs CD Eldense" to EspnLeague("soccer", "esp.2"),
+            "Gillingham vs Crewe" to EspnLeague("soccer", "eng.4"),
+            "Celtic vs St. Mirren" to EspnLeague("soccer", "sco.1")
+        )
+        for ((name, league) in cases) {
+            val item = card(name, sport = "OTHER", catalog = "Other Sports", genres = listOf("OTHER"))
+            val placed = SportsLiveSportInference.infer(item, dir)
+            // Its tag routes back to exactly that league's feed and reads as soccer.
+            assertEquals(name, listOf(league), EspnLeagueMap.leaguesFor(placed))
+            assertEquals(name, SportsLiveSportKind.SOCCER, SportsLiveSportKind.tagOf(placed))
+            assertEquals(name, SportsLiveSportKind.SOCCER, SportsLiveMySportsScope.kindOf(placed))
+        }
+        // One side only in a list: nothing is guessed.
+        val cup = card("Burnley vs Arsenal", sport = "OTHER", catalog = "Other Sports", genres = listOf("OTHER"))
+        assertSame(cup, SportsLiveSportInference.infer(cup, dir))
+    }
+
+    @Test
+    fun `the placement lists are kept with the inference lists`() {
+        for (slug in listOf("eng.2", "eng.3", "eng.4", "sco.1", "ned.1", "ger.2", "esp.2", "mex.1")) {
+            assertTrue(slug, EspnLeague("soccer", slug) in SportsLiveSportInference.leagues)
+        }
+        // Clubs that field basketball and handball sides under one name stay out (Portugal, Turkey, Greece).
+        for (slug in listOf("por.1", "tur.1", "gre.1")) assertFalse(slug, EspnLeague("soccer", slug) in SportsLiveSportInference.leagues)
     }
 }

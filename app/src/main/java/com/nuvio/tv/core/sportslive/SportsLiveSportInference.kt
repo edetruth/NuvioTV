@@ -40,8 +40,26 @@ object SportsLiveSportInference {
         EspnLeagueMap.G_LEAGUE to "NBA G League"
     )
 
-    /** The directory lists inference needs (asked for weekly with the rest, #82). */
-    val leagues: List<EspnLeague> get() = LEAGUES.map { it.first }
+    /**
+     * Leagues a game no source gives a sport is placed in by its two teams alone ([heldLeague], never [leagueOf]'s
+     * candidates), with the tag that routes back to exactly that league (live.23: "Burnley vs Blackburn Rovers" and
+     * "Feyenoord vs Excelsior" under an addon's catch-all "Other" stayed untagged, as no list held them). Soccer leagues
+     * whose clubs addons rarely list under another sport's name; Portugal, Turkey and Greece are left out, as their big
+     * clubs' basketball, volleyball and handball games are listed under the same names.
+     */
+    private val HELD_ONLY: List<Pair<EspnLeague, String>> = listOf(
+        EspnLeague("soccer", "eng.2") to "EFL Championship",
+        EspnLeague("soccer", "eng.3") to "EFL League One",
+        EspnLeague("soccer", "eng.4") to "EFL League Two",
+        EspnLeague("soccer", "sco.1") to "Scottish Premiership",
+        EspnLeague("soccer", "ned.1") to "Eredivisie",
+        EspnLeague("soccer", "ger.2") to "2. Bundesliga",
+        EspnLeague("soccer", "esp.2") to "LaLiga 2",
+        EspnLeague("soccer", "mex.1") to "Liga MX"
+    )
+
+    /** The directory lists inference and placement need (asked for weekly with the rest, #82). */
+    val leagues: List<EspnLeague> get() = (LEAGUES + HELD_ONLY).map { it.first }
 
     /** College feeds a bare sport word may also be on ([EspnLeagueMap.collegeFallbackFor]), with their tags. */
     private val COLLEGE: List<Pair<EspnLeague, String>> = listOf(
@@ -157,7 +175,7 @@ object SportsLiveSportInference {
         val league = leagueOf(item, directory) ?: heldLeague(item, directory)
             ?: return heldSport(item, directory)?.let { item.copy(sport = it) } ?: item
         // The league's tag ("NHL", "NCAAM"), never the generic sport word.
-        val sport = (LEAGUES + COLLEGE).first { it.first == league }.second
+        val sport = (LEAGUES + COLLEGE + HELD_ONLY).first { it.first == league }.second
         return item.copy(sport = sport)
     }
 
@@ -165,7 +183,7 @@ object SportsLiveSportInference {
      * The one loaded league whose list holds both teams of a game no source gives a sport (TV report #5: "Bayern vs
      * Köln", untagged): the league My sports already places it in ([SportsLiveMySportsScope.directoryLeaguesOf]), so
      * its row shows that league's tag and routes to its feed, one classification for both. Only a league with a tag
-     * here ([LEAGUES], [COLLEGE]); a card that says women's only into a women's league. The score still needs both
+     * here ([LEAGUES], [COLLEGE], [HELD_ONLY]); a card that says women's only into a women's league. The score still needs both
      * teams on that feed at the card's time ([com.nuvio.tv.core.sportslive.scores.ScoreMatcher]).
      */
     internal fun heldLeague(item: SportsLiveItem, directory: TeamDirectory): EspnLeague? {
@@ -176,7 +194,7 @@ object SportsLiveSportInference {
         if (SportsLiveNations.isNationalPair(first, second)) return null
         val league = directory.leaguesHolding(first, second).singleOrNull() ?: return null
         if (EspnLeagueMap.saysWomen(item) && league !in EspnLeagueMap.WOMEN_FEEDS) return null
-        return league.takeIf { held -> (LEAGUES + COLLEGE).any { it.first == held } }
+        return league.takeIf { held -> (LEAGUES + COLLEGE + HELD_ONLY).any { it.first == held } }
     }
 
     /**
