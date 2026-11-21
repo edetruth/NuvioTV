@@ -867,7 +867,7 @@ private fun SportsLiveContent(
     val belowResumeFocusRequester = if (catchUpShown) {
         catchUpFocusRequester
     } else {
-        entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
+        entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS && !uiState.firstLoadPending }
     }
     // Down from the header (#155, live.20 1c): Resume, else the strip's first card (a followed team's live game comes
     // first; a replay may take it), else the list.
@@ -889,7 +889,7 @@ private fun SportsLiveContent(
         LiveNowEntry.RESUME -> resumeFocusRequester
         LiveNowEntry.STRIP -> catchUpFocusRequester
         LiveNowEntry.LIST -> dayBarFocusRequester ?: entryCardFocusRequester
-        LiveNowEntry.EMPTY -> emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
+        LiveNowEntry.EMPTY -> emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS && !uiState.firstLoadPending }
     }
     // Results' "N games live now →" (#170): once Live now is the composed tab and its rows are drawn, focus goes
     // to its list (the column rule), else to its tab.

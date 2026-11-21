@@ -243,7 +243,9 @@ class SportsLiveViewModel internal constructor(
         val hasLoad: Boolean,
         val tabs: Map<SportsLiveTab, List<SportsLiveItem>>,
         /** When the catalogs shown were loaded (a list restored from the device: when it was saved); null: none. */
-        val listAtMs: Long? = null
+        val listAtMs: Long? = null,
+        /** Built from this session's own load, not the saved list or nothing (#214). */
+        val fromLoad: Boolean = false
     )
 
     @VisibleForTesting
@@ -356,7 +358,7 @@ class SportsLiveViewModel internal constructor(
             }
         }
         scheduleKickoff(SportsLiveItemBucketer.nextClockChange(items, now))
-        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = true, tabs = tabs, listAtMs = latest.loadedAtMs)
+        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = true, tabs = tabs, listAtMs = latest.loadedAtMs, fromLoad = true)
     }.flowOn(computeDispatcher)
 
     /** The saved list's tabs for [claimed] at [now], with when it was loaded; null when there is none to show. */
@@ -1002,6 +1004,9 @@ class SportsLiveViewModel internal constructor(
         return SportsLiveUiState(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
             isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
+            // #214: until the first load of this visit lands (or fails), an empty tab is loading, never "nothing here".
+            firstLoadPending = hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
+                (selection.isRefreshing || selection.lastRefreshedMs == null),
             hasClaimedCatalogs = hasClaimed,
             tabs = if (allSports) scopedTabs + (selection.tab to fullItems) else scopedTabs,
             selectedTab = selection.tab,

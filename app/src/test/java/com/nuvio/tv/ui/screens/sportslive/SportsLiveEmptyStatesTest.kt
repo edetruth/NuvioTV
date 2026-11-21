@@ -46,6 +46,19 @@ class SportsLiveEmptyStatesTest {
     }
 
     @Test
+    fun `before the first load lands an empty tab is loading, never nothing live`() {
+        // #214: the saved list (nothing live in it) showed "Nothing live right now · Next" for 8 s before 14 live games.
+        val saved = SportsLiveUiState(
+            selectedTab = SportsLiveTab.LIVE_NOW,
+            tabs = mapOf(SportsLiveTab.UPCOMING to listOf(item("Knicks vs Celtics", now + HOUR))),
+            firstLoadPending = true
+        )
+        assertEquals(SportsLiveEmptyKind.LOADING, sportsLiveEmptyState(saved, now).kind)
+        // Landed: the usual card.
+        assertEquals(SportsLiveEmptyKind.NOTHING_LIVE, sportsLiveEmptyState(saved.copy(firstLoadPending = false), now).kind)
+    }
+
+    @Test
     fun `each tab's card points somewhere useful`() {
         assertEquals(SportsLiveEmptyKind.NOTHING_UPCOMING, sportsLiveEmptyState(SportsLiveUiState(selectedTab = SportsLiveTab.UPCOMING), now).kind)
         assertEquals(SportsLiveEmptyKind.NO_CHANNELS, sportsLiveEmptyState(SportsLiveUiState(selectedTab = SportsLiveTab.CHANNELS), now).kind)

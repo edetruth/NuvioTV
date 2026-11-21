@@ -14,6 +14,8 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 internal enum class SportsLiveEmptyKind {
     /** The tab has games, but not under the chip picked: Show all. */
     FILTER_EMPTY,
+    /** The first load has not landed yet (#214): loading rows, never an empty card. */
+    LOADING,
     /** Every source failed and nothing is listed anywhere: Try again, or the addons. */
     UNREACHABLE,
     /** Live Now: the next game with See Upcoming (and Remind me). */
@@ -34,6 +36,7 @@ internal data class SportsLiveEmptyState(val kind: SportsLiveEmptyKind, val next
 internal fun sportsLiveEmptyState(state: SportsLiveUiState, nowMs: Long): SportsLiveEmptyState {
     val tab = state.selectedTab
     if (state.tabs[tab].orEmpty().isNotEmpty() && state.visibleItems.isEmpty()) return SportsLiveEmptyState(SportsLiveEmptyKind.FILTER_EMPTY)
+    if (state.firstLoadPending) return SportsLiveEmptyState(SportsLiveEmptyKind.LOADING)
     if (state.failures.isNotEmpty() && state.tabs.values.all { it.isEmpty() }) return SportsLiveEmptyState(SportsLiveEmptyKind.UNREACHABLE)
     return when (tab) {
         SportsLiveTab.LIVE_NOW -> SportsLiveEmptyState(
@@ -67,6 +70,7 @@ internal fun SportsLiveEmptyCard(
     primaryModifier: Modifier = Modifier
 ) {
     when (empty.kind) {
+        SportsLiveEmptyKind.LOADING -> SportsLiveSkeletonRows(modifier = modifier)
         SportsLiveEmptyKind.FILTER_EMPTY -> SportsLiveStateCard(
             title = stringResource(R.string.sports_live_state_filter_empty),
             line = stringResource(R.string.sports_live_state_filter_empty_line),

@@ -499,7 +499,9 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
             when (val status = face.status) {
                 is SlimStatus.Live -> {
                     Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.LiveRed))
-                    SlimText(status.clock, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary, Modifier.weight(1f))
+                    // #214: the clock is measured first and kept whole ("● ..." when ▶ Ready took the room); the corner gives way.
+                    SlimText(status.clock, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
+                    Spacer(modifier = Modifier.weight(1f))
                 }
                 is SlimStatus.Time -> SlimText(status.text, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary, Modifier.weight(1f))
                 SlimStatus.Replay -> {
@@ -518,7 +520,11 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
                 }
             }
             when (val corner = face.corner) {
-                SlimCorner.Ready -> SportsLiveReadyPill()
+                // Beside a live clock "▶ Ready" steps down to "▶" when the card has no room for both (#214).
+                SlimCorner.Ready -> PanelFirstFit {
+                    SportsLiveReadyPill()
+                    Text(text = "▶", style = tag.copy(fontWeight = FontWeight.Bold), color = Colors.ReplayGreen, maxLines = 1, softWrap = false)
+                }
                 is SlimCorner.Bell -> AgendaBellIcon(if (corner.on) AgendaBell.ON else AgendaBell.OFF, Modifier.size(14.dp), offTint = Colors.TextSecondary)
                 is SlimCorner.Day -> corner.text?.let { SlimText(it, tag, Colors.TextSecondary) }
                 null -> Unit

@@ -16,6 +16,11 @@ import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
 
 data class SportsLiveUiState(
     val isLoading: Boolean = true,
+    /**
+     * The first load of this visit has not landed yet (#214): what shows is the saved list or nothing, so an empty tab
+     * shows its loading rows, never "Nothing live right now".
+     */
+    val firstLoadPending: Boolean = false,
     val hasClaimedCatalogs: Boolean = false,
     val tabs: Map<SportsLiveTab, List<SportsLiveItem>> = emptyMap(),
     val selectedTab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
