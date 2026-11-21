@@ -72,6 +72,8 @@ import kotlin.random.Random
  *   live.23: when scores are first collected (Home's first show), today's feeds of followed teams' leagues and
  *   My sports are fetched before any card asks ([prewarmFeeds]); and the scores last shown are kept on disk
  *   ([KeptScores]), drawn on a reopen until each card's own feed answers, at most one poll ([ScoreCadence.LIVE_MS]).
+ *   So is a card's last score when its screen stops tracking it (the player's guide closing): a reopen draws it
+ *   at once until the feed answers again ([keptLocked]).
  * - Logo directory (#82): while Scores is not Off and someone collects [scores], the team lists of the
  *   leagues on screen, in My sports and of followed teams are fetched in the background, one league at a
  *   time after a short wait, at most weekly ([TeamDirectorySync]); never on the poll path or under its lock.
@@ -292,14 +294,18 @@ class LiveScoresRepository internal constructor(
     private var scoresMode = ScoresMode.OFF
     /** When "Retry now" last fetched. */
     private var lastRetryAt: Long? = null
-    /** The scores read back from [keptFile] (live.23), by card key; a card's entry goes once its own feed answers. */
-    private var kept: Map<String, ScoreSnapshot> = emptyMap()
-    /** When the [kept] scores were shown: none is drawn once older than [KeptScores.MAX_AGE_MS]. */
-    private var keptSavedAt = 0L
-    /** The [kept] scores of tracked cards no feed has answered for yet ([refreshLocked]), by card key. */
-    private var keptShown: Map<String, ScoreSnapshot> = emptyMap()
-    /** When a kept score was first served: none is served longer than one poll ([ScoreCadence.LIVE_MS]). */
-    private var keptServedAt: Long? = null
+    /** A card's last score shown ([at]), kept for a re-track (live.23); [servedAt]: when it was first drawn again. */
+    private class KeptCard(val snapshot: ScoreSnapshot, val at: Long, var servedAt: Long? = null)
+
+    /**
+     * The scores kept for a re-track (live.23), by card key: read back from [keptFile] at start, and each card's last
+     * delayed score when no screen tracks it any more. A card's entry goes once its own feed answers after [KeptCard.at].
+     */
+    private val kept = HashMap<String, KeptCard>()
+    /** The [kept] scores of tracked cards no feed has answered for since ([refreshLocked]), by card key. */
+    private var keptShown: Map<String, KeptCard> = emptyMap()
+    /** The delayed scores last published, by card key: what an untracked card keeps. */
+    private var lastDelayed: Map<String, ScoreSnapshot> = emptyMap()
     /** The scores to write to [keptFile] next, and when they were shown. */
     private var keptPending: Pair<Map<String, ScoreSnapshot>, Long>? = null
     private var keptWrite: Job? = null
@@ -323,8 +329,7 @@ class LiveScoresRepository internal constructor(
             scope.launch(io) {
                 val read = file.read()?.let { KeptScores.decode(it, now()) } ?: return@launch
                 lock.withLock {
-                    kept = read.games
-                    keptSavedAt = read.savedAt
+                    read.games.forEach { (key, snapshot) -> kept.putIfAbsent(key, KeptCard(snapshot, read.savedAt)) }
                     activePollerScope?.let { refreshLocked(it, restartStopped = false) }
                 }
             }
@@ -835,6 +840,14 @@ class LiveScoresRepository internal constructor(
             learnLogos(match)
             matched[entry.card.key] = match
         }
+        // A card no screen tracks any more keeps its last score, drawn at once if it is tracked again (live.23).
+        val trackedKeys = tracked.value.values.flatten().mapTo(HashSet()) { it.card.key }
+        for (key in raw.keys) {
+            if (key in matched || key in trackedKeys) continue
+            val last = lastDelayed[key] ?: continue
+            if (kept.size >= MAX_REMEMBERED) kept.clear()
+            kept[key] = KeptCard(last, nowMs)
+        }
         raw = matched
         keptShown = if (kept.isEmpty()) emptyMap() else keptLocked(matched, nowMs)
         matchedStates.value = matched.values.associate { it.eventId to it.state }
@@ -877,30 +890,26 @@ class LiveScoresRepository internal constructor(
     }
 
     /**
-     * The [kept] scores to draw (live.23): a tracked card's, while no feed it routes to has answered yet and the
-     * matcher still pairs the card with that game (a wrong score is worse than none). A card matched, or one of whose
-     * feeds has answered (or failed), loses its kept score for good. Cards that name no sport and tennis get none.
+     * The [kept] scores to draw (live.23): a tracked card's, while no feed it routes to has answered since it was kept,
+     * and the matcher still pairs the card with that game (a wrong score is worse than none). A card matched, one of
+     * whose feeds has answered (or failed) since, or one kept longer than [KeptScores.MAX_AGE_MS] ago loses its kept
+     * score for good. Cards that name no sport and tennis get none.
      */
-    private fun keptLocked(matched: Map<String, ScoreSnapshot>, nowMs: Long): Map<String, ScoreSnapshot> {
-        if (nowMs - keptSavedAt > KeptScores.MAX_AGE_MS) {
-            kept = emptyMap()
-            return emptyMap()
-        }
-        val shown = HashMap<String, ScoreSnapshot>()
-        val done = HashSet<String>()
+    private fun keptLocked(matched: Map<String, ScoreSnapshot>, nowMs: Long): Map<String, KeptCard> {
+        kept.values.removeAll { nowMs - it.at > KeptScores.MAX_AGE_MS || it.servedAt?.let { at -> nowMs - at > ScoreCadence.LIVE_MS } == true }
+        val shown = HashMap<String, KeptCard>()
         for (entry in trackedUnion()) {
             val key = entry.card.key
-            val snapshot = kept[key] ?: continue
+            val keptCard = kept[key] ?: continue
             val leagues = remembered[key]?.let(::listOf) ?: entry.leagues
             if (entry.piggyback || entry.tennis || key in matched ||
-                feedsOf(leagues, datesFor(entry.card)).any { feeds[it]?.lastAttemptAt != null }
+                feedsOf(leagues, datesFor(entry.card)).any { feed -> feeds[feed]?.lastAttemptAt?.let { it > keptCard.at } == true }
             ) {
-                done += key
+                kept -= key
                 continue
             }
-            if (matcher.match(entry.card, listOf(snapshot), nowMs) != null) shown[key] = snapshot.copy(kept = true)
+            if (matcher.match(entry.card, listOf(keptCard.snapshot), nowMs) != null) shown[key] = keptCard
         }
-        if (done.isNotEmpty()) kept = kept - done
         return shown
     }
 
@@ -1021,6 +1030,7 @@ class LiveScoresRepository internal constructor(
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
         val delayed = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
         saveKept(delayed)
+        lastDelayed = delayed
         val keptNow = keptServedLocked()
         val shown = if (keptNow.isEmpty()) delayed else keptNow + delayed
         // The games being watched: no score and no clock from us; the broadcast shows its own (Q18).
@@ -1030,21 +1040,29 @@ class LiveScoresRepository internal constructor(
         output.value = stamping.stampAll(served)
         watchedOutput.value = if (watched.isEmpty()) emptyMap() else stamping.stampAll(shown.filterValues { it.eventId in watched })
         // A kept score leaves one poll after it was first served, even with no answer to replace it.
-        val keptUntil = keptServedAt?.takeIf { keptNow.isNotEmpty() }?.let { it + ScoreCadence.LIVE_MS + 1 }
+        val keptUntil = keptShown.values.mapNotNull { it.servedAt }.minOrNull()?.takeIf { keptNow.isNotEmpty() }?.let { it + ScoreCadence.LIVE_MS + 1 }
         nextRelease.value = listOfNotNull(scoreDelay.nextChangeAt, keptUntil).minOrNull()
     }
 
-    /** The kept scores to serve now (live.23): none while video plays, and none past one poll from the first served. */
+    /**
+     * The kept scores to serve now (live.23), flagged [ScoreSnapshot.kept]: each for one poll at most from when it was
+     * first served, and none of a game being watched (its picture runs behind; it keeps the delay's first-seen hold).
+     */
     private fun keptServedLocked(): Map<String, ScoreSnapshot> {
-        if (keptShown.isEmpty() || playing.isNotEmpty()) return emptyMap()
+        if (keptShown.isEmpty()) return emptyMap()
         val at = now()
-        val since = keptServedAt ?: at.also { keptServedAt = it }
-        if (at - since > ScoreCadence.LIVE_MS) {
-            kept = emptyMap()
-            keptShown = emptyMap()
-            return emptyMap()
+        val watched = ScoreWatch.watchedEvents(playing, keptShown.mapValues { it.value.snapshot } + raw)
+        val served = HashMap<String, ScoreSnapshot>()
+        for ((key, keptCard) in keptShown) {
+            if (keptCard.snapshot.eventId in watched) continue
+            val since = keptCard.servedAt ?: at.also { keptCard.servedAt = it }
+            if (at - since > ScoreCadence.LIVE_MS) {
+                kept -= key
+                continue
+            }
+            served[key] = keptCard.snapshot.copy(kept = true)
         }
-        return keptShown
+        return served
     }
 
     /** Writes [shown] (the delayed scores, unmasked) to [keptFile] a moment after the last change, off the poll path. */

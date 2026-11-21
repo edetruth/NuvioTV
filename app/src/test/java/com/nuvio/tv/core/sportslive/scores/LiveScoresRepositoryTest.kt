@@ -1368,7 +1368,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a kept score is not drawn when older than 10 minutes, for another game, or while video plays`() = runTest {
+    fun `a kept score is not drawn when older than 10 minutes, for another game, or for the game being watched`() = runTest {
         val base = ms("2026-11-15T19:00:00Z")
         val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
         val shown = mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48), lakers.streamKey to game(ScoreState.IN, 50, 48))
@@ -1382,19 +1382,61 @@ class LiveScoresRepositoryTest {
         assertTrue(oldRepo.scores.value.isEmpty())
         looking.cancel()
 
-        // The Lakers card was kept with the Pacers game: the matcher disagrees, so nothing.
+        // The Lakers card was kept with the Pacers game: the matcher disagrees, so nothing. The Pacers game is the one
+        // playing: its kept score is never drawn, not even for the guide's Now playing.
         val fresh = keptFile().apply { write(KeptScores.encode(shown, base - 60_000L)) }
         val repo = repository("2026-11-15T19:00:00Z", keptFile = fresh)
         collect(repo)
-        watching.watch("player", setOf("another card"), "addon-a")
+        watching.watch("player", setOf(pacersCard.streamKey), "addon-a")
         repo.track(SECTION, listOf(pacersCard, lakers))
         runCurrent()
         assertTrue(repo.scores.value.isEmpty())
-        watching.stop("player")
+        assertTrue(repo.watchedScores.value.isEmpty())
+        // Another game playing: the Pacers' kept score is drawn.
+        watching.watch("player", setOf("another card"), "addon-a")
         runCurrent()
         repo.track(SECTION, listOf(lakers, pacersCard))
         runCurrent()
         assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `the player's guide closed and reopened draws its games' last scores at once`() = runTest {
+        // TV report: Score delay 0, a game playing; the guide's scores and clocks were gone on every reopen.
+        val panel = LiveScoresRepository.SCREEN_PLAYER_PANEL
+        val key = pacersCard.streamKey
+        watching.watch("player", setOf("another card"), "addon-a")
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(panel, listOf(pacersCard))
+        runCurrent()
+        // First seen while video plays: at once.
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        assertEquals("Q2 5:00", repo.scores.value.getValue(key).clockText)
+        // Closed for five minutes: the feed is stale by then and fetched again on the reopen.
+        repo.untrack(panel)
+        runCurrent()
+        assertTrue(key !in repo.scores.value)
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        repo.track(panel, listOf(pacersCard))
+        runCurrent()
+        repo.scores.value.getValue(key).let {
+            assertEquals(50, it.homeScore)
+            assertEquals("Q2 5:00", it.clockText)
+            assertTrue(it.kept)
+        }
+        // The fetch lands: the delayed score takes over.
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        repo.scores.value.getValue(key).let {
+            assertEquals(50, it.homeScore)
+            assertFalse(it.kept)
+        }
     }
 
     @Test
