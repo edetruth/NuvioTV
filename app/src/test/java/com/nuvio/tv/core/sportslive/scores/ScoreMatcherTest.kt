@@ -58,6 +58,19 @@ class ScoreMatcherTest {
     }
 
     @Test
+    fun `a city written the other way is still a strong name, a bare city never (J4)`() {
+        val strict = ScoreMatcher(zone = { ZoneOffset.UTC }, minScore = ScoreMatcher.BOTH_STRONG)
+        fun strictMatch(title: String, start: String) =
+            strict.match(card(title, start), nba, ms("2026-11-16T20:00:00Z"))?.eventId
+        // ESPN's "LA Clippers" is the addons' "Los Angeles Clippers"; ESPN's "Los Angeles Lakers" their "LA Lakers".
+        assertEquals("401909987", strictMatch("Los Angeles Clippers vs Charlotte Hornets", "2026-11-15T21:30:00Z"))
+        assertEquals("401909986", strictMatch("LA Lakers at Phoenix Suns", "2026-11-15T21:00:00Z"))
+        // The city alone stays weak.
+        assertNull(strictMatch("Los Angeles vs Charlotte Hornets", "2026-11-15T21:30:00Z"))
+        assertNull(strictMatch("LA vs Phoenix Suns", "2026-11-15T21:00:00Z"))
+    }
+
+    @Test
     fun `matching ignores the order of the sides`() {
         assertEquals("401927170", match("Cameroon vs Namibia", "2026-11-16T13:00:00Z", caf))
         assertEquals("401927170", match("CMR vs NAM", "2026-11-16T13:00:00Z", caf))
