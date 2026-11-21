@@ -167,7 +167,7 @@ class SportsLiveLive20DataTest {
 
     @Test
     fun `a generic title never merges, even across addons`() {
-        // A bare "Tennis" / "ATP" / "WTA" is a sport feed, listed on Channels (TV report #5).
+        // A bare "Tennis" / "ATP" / "WTA" is folded under Other events (H, live.23).
         for (title in listOf("Court 3", "Day 6 Singles", "Main Feed")) {
             val rows = live(event("a", "1", title, listOf("Tennis")), event("b", "2", title, listOf("Tennis")))
             assertEquals(title, 2, rows.size)
@@ -234,12 +234,13 @@ class SportsLiveLive20DataTest {
     }
 
     @Test
-    fun `a title naming only a sport or a tour is a feed on Channels, a tournament stays an event`() {
+    fun `a title naming only a sport or a tour is folded under Other events, a tournament stays an event`() {
+        // H (live.23): no channel, but no event of its own either.
         for (title in listOf("Tennis", "ATP", "WTA", "Live Tennis", "ATP Tour", "Ice Hockey HD", "Soccer")) {
             val feed = event("a", title, title, listOf("Tennis"))
-            assertTrue(title, feed.isChannel)
-            assertTrue(title, live(feed).isEmpty())
-            assertNotNull(title, SportsLiveItemBucketer.bucketTab(listOf(feed), SportsLiveTab.CHANNELS, now).singleOrNull())
+            assertFalse(title, feed.isChannel)
+            assertTrue(title, SportsLiveOtherEvents.isOtherEvent(feed))
+            assertTrue(title, SportsLiveItemBucketer.bucketTab(listOf(feed), SportsLiveTab.CHANNELS, now).isEmpty())
         }
         for (title in listOf("ATP Finals 2026", "ATP 250 · Stockholm", "ATP 250", "Court 3", "Main Feed", "Sinner vs Alcaraz")) {
             assertFalse(title, event("a", title, title, listOf("Tennis")).isChannel)
