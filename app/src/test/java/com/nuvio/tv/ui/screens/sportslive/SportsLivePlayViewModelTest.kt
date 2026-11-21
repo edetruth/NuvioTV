@@ -468,7 +468,8 @@ class SportsLivePlayViewModelTest {
         advanceUntilIdle()
         assertNull(SportsLiveZapSessions.current())
 
-        val fromLiveNow = SportsLiveZapSession.of(listOf(SINGLE), SINGLE.streamKey, SportsLiveTab.LIVE_NOW, "x", returnToHomeOnBack = true)!!
+        // The section's Live now session (its origin, the section, as the hover preview's Watch, #211).
+        val fromLiveNow = SportsLiveZapSession.of(listOf(SINGLE), SINGLE.streamKey, SportsLiveTab.LIVE_NOW, "x", returnToHomeOnBack = false)!!
         SportsLiveZapSessions.start(fromLiveNow)
         viewModel.playResolved(SINGLE, STREAM)
         advanceUntilIdle()

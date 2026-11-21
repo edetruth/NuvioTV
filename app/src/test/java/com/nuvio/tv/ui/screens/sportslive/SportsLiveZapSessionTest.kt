@@ -45,9 +45,33 @@ class SportsLiveZapSessionTest {
     fun `the session already on the game, from Live now or Home, is kept`() {
         val home = session(listOf(item("a"), item("b")), index = 1).copy(returnToHomeOnBack = true)
         SportsLiveZapSessions.start(home)
-        assertSame(home, SportsLiveZapSessions.ensureFor(item("b"), listOf(item("c"))))
+        assertSame(home, SportsLiveZapSessions.ensureFor(item("b"), listOf(item("c")), returnToHomeOnBack = true))
         // On another game it is replaced.
         assertEquals(listOf("c"), SportsLiveZapSessions.ensureFor(item("c"), listOf(item("c"))).items.map { it.id })
+    }
+
+    @Test
+    fun `a Watch in the section on the game of a session left from Home keeps its list but takes the section's origin`() {
+        val home = session(listOf(item("a"), item("b")), index = 1).copy(returnToHomeOnBack = true)
+        SportsLiveZapSessions.start(home)
+
+        val kept = SportsLiveZapSessions.ensureFor(item("b"), listOf(item("c")), returnToHomeOnBack = false)
+
+        assertEquals(listOf("a", "b"), kept.items.map { it.id })
+        assertEquals("b", kept.current.id)
+        assertEquals(false, kept.returnToHomeOnBack)
+        assertSame(kept, SportsLiveZapSessions.current())
+    }
+
+    @Test
+    fun `a session started in the section keeps its origin through zaps and panel picks`() {
+        val section = session(listOf(item("a"), item("b"), item("c")), index = 0).copy(returnToHomeOnBack = false)
+
+        assertEquals(false, section.next().returnToHomeOnBack)
+        assertEquals(false, section.previous().returnToHomeOnBack)
+        // A pick in the panel or guide: a game of the session, or one only the panel lists.
+        assertEquals(false, section.pickFromPanel(item("c"), listOf(item("c")))!!.returnToHomeOnBack)
+        assertEquals(false, section.pickFromPanel(item("x"), listOf(item("a"), item("x")))!!.returnToHomeOnBack)
     }
 
     @Test

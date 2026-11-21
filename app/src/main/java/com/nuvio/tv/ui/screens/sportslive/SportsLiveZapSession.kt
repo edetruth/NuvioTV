@@ -213,9 +213,14 @@ internal object SportsLiveZapSessions {
      * stage. The session already on [item] (Live now's, Home's row, a zap's) is kept; otherwise one over
      * [lineup] (the shared Live now list, as the panel builds it) starts on [item], with [item] put first
      * when the list lacks it (not loaded yet, a game about to start). So the panel and CH± always work.
+     * #211: the kept session takes this Watch's origin ([returnToHomeOnBack]): a session left over from Home's
+     * row must not make a game started in the section behave as Home's (no mini player on Back, BUG13).
      */
     fun ensureFor(item: SportsLiveItem, lineup: List<SportsLiveItem>, returnToHomeOnBack: Boolean = false): SportsLiveZapSession {
-        activeFor(item.id)?.let { return it }
+        activeFor(item.id)?.let { kept ->
+            if (kept.returnToHomeOnBack == returnToHomeOnBack) return kept
+            return kept.copy(returnToHomeOnBack = returnToHomeOnBack).also(::update)
+        }
         val items = if (lineup.any { it.streamKey == item.streamKey }) lineup else listOf(item) + lineup
         val session = checkNotNull(
             SportsLiveZapSession.of(items, item.streamKey, SportsLiveTab.LIVE_NOW, filter = null, returnToHomeOnBack = returnToHomeOnBack)
