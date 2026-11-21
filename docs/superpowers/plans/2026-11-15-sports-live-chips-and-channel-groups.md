@@ -139,9 +139,9 @@ Observed in `org.nebulastreams.sports` (type `sports`, ids `streamed:`): `releas
 
 ---
 
-### Task 6: CNCVerse compatibility and large channel lists (added 2026-11-15, user-supplied test addon)
+### Task 6: a private addon compatibility and large channel lists (added 2026-11-15, user-supplied test addon)
 
-Observed in `com.cncverse.stremiobridge.*`: type `tv` catalogs "⚡SportzX Live Events (tv)" etc. (names like "🔜 AFG vs ZIM", no time, no genres) and "EasyPlay Live TV (tv)" with 4,857 channels named "UK| SKY SPORTS 1" (132 prefixes, ~60 each; 3.8 MB response).
+Observed in `com.a-private-addon.stremiobridge.*`: type `tv` catalogs "⚡SportzX Live Events (tv)" etc. (names like "🔜 AFG vs ZIM", no time, no genres) and "EasyPlay Live TV (tv)" with 4,857 channels named "UK| SKY SPORTS 1" (132 prefixes, ~60 each; 3.8 MB response).
 
 **Rulings:**
 - Kind: a catalog whose name or id contains the phrase "live tv" (case-insensitive) is CHANNELS (in addition to channel/channels); "events" in the name keeps EVENTS.
@@ -152,7 +152,7 @@ Observed in `com.cncverse.stremiobridge.*`: type `tv` catalogs "⚡SportzX Live 
 **Files:** `core/sportslive/SportsLiveCatalogPolicy.kt`, `SportsLiveItemBucketer.kt`, `SportsLiveChannelGrouper.kt` (from Task 1), `data/repository/SportsLiveRepositoryImpl.kt` (`load(force, includeChannels: Boolean = true)`), `ui/screens/sportslive/SportsLiveViewModel.kt`, fixtures `cnc_live_events.json` (from `D:\Nuvio\scratch\addons\cnc.sportzx.json`) and `cnc_live_tv_sample.json` (first 200 metas of `cnc.cnc_EasyPlayLiveTV_tv.json`); verify no tokens (catalog ids are base64 channel descriptors, not secrets).
 
 - [ ] Tests: "Live TV" catalog → CHANNELS; 🔜 item not live and in Upcoming; 🔴 item live; displayed names stripped; "AFG vs ZIM" parses (for later team features); grouper gives `UK`, `ASIA-IN`, `DSTV`; auto-refresh calls `load(includeChannels = false)`; ViewModel buckets once per load (count calls via a seam or measure that selection changes don't re-invoke the bucketer).
-- [ ] Emulator: install CNCVerse; Channels tab with group chips stays responsive (scroll, filter) with ~4.8k channels; Live Now shows no channels from "Live TV". Screenshots.
+- [ ] Emulator: install a private addon; Channels tab with group chips stays responsive (scroll, filter) with ~4.8k channels; Live Now shows no channels from "Live TV". Screenshots.
 - [ ] Commit `feat(sportslive): handle large live TV catalogs and status emoji`.
 
 ---
@@ -165,12 +165,12 @@ Observed in `org.kris.ultra.max.tv.*`: type `tv` catalogs "🇺🇸 United State
 - An item whose genres contain "Live TV" (case-insensitive, whole phrase) is a channel (`isChannel = true`), whatever its catalog's kind.
 - Channels appear only in the Channels tab, never in Live Now or Upcoming, unless the item comes from an EVENTS-kind catalog (e.g. highfly lists TSN in its "Live Now" catalog) AND is live. Channels from CHANNELS-kind catalogs never appear in Live Now even when marked live (Nebula's Channels catalog marks ~1000 channels "live", flooding Live Now to 1073 items on the emulator). This amends spec §7.2 ("A channel that is live also appears in Live Now").
 - Replays are sorted newest first (start descending, null last) instead of oldest first.
-- Items whose name starts with the status emoji ✅ (finished, as CNCVerse marks them) are excluded from every tab; the emoji is never shown.
+- Items whose name starts with the status emoji ✅ (finished, as a private addon marks them) are excluded from every tab; the emoji is never shown.
 - Channel group names are compared case-insensitively and displayed upper-cased ("BiH" and "BIH" are one chip "BIH").
 - Channel group fallback order becomes: second-genre code → name prefix (Task 6 rule) → **catalog name with emoji, "(tv)" and surrounding whitespace removed** → addon name.
 
 **Files:** `core/sportslive/SportsLiveItemBucketer.kt`, `SportsLiveChannelGrouper.kt`, spec §7.2 amendment (`git add -f`), fixture `ultra_tv_uk.json` (copy of `D:\Nuvio\scratch\addons\ultra.tv_uk.json`; ids are base64 channel names, no secrets).
-- [ ] Tests: Ultra fixture items are channels, absent from LIVE_NOW and UPCOMING, present in CHANNELS; group "United Kingdom TV"; highfly leaf items (with "LIVE NOW") still appear in both LIVE_NOW and CHANNELS; CNCVerse Live TV sample stays out of LIVE_NOW.
+- [ ] Tests: Ultra fixture items are channels, absent from LIVE_NOW and UPCOMING, present in CHANNELS; group "United Kingdom TV"; highfly leaf items (with "LIVE NOW") still appear in both LIVE_NOW and CHANNELS; a private addon Live TV sample stays out of LIVE_NOW.
 - [ ] Tests: Nebula channels fixture (first 30 metas of D:/Nuvio/scratch/addons/nebula.streamed-events-dlhd-channels.json, read as UTF-8; catalog kind CHANNELS) stays out of LIVE_NOW; Replays order newest first. Tests: ✅ item appears in no tab; groups "BiH" and "BIH" yield one filter "BIH".
 - [ ] Commit `feat(sportslive): treat plain live TV addons as channels`.
 

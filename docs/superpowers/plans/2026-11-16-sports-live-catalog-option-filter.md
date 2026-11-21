@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Let the user pin one option of a claimed catalog's optional extra (e.g. CNCVerse Live TV genre = United States) so Sports & Live loads only those items.
+**Goal:** Let the user pin one option of a claimed catalog's optional extra (e.g. a private addon Live TV genre = United States) so Sports & Live loads only those items.
 
 **Spec:** `docs/superpowers/specs/2026-11-16-sports-live-catalog-option-filter-design.md`
 
@@ -25,4 +25,4 @@
 `core/sportslive/SportsLiveCatalogOptions.kt` (pure: `eligibleExtra(catalog): CatalogExtra?`), prefs store additions (`catalogOptions: Flow<Map<String, CatalogOption>>`, `setCatalogOption(key, option?)`), repository passes extraArgs and includes the value in cache/carry-over identity; tests for each. Commit `feat(sportslive): pin a catalog option to load only matching items`.
 
 ### Task C2: Settings picker + stats wording
-Settings VM exposes per-catalog `eligibleOptions` and current pin; content adds the "Filter: …" action and picker dialog; stats line uses "No items for %1$s" when a pinned catalog loaded zero items. Tests for VM; both flavor compiles; `assembleFullDebug`; emulator screenshot of the picker (any addon with options — CNCVerse event catalogs or EasyPlay if installed; otherwise use a fixture-backed unit test and mark the emulator check UNCLEAR). Commit `feat(sportslive): choose a catalog filter in settings`.
+Settings VM exposes per-catalog `eligibleOptions` and current pin; content adds the "Filter: …" action and picker dialog; stats line uses "No items for %1$s" when a pinned catalog loaded zero items. Tests for VM; both flavor compiles; `assembleFullDebug`; emulator screenshot of the picker (any addon with options — a private addon event catalogs or EasyPlay if installed; otherwise use a fixture-backed unit test and mark the emulator check UNCLEAR). Commit `feat(sportslive): choose a catalog filter in settings`.

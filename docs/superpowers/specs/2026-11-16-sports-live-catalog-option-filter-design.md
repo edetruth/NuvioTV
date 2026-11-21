@@ -6,7 +6,7 @@ Depends on: Sports & Live section, follow-on (stats, groups)
 
 ## Intent
 
-CNCVerse's "EasyPlay Live TV" catalog lists ~4,800 channels from ~130 countries. The addon itself supports a `genre` catalog extra whose options are countries ("United States", "United Kingdom", …). Sports & Live currently loads every claimed catalog with no extras, so the user gets the whole list. Let the user pin one option value per catalog so the section asks the addon only for that (e.g. US channels only). Generic: any addon whose catalog declares an optional extra with `options` (CNCVerse's event catalogs expose sport options too).
+a private addon's "EasyPlay Live TV" catalog lists ~4,800 channels from ~130 countries. The addon itself supports a `genre` catalog extra whose options are countries ("United States", "United Kingdom", …). Sports & Live currently loads every claimed catalog with no extras, so the user gets the whole list. Let the user pin one option value per catalog so the section asks the addon only for that (e.g. US channels only). Generic: any addon whose catalog declares an optional extra with `options` (a private addon's event catalogs expose sport options too).
 
 ## Rulings
 
@@ -23,4 +23,4 @@ Multiple values per catalog. Free-text search extras. Filtering catalogs whose e
 
 ## Verification
 
-Unit: option detection (genre preferred, required extras ignored), prefs round-trip and per-profile isolation, repository passes extraArgs and refetches on change, carry-over identity includes the value. Emulator: CNCVerse (if the user reinstalls it and the addon is serving data) pinned to "United States" shows only US channels; otherwise UNCLEAR with unit evidence.
+Unit: option detection (genre preferred, required extras ignored), prefs round-trip and per-profile isolation, repository passes extraArgs and refetches on change, carry-over identity includes the value. Emulator: a private addon (if the user reinstalls it and the addon is serving data) pinned to "United States" shows only US channels; otherwise UNCLEAR with unit evidence.
