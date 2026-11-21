@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
@@ -184,7 +185,9 @@ class SportsLiveViewModel internal constructor(
     /** #143: Upcoming's ESPN scoreboards asked for ahead ([LiveScoresRepository.prefetchUpcoming]); the requests made. */
     private val prefetchUpcomingScores: suspend () -> Int = { 0 },
     /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
-    unmatchedScores: Flow<Set<String>> = flowOf(emptySet())
+    unmatchedScores: Flow<Set<String>> = flowOf(emptySet()),
+    /** The active profile's id: part of every kept board's scope (live.23 review F3), so a switch drops them. */
+    activeProfile: Flow<Int?> = flowOf(null)
 ) : ViewModel() {
 
     @Inject
@@ -198,7 +201,8 @@ class SportsLiveViewModel internal constructor(
         identifier: TeamIdentifier,
         standingsRepository: StandingsRepository,
         listStore: SportsLiveListSnapshotStore,
-        reporter: SportsLiveReporter
+        reporter: SportsLiveReporter,
+        profileManager: ProfileManager
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -262,7 +266,8 @@ class SportsLiveViewModel internal constructor(
         addMySport = { sport -> prefs.updateMySports { if (it.isDefault || sport in it.effectiveSports) it else it.toggleSport(sport) } },
         scoresSettleMs = SCORES_SETTLE_MS,
         prefetchUpcomingScores = liveScores::prefetchUpcoming,
-        unmatchedScores = liveScores.unmatched
+        unmatchedScores = liveScores.unmatched,
+        activeProfile = profileManager.activeProfileId
     )
 
     private data class Selection(
@@ -666,12 +671,18 @@ class SportsLiveViewModel internal constructor(
             boardScores.firstThenCoalesce(scoresSettleMs),
             repo.followedTeams,
             logoRevision,
-            combine(standings, combine(channelLists, unmatchedScores, ::Pair), combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), ::Triple)
-        ) { state, scores, followed, revision, (books, listsAndUnmatched, profile) ->
+            combine(
+                standings,
+                combine(channelLists, unmatchedScores, ::Pair),
+                combine(combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), activeProfile, ::Pair),
+                ::Triple
+            )
+        ) { state, scores, followed, revision, (books, listsAndUnmatched, profileAndId) ->
             val (lists, unmatched) = listsAndUnmatched
             // #143: another profile or setting drops every tab's kept board before any is shown again.
+            val (profile, profileId) = profileAndId
             val (claimed, sports, hidden) = profile
-            boardCache.scopeTo(SportsLiveBoardScope(claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode))
+            boardCache.scopeTo(SportsLiveBoardScope(profileId, claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode))
             val tab = state.selectedTab
             val live = tab == SportsLiveTab.LIVE_NOW
             SportsLiveBoardInputs(
@@ -1486,8 +1497,12 @@ internal suspend fun SportsLiveRepository.toggleFollowTarget(target: FollowTarge
     }
 }
 
-/** What every kept board was built for (#143, [SportsLiveBoardCache.scopeTo]): the profile's catalogs and settings. */
-private data class SportsLiveBoardScope(
+/**
+ * What every kept board was built for (#143, [SportsLiveBoardCache.scopeTo]): the profile (F3: two profiles with the same
+ * catalogs and settings never share a board) and its catalogs and settings.
+ */
+internal data class SportsLiveBoardScope(
+    val profileId: Int?,
     val claimed: Set<String>,
     val mySports: MySports,
     val hidden: Set<String>,
