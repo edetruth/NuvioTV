@@ -27,6 +27,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowseKind
 import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
@@ -295,7 +296,9 @@ private const val MORE_LIVE_KEY = "live:more_live"
 internal fun moreLiveGroupLabel(key: String): String = when (key) {
     SportsLiveMoreLive.FIGHTS -> stringResource(R.string.sports_live_more_live_fights)
     SportsLiveMoreLive.OTHER -> stringResource(R.string.sports_live_more_live_other)
-    else -> SportsLiveMoreLive.kindOf(key)?.let { sportKindLabel(it) } ?: stringResource(R.string.sports_live_more_live_other)
+    else -> SportsLiveMoreLive.kindOf(key)?.let { sportKindLabel(it) }
+        ?: SportsLiveMoreLive.textOf(key)?.let { SportsLiveDisplayText.label(it) }
+        ?: stringResource(R.string.sports_live_more_live_other)
 }
 
 /** "More live: 4 Racing · 3 Cricket · 2 Fights · 2 Other ›". */

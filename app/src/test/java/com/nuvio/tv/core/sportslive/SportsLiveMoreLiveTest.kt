@@ -45,6 +45,16 @@ class SportsLiveMoreLiveTest {
     }
 
     @Test
+    fun `Other holds only what isUntagged calls unknown, a sport the app has no name for keeps its own word`() {
+        val volleyball = game("Perugia vs Trento", "Volleyball")
+        assertEquals(SportsLiveMoreLive.SPORT_TEXT + "Volleyball", SportsLiveMoreLive.keyOf(volleyball, untagged = { false }))
+        assertEquals("Volleyball", SportsLiveMoreLive.textOf(SportsLiveMoreLive.keyOf(volleyball, untagged = { false })))
+        assertEquals(SportsLiveMoreLive.OTHER, SportsLiveMoreLive.keyOf(volleyball, untagged = { true }))
+        // The app's own rule: a game no source gives a sport is Other.
+        assertEquals(SportsLiveMoreLive.OTHER, SportsLiveMoreLive.keyOf(game("Mystery A vs Mystery B", null)))
+    }
+
+    @Test
     fun `adding a sport is offered once per sport My sports can hold`() {
         val mine = MySports(mapOf(MySport.SOCCER to emptySet()))
         val tennis = game("Sinner vs Alcaraz", "Tennis")

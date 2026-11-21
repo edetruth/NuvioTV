@@ -54,18 +54,30 @@ object SportsLiveMoreLive {
         return if (rest > 0) shown + (OTHER to rest) else shown
     }
 
-    /** The group [item] goes under: its sport, Fights, or Other when no source tells its sport. */
+    /**
+     * The group [item] goes under: Other exactly when no source tells its sport ([SportsLiveUnidentified.isUntagged],
+     * the one "unknown sport" rule); else its sport (MMA and boxing as Fights), or the sport word its addon gives when
+     * that is no sport the app names ("Volleyball": [SPORT_TEXT]).
+     */
     internal fun keyOf(item: SportsLiveItem, untagged: (SportsLiveItem) -> Boolean = SportsLiveUnidentified::isUntagged): String {
         if (untagged(item)) return OTHER
-        val kind = SportsLiveMySportsScope.kindOf(item) ?: SportsLiveSportKind.tagOf(item) ?: return OTHER
+        val kind = SportsLiveMySportsScope.kindOf(item) ?: SportsLiveSportKind.tagOf(item)
+            ?: return (listOf(item) + item.alternates).firstNotNullOfOrNull { SportsLiveTeams.knownSport(it)?.trim()?.takeIf(String::isNotEmpty) }
+                ?.let { SPORT_TEXT + it } ?: OTHER
         return when (kind) {
             SportsLiveSportKind.MMA, SportsLiveSportKind.BOXING -> FIGHTS
             else -> kind.name
         }
     }
 
-    /** The sport a group key names, for its label; null for [FIGHTS] and [OTHER]. */
+    /** A group key for a sport the app has no name of its own for: this, then the addon's word ("Volleyball"). */
+    const val SPORT_TEXT = "sport:"
+
+    /** The sport a group key names, for its label; null for [FIGHTS], [OTHER] and an addon's own word ([textOf]). */
     fun kindOf(key: String): SportsLiveSportKind? = SportsLiveSportKind.entries.firstOrNull { it.name == key }
+
+    /** The addon's sport word a [SPORT_TEXT] key carries; null for any other key. */
+    fun textOf(key: String): String? = key.takeIf { it.startsWith(SPORT_TEXT) }?.removePrefix(SPORT_TEXT)
 
     /**
      * The sport to offer adding to My sports once [item], a More live game, plays ("Add Cricket to My sports?"): its
