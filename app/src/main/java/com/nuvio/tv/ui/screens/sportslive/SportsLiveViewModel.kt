@@ -87,6 +87,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.onStart
@@ -337,7 +338,9 @@ class SportsLiveViewModel internal constructor(
         /** live.24: Upcoming's later dates not sorted yet ([SportsLiveUpcomingWindow]). */
         val upcomingPending: List<LocalDate> = emptyList(),
         /** live.24: games on Upcoming's sorted days waiting for All sports (a cheap count). */
-        val upcomingWaiting: Int = 0
+        val upcomingWaiting: Int = 0,
+        /** live.24: tabs still being sorted on the cold open (Live now went first): an empty one shows as loading. */
+        val sortingTabs: Set<SportsLiveTab> = emptySet()
     )
 
     /** What Upcoming's working set was asked to hold (live.24): how many days, and every sport (All sports picked). */
@@ -439,7 +442,15 @@ class SportsLiveViewModel internal constructor(
     private val firstStateLogged = java.util.concurrent.atomic.AtomicBoolean(false)
     private fun sinceOpenMs(): Long = (System.nanoTime() - openedAtNs) / 1_000_000
 
-    private val bucketed = combine(repo.claimedCatalogs, repo.latest, rebucket, kickoffs, upcomingInputs) { claimed, latest, _, _, upcoming ->
+    // live.24: the cold open's Live now went out before the other tabs were sorted (once per visit), and the last sorting out.
+    private var liveFirstDone = false
+    private var lastSorted: Bucketed? = null
+
+    /** Runs between the cold open's Live now and the other tabs' sorting; tests hold it to see Live now first. */
+    @VisibleForTesting
+    internal var afterLiveFirst: suspend () -> Unit = {}
+
+    private val bucketed = combineTransform(repo.claimedCatalogs, repo.latest, rebucket, kickoffs, upcomingInputs) { claimed, latest, _, _, upcoming ->
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
         // Claimed catalogs come in the user's addon order, which picks a merged game's primary.
@@ -449,9 +460,11 @@ class SportsLiveViewModel internal constructor(
             // Stale-while-revalidate (live.20 B1): the profile's last list, moved by the clock, while the first load runs.
             savedTabs(claimed, now)?.let { (tabs, savedAtMs) ->
                 scheduleKickoff(SportsLiveItemBucketer.nextClockChange(tabs.values.flatten(), now))
-                return@combine Bucketed(hasClaimed = true, hasLoad = true, tabs = tabs, listAtMs = savedAtMs)
+                emit(Bucketed(hasClaimed = true, hasLoad = true, tabs = tabs, listAtMs = savedAtMs).also { lastSorted = it })
+                return@combineTransform
             }
-            return@combine Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder))
+            emit(Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder)))
+            return@combineTransform
         }
         val items = latest.items.filter { it.catalogKey in claimedKeys }
         val stamp = directoryStamp()
@@ -468,6 +481,24 @@ class SportsLiveViewModel internal constructor(
             reused.tabs
         } else {
             val startedAt = System.nanoTime()
+            // live.24: the cold open's first sorting sends Live now (~80 games) out at once, before Upcoming, Channels and
+            // Replays (~3,800) are sorted; those tabs keep what they showed (the saved list) or wait as loading meanwhile.
+            if (sharedBuckets != null && !liveFirstDone) {
+                liveFirstDone = true
+                val live = sharedBuckets.tab(latest, claimedKeys, addonOrder, SportsLiveTab.LIVE_NOW, now, stamp)
+                val before = lastSorted?.tabs.orEmpty()
+                emit(
+                    Bucketed(
+                        hasClaimed = claimed.isNotEmpty(), hasLoad = true, listAtMs = latest.loadedAtMs, fromLoad = true,
+                        tabs = SportsLiveTab.entries.associateWith { tab -> if (tab == SportsLiveTab.LIVE_NOW) live else before[tab].orEmpty() },
+                        sortingTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.LIVE_NOW && before[it].isNullOrEmpty() }.toSet()
+                    )
+                )
+                SportsLiveDebugTiming.log {
+                    "sportsOpen stage=liveFirst ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} rows=${live.size}"
+                }
+                afterLiveFirst()
+            }
             val sorted = if (sharedBuckets != null && upcoming != null) {
                 val window = SportsLiveUpcomingWindow(
                     zone = zone,
@@ -497,10 +528,12 @@ class SportsLiveViewModel internal constructor(
             }
         }
         scheduleKickoff(SportsLiveItemBucketer.nextClockChange(items, now))
-        Bucketed(
+        val done = Bucketed(
             hasClaimed = claimed.isNotEmpty(), hasLoad = true, tabs = tabs, listAtMs = latest.loadedAtMs, fromLoad = true,
             upcomingPending = upcomingBucket?.pendingDates.orEmpty(), upcomingWaiting = upcomingBucket?.waitingBySport ?: 0
         )
+        lastSorted = done
+        emit(done)
     }.flowOn(computeDispatcher)
 
     /** The saved list's tabs for [claimed] at [now], with when it was loaded; null when there is none to show. */
@@ -1507,8 +1540,8 @@ class SportsLiveViewModel internal constructor(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
             isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
             // #214: until the first load of this visit lands (or fails), an empty tab is loading, never "nothing here".
-            firstLoadPending = hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
-                (selection.isRefreshing || selection.lastRefreshedMs == null),
+            firstLoadPending = (hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
+                (selection.isRefreshing || selection.lastRefreshedMs == null)) || selection.tab in bucketed.sortingTabs,
             hasClaimedCatalogs = hasClaimed,
             tabs = if (allSports) scopedTabs + (selection.tab to fullItems) else scopedTabs,
             selectedTab = selection.tab,
