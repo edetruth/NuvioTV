@@ -56,7 +56,9 @@ internal data class SportsLiveListModel(
     /** Live now's More live row (user 2026-11-21): (group key, count) as the row names them; empty: no row. */
     val moreLive: List<Pair<String, Int>> = emptyList(),
     /** The More live view is shown: [items] are its games, headed by sport ([ScoreboardRow.section]). */
-    val moreLiveOpen: Boolean = false
+    val moreLiveOpen: Boolean = false,
+    /** The add-sport card's sport name ("Cricket"), shown above the first row; null for no card. */
+    val addSportLabel: String? = null
 )
 
 /**
@@ -101,6 +103,11 @@ internal class SportsLiveListActions {
 
     /** OK on Live now's "More live" row. */
     var onOpenMoreLive: () -> Unit = {}
+
+    /** The add-sport card's Add and Not now, and its Add button's requester (Up from the first row lands there). */
+    var onAddSport: () -> Unit = {}
+    var onDeclineSport: () -> Unit = {}
+    val addSportRequester = FocusRequester()
 }
 
 /**
@@ -147,6 +154,20 @@ internal fun SportsLiveBoardList(
             // Read here, not through [model] in each row's key handler: a score poll builds a new model, and the handler
             // (part of the row's modifier) must stay equal so an unchanged row skips (#143).
             val letters = model.channelLetters
+            // The add-sport card (after a More live game): above the first row, never first focus.
+            val addSportLabel = model.addSportLabel
+            if (addSportLabel != null) {
+                item(key = ADD_SPORT_KEY, contentType = ENTRY_CONTENT) {
+                    SportsLiveAddSportCard(
+                        sportLabel = addSportLabel,
+                        onAdd = { actions.onAddSport() },
+                        onNotNow = { actions.onDeclineSport() },
+                        addRequester = actions.addSportRequester,
+                        up = upFocusRequester,
+                        right = stageFocusRequester
+                    )
+                }
+            }
             itemsIndexed(items, key = { _, item -> item.listKey }, contentType = { _, _ -> ROW_CONTENT }) { index, item ->
                 val boardRow = rowOf[item.listKey] ?: return@itemsIndexed
                 // The group's heading rides on its first row, so list indices stay the rows' own.
@@ -184,7 +205,7 @@ internal fun SportsLiveBoardList(
                             .focusRequester(actions.requesterOf(item))
                             .focusProperties {
                                 right = stageFocusRequester
-                                if (index == 0) up = upFocusRequester
+                                if (index == 0) up = if (addSportLabel != null) actions.addSportRequester else upFocusRequester
                             }
                             .onPreviewKeyEvent { event ->
                                 // Channels phase 2: ◂ ▸ on a browse row jump to the previous or next letter.
@@ -262,6 +283,9 @@ internal fun SportsLiveBoardList(
 private const val CHANNEL_POPULAR_KEY = "\u0000channels:popular"
 private const val CHANNEL_SPORTS_KEY = "\u0000channels:sports"
 private const val CHANNEL_ALL_KEY = "\u0000channels:all"
+
+/** The add-sport card's list key. */
+private const val ADD_SPORT_KEY = "live:add_sport"
 
 /** Live now's More live row's list key. */
 private const val MORE_LIVE_KEY = "live:more_live"

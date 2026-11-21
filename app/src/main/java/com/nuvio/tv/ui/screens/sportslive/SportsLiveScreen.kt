@@ -521,6 +521,8 @@ fun SportsLiveScreen(
             onBrowsing = viewModel::setBrowsing,
             onShowNewRows = viewModel::showNewRows,
             onOpenMoreLive = viewModel::openMoreLive,
+            onAddSport = viewModel::acceptAddSport,
+            onDeclineSport = viewModel::declineAddSport,
             onCloseMoreLive = viewModel::closeMoreLive,
             onToggleChannelFavorite = viewModel::toggleChannelFavorite,
             channelBrowse = channelBrowse,
@@ -659,6 +661,9 @@ private fun SportsLiveContent(
     /** OK on Live now's "More live" row, and Back from its view (user 2026-11-21). */
     onOpenMoreLive: () -> Unit = {},
     onCloseMoreLive: () -> Unit = {},
+    /** The add-sport card's Add and Not now (after a More live game was played). */
+    onAddSport: () -> Unit = {},
+    onDeclineSport: () -> Unit = {},
     /** Hold OK → Add to / Remove from favorites on a Channels row (phase 1): the channel, and whether it is one now. */
     onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> },
     /** Channels' browse view (phase 2); null while the tab shows its own sections. */
@@ -1616,6 +1621,14 @@ private fun SportsLiveContent(
     }
     listActions.onOpenBrowse = openChannelBrowse
     listActions.onShowAllSports = { onSelectFilter(SportsLiveUiState.ALL_SPORTS_FILTER) }
+    // The add-sport card: Add says so in a toast.
+    val addSportName = uiState.addSportPrompt?.let { mySportLabel(it) }
+    val addedText = addSportName?.let { stringResource(R.string.sports_live_add_sport_added, it) }
+    listActions.onAddSport = {
+        onAddSport()
+        addedText?.let { SportsLiveToasts.show(SportsLiveToastKind.INFO, it) }
+    }
+    listActions.onDeclineSport = onDeclineSport
     listActions.onOpenMoreLive = {
         moreLiveFocusPending = true
         onOpenMoreLive()
@@ -2150,7 +2163,7 @@ private fun SportsLiveContent(
                     // What the list shows, once per board, tab and filter (#115).
                     val listModel = remember(
                         shownBoard, channelsTab, channelBrowse, uiState.selectedFilter, uiState.hiddenByMySports, otherRegionLabel, channelLetters,
-                        uiState.moreLive, moreLiveShown
+                        uiState.moreLive, moreLiveShown, addSportName
                     ) {
                         val rows = shownBoard?.rows.orEmpty()
                         val sectionCounts = rows.mapNotNull { it.section }.groupingBy { it }.eachCount()
@@ -2168,7 +2181,8 @@ private fun SportsLiveContent(
                             hiddenByMySports = if (channelsTab) 0 else uiState.hiddenByMySports,
                             channelLetters = channelLetters,
                             moreLive = if (channelsTab) emptyList() else SportsLiveMoreLive.summary(uiState.moreLive),
-                            moreLiveOpen = moreLiveShown
+                            moreLiveOpen = moreLiveShown,
+                            addSportLabel = addSportName.takeIf { !channelsTab && !moreLiveShown }
                         )
                     }
                     // The rows' marks (#143): equal from one D-pad move to the next while the list holds focus.

@@ -24,6 +24,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveImportance
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
+import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
@@ -172,7 +174,13 @@ class SportsLiveViewModel internal constructor(
     /** Saves the countries chosen (null: back to the viewer's own). */
     private val saveChannelCountries: suspend (Set<String>?) -> Unit = {},
     /** This TV's region, a viewer's own country (phase 2); null in tests. */
-    tvRegion: String? = null
+    tvRegion: String? = null,
+    /** What the profile said to "Add ‹sport› to My sports?" (More live). */
+    addSportMemory: Flow<SportsLiveAddSportPrompt.Memory> = flowOf(SportsLiveAddSportPrompt.Memory()),
+    /** Saves a change of those answers. */
+    private val saveAddSportMemory: suspend ((SportsLiveAddSportPrompt.Memory) -> SportsLiveAddSportPrompt.Memory) -> Unit = {},
+    /** Puts a sport in My sports (Add on the card). */
+    private val addMySport: suspend (MySport) -> Unit = {}
 ) : ViewModel() {
 
     @Inject
@@ -243,7 +251,10 @@ class SportsLiveViewModel internal constructor(
         updateChannelPicks = prefs::updateChannelPicks,
         channelCountries = prefs.channelCountries,
         saveChannelCountries = prefs::setChannelCountries,
-        tvRegion = SportsLiveChannelCountries.tvRegion()
+        tvRegion = SportsLiveChannelCountries.tvRegion(),
+        addSportMemory = prefs.addSportMemory,
+        saveAddSportMemory = prefs::updateAddSportMemory,
+        addMySport = { sport -> prefs.updateMySports { if (it.isDefault || sport in it.effectiveSports) it else it.toggleSport(sport) } }
     )
 
     private data class Selection(
@@ -260,6 +271,10 @@ class SportsLiveViewModel internal constructor(
         val moreLiveOpen: Boolean = false,
         /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
         val holdOver: Boolean = false,
+        /** The sport of a More live game just played, to offer adding to My sports ([SportsLiveAddSportPrompt]). */
+        val addSport: MySport? = null,
+        /** Its card is on screen now (Live now shown since the game was played): leaving it unanswered counts. */
+        val addSportShown: Boolean = false,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
         val lastRefreshedMs: Long? = null,
@@ -304,6 +319,10 @@ class SportsLiveViewModel internal constructor(
 
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
+
+    // The profile's answers to "Add ‹sport› to My sports?", as last read.
+    @Volatile
+    private var addSportMemoryNow = SportsLiveAddSportPrompt.Memory()
 
     // J1: Live now has been shown this visit of the tab (reset when another tab or screen is shown): it stays calm.
     @Volatile
@@ -672,6 +691,7 @@ class SportsLiveViewModel internal constructor(
         }
         viewModelScope.launch { miniPlayingId.collect { miniPlayingNow = it } }
         viewModelScope.launch { dataSaver.collect { dataSaverActive = it } }
+        viewModelScope.launch { addSportMemory.catch { }.collect { addSportMemoryNow = it } }
         viewModelScope.launch { runCatching { dropRetiredPrefs() } }
     }
 
@@ -733,8 +753,15 @@ class SportsLiveViewModel internal constructor(
         if (!changed) return
         // J1: back on Live now, it is built afresh once, then calm again.
         liveNowShown = false
+        // The add-sport card shows on Live now only: leaving it unanswered counts; coming back to Live now shows it.
+        if (tab != SportsLiveTab.LIVE_NOW) leaveAddSportCard()
         if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
-        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false, moreLiveOpen = false) }
+        selectionState.update {
+            it.copy(
+                tab = tab, filter = remembered, itemId = null, browsing = false, moreLiveOpen = false,
+                addSportShown = it.addSport != null && tab == SportsLiveTab.LIVE_NOW
+            )
+        }
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()
@@ -766,6 +793,34 @@ class SportsLiveViewModel internal constructor(
      */
     fun setBrowsing(focused: Boolean) {
         if (selectionState.value.browsing != focused) selectionState.update { it.copy(browsing = focused) }
+    }
+
+    /** Add on the "Add ‹sport› to My sports?" card: the sport goes into My sports; the card goes. */
+    fun acceptAddSport() {
+        val sport = selectionState.value.addSport ?: return
+        selectionState.update { it.copy(addSport = null, addSportShown = false) }
+        viewModelScope.launch { runCatching { addMySport(sport) } }
+    }
+
+    /** Not now on the card: that sport is not asked about again. */
+    fun declineAddSport() {
+        val sport = selectionState.value.addSport ?: return
+        selectionState.update { it.copy(addSport = null, addSportShown = false) }
+        viewModelScope.launch { runCatching { saveAddSportMemory { it.decline(sport) } } }
+    }
+
+    /**
+     * The card left unanswered (another tab, the player, another screen): it shows again next time, until it was left
+     * [SportsLiveAddSportPrompt.MAX_IGNORES] times; then that sport is not asked about again.
+     */
+    private fun leaveAddSportCard() {
+        val selection = selectionState.value
+        val sport = selection.addSport ?: return
+        if (!selection.addSportShown) return
+        val next = addSportMemoryNow.ignore(sport)
+        addSportMemoryNow = next
+        selectionState.update { it.copy(addSport = sport.takeIf { next.asks(it) }, addSportShown = false) }
+        viewModelScope.launch { runCatching { saveAddSportMemory { it.ignore(sport) } } }
     }
 
     /** OK on Live now's "More live" row: its view, the games My sports leaves out by sport. */
@@ -810,6 +865,12 @@ class SportsLiveViewModel internal constructor(
         val state = uiState.value
         // More live's games are zapped only among themselves, when one of them is played (user 2026-11-21).
         val moreLive = state.moreLive.flatMap { it.items }
+        // A More live game played: the next Live now offers adding its sport to My sports, once per sport.
+        if (moreLive.any { it.streamKey == item.streamKey }) {
+            SportsLiveMoreLive.promptFor(item, lastMySports, addSportMemoryNow.notAsked)?.let { sport ->
+                selectionState.update { it.copy(addSport = sport, addSportShown = false) }
+            }
+        }
         val session = SportsLiveZapSession.of(
             items = if (moreLive.any { it.streamKey == item.streamKey }) moreLive else state.zapItems,
             itemKey = item.streamKey,
@@ -851,6 +912,10 @@ class SportsLiveViewModel internal constructor(
         if (!visible) {
             liveNowShown = false
             setBrowsing(false)
+            leaveAddSportCard()
+        } else {
+            // Back on the section after a More live game: its card shows on Live now.
+            selectionState.update { it.copy(addSportShown = it.addSport != null && it.tab == SportsLiveTab.LIVE_NOW) }
         }
         if (visible == screenVisible) return
         screenVisible = visible
@@ -1201,7 +1266,11 @@ class SportsLiveViewModel internal constructor(
             newLiveRows = newRows,
             moreLive = moreLiveGroups,
             moreLiveOpen = moreLiveOpen,
-            moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey }
+            moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
+            // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
+            addSportPrompt = selection.addSport?.takeIf {
+                selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
+            }
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

@@ -18,6 +18,7 @@ import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -1353,6 +1354,84 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertEquals(setOf("g", "p"), everything.uiState.value.visibleItems.map { it.id }.toSet())
         assertTrue(everything.uiState.value.moreLive.isEmpty())
+    }
+
+    @Test
+    fun `a More live game played offers its sport on Live now, and Add, Not now and two unanswered showings end it`() = runTest {
+        val memory = MutableStateFlow(SportsLiveAddSportPrompt.Memory())
+        val added = mutableListOf<MySport>()
+        val game = item("g", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea")
+        val tennis = item("t", isLive = true, sport = "Tennis", name = "Sinner vs Alcaraz")
+        val fight = item("f", isLive = true, sport = "MMA", name = "Jones vs Miocic")
+        val golf = item("go", isLive = true, sport = "Golf", name = "Scheffler vs McIlroy")
+        nextLoad = load(listOf(game, tennis, fight, golf))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            mySports = flowOf(MySports(mapOf(MySport.SOCCER to emptySet()))),
+            computeDispatcher = compute,
+            addSportMemory = memory,
+            saveAddSportMemory = { change -> memory.value = change(memory.value) },
+            addMySport = { added += it }
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        fun showLiveNow() {
+            viewModel.selectTab(SportsLiveTab.UPCOMING)
+            advanceUntilIdle()
+            viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+            advanceUntilIdle()
+        }
+        fun prompt() = viewModel.uiState.value.addSportPrompt
+        try {
+            // Played from More live: nothing until Live now shows again, then the card, once per sport.
+            viewModel.startZapSession(tennis)
+            advanceUntilIdle()
+            assertNull(prompt())
+            showLiveNow()
+            assertEquals(MySport.TENNIS, prompt())
+            // Left unanswered once: it shows again next time; twice: it stops for that sport.
+            showLiveNow()
+            assertEquals(MySport.TENNIS, prompt())
+            assertEquals(1, memory.value.ignored["tennis"])
+            viewModel.selectTab(SportsLiveTab.UPCOMING)
+            advanceUntilIdle()
+            assertEquals(2, memory.value.ignored["tennis"])
+            viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+            advanceUntilIdle()
+            assertNull(prompt())
+            viewModel.startZapSession(tennis)
+            showLiveNow()
+            assertNull(prompt())
+
+            // Not now: remembered for that sport.
+            viewModel.startZapSession(golf)
+            showLiveNow()
+            assertEquals(MySport.GOLF, prompt())
+            viewModel.declineAddSport()
+            advanceUntilIdle()
+            assertNull(prompt())
+            assertEquals(setOf("golf"), memory.value.declined)
+            viewModel.startZapSession(golf)
+            showLiveNow()
+            assertNull(prompt())
+
+            // Add: the sport goes into My sports.
+            viewModel.startZapSession(fight)
+            showLiveNow()
+            assertEquals(MySport.MMA, prompt())
+            viewModel.acceptAddSport()
+            advanceUntilIdle()
+            assertEquals(listOf(MySport.MMA), added)
+            assertNull(prompt())
+
+            // A game of My sports offers nothing.
+            viewModel.startZapSession(game)
+            showLiveNow()
+            assertNull(prompt())
+        } finally {
+            SportsLiveZapSessions.clear()
+        }
     }
 
     @Test

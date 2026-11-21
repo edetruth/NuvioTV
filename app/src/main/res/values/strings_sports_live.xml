@@ -457,6 +457,11 @@
     <string name="sports_live_more_live_other">Other</string>
     <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->
     <string name="sports_live_more_live_title">More live</string>
+    <!-- After a More live game was played: the card at the top of Live now, and the toast after Add. -->
+    <string name="sports_live_add_sport_question">You watched %1$s · Add to My sports?</string>
+    <string name="sports_live_add_sport_add">Add</string>
+    <string name="sports_live_add_sport_not_now">Not now</string>
+    <string name="sports_live_add_sport_added">%1$s added to My sports</string>
     <!-- J7: the line under Now playing in the player's panel, and the guide row's tag: the game played before this one. -->
     <string name="sports_live_just_watched">Just watched</string>
     <string name="sports_live_just_watched_tag">WATCHED</string>

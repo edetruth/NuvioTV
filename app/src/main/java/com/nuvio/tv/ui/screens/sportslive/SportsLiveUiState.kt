@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
@@ -77,7 +78,9 @@ data class SportsLiveUiState(
     /** Its view is open: [visibleItems] are [moreLive]'s games, group by group. */
     val moreLiveOpen: Boolean = false,
     /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
-    val moreLiveOther: Set<String> = emptySet()
+    val moreLiveOther: Set<String> = emptySet(),
+    /** "You watched ‹sport› · Add to My sports?": the sport its card at the top of Live now offers; null for none. */
+    val addSportPrompt: MySport? = null
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {
