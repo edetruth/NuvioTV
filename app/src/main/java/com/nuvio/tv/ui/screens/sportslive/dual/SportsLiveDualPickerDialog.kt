@@ -36,6 +36,8 @@ import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoPairSlot
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
+import com.nuvio.tv.ui.screens.sportslive.GameIdentities
+import com.nuvio.tv.ui.screens.sportslive.rememberSportWord
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.screens.sportslive.groupPanelRows
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -73,6 +75,7 @@ internal fun SportsLiveDualPickerDialog(
     val firstModifier = Modifier
         .focusRequester(firstFocusRequester)
         .onFocusChanged { firstFocused.value = it.isFocused }
+    val sportWord = rememberSportWord()
 
     NuvioDialog(onDismiss = onDismiss, title = stringResource(R.string.sports_live_dual_pick), width = 640.dp) {
         if (candidates.isEmpty()) {
@@ -114,6 +117,11 @@ internal fun SportsLiveDualPickerDialog(
                         )
                     ) {
                         val row = rows[item.streamKey]
+                        // A game's tag is the one game identity's (live.24): Live Now's "NCAAM", not the addon's sport word.
+                        val tag = remember(item, row, sportWord) {
+                            if (item.isChannel) SportsLiveTeams.sportLabelOf(item)
+                            else GameIdentities.of(item, null, row?.chip, sportWord, art = row?.teams).tag.takeIf { it.isNotEmpty() } ?: SportsLiveTeams.sportLabelOf(item)
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
@@ -124,7 +132,7 @@ internal fun SportsLiveDualPickerDialog(
                                 // The whole name, on two lines when long (live.23 TV test): never cut.
                                 Text(item.displayName)
                                 Text(
-                                    text = listOfNotNull(SportsLiveTeams.sportLabelOf(item), item.addonName).joinToString(" · "),
+                                    text = listOfNotNull(tag, item.addonName).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
