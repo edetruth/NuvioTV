@@ -173,9 +173,8 @@ class SportsLiveResultsTodayTest {
         val repo = repository()
         val vm = viewModel(repo)
         backgroundScope.launch { vm.uiState.collect {} }
-        val basketball = mySports.value.effectiveSports.first { it.espnSport == aFinal.league.sport }
         vm.selectDay(SportsResults.YESTERDAY)
-        vm.selectSport(basketball)
+        vm.jumpTo(ResultsJump.YourTeams)
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
         // Watching games on Live now, then back to Results.
@@ -183,13 +182,13 @@ class SportsLiveResultsTodayTest {
         advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS); runCurrent()
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
-        // Today, ★ My sports, a new list (its key changes, so it starts at its top).
+        // Today, every league, a new list (its key changes, so it starts at its top).
         assertEquals(SportsResults.TODAY, vm.selectedDay.value)
         assertEquals(SportsResults.TODAY, repo.chosenDay)
         assertFalse(vm.earlierShown.value)
         val state = vm.uiState.value
         assertEquals(1, state.freshOpens)
-        assertNull(state.selectedSport)
+        assertNull(state.jump)
         assertEquals(ResultsStatus.READY, state.status)
         // A screen built soon after (another visit) opens on Today too.
         vm.setActive(false)
@@ -370,13 +369,16 @@ class SportsLiveResultsTodayTest {
         vm.selectDay(SportsResults.YESTERDAY)
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
-        assertEquals(1, provider.calls.size)
+        // My sports' feed only: an empty day also looks once in other sports (results redesign), never again.
+        assertEquals(1, nbaCalls())
         live = false
         advanceTimeBy(120_000); runCurrent()
-        assertEquals(2, provider.calls.size)
+        assertEquals(2, nbaCalls())
         // Over: no more refreshes.
+        val all = provider.calls.size
         advanceTimeBy(60 * 60_000L); runCurrent()
-        assertEquals(2, provider.calls.size)
+        assertEquals(2, nbaCalls())
+        assertEquals(all, provider.calls.size)
         vm.close()
     }
 
@@ -386,9 +388,107 @@ class SportsLiveResultsTodayTest {
         vm.selectDay(SportsResults.YESTERDAY)
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
-        assertEquals(1, provider.calls.size)
+        assertEquals(1, nbaCalls())
+        val all = provider.calls.size
         advanceTimeBy(60 * 60_000L); runCurrent()
-        assertEquals(1, provider.calls.size)
+        assertEquals(1, nbaCalls())
+        assertEquals(all, provider.calls.size)
+        vm.close()
+    }
+
+    private fun nbaCalls() = provider.calls.count { it.league == EspnLeagueMap.NBA }
+
+    @Test
+    fun `an empty day from My sports offers the games of other sports, fetched once`() = runTest {
+        // Yesterday: nothing in basketball, one hockey final.
+        provider.respond = { feed ->
+            ScoreboardResult(
+                if (feed.date == today.minusDays(1) && feed.league == EspnLeagueMap.NHL) {
+                    listOf(aFinal.copy(eventId = "nhl", league = EspnLeagueMap.NHL, leagueSlug = "nhl", competitionId = null, leagueName = "NHL"))
+                } else {
+                    emptyList()
+                }
+            )
+        }
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.selectDay(SportsResults.YESTERDAY)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        val state = vm.uiState.value
+        assertEquals(1, state.otherCount)
+        assertEquals(1, provider.calls.count { it.league == EspnLeagueMap.NHL })
+        // See 1 game in other sports: the list narrows to them, focus asked for.
+        val focusBefore = state.jumpFocus
+        vm.jumpTo(ResultsJump.OtherSports)
+        runCurrent()
+        val other = vm.uiState.value
+        assertEquals(ResultsJump.OtherSports, other.jump)
+        assertEquals(listOf("nhl"), other.items.filterIsInstance<ResultListItem.Row>().map { it.row.key })
+        assertTrue(other.jumpFocus > focusBefore)
+        // Back: every league again; nothing fetched again.
+        vm.jumpTo(null)
+        runCurrent()
+        assertNull(vm.uiState.value.jump)
+        assertEquals(1, provider.calls.count { it.league == EspnLeagueMap.NHL })
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `a followed team's result stays hidden on open, focus and return, until revealed`() = runTest {
+        val celtics = aFinal.home
+        followed.value = listOf(FollowedTeam(celtics.displayName.orEmpty(), "Basketball", espnId = celtics.id, league = "basketball/nba"))
+        // Show, and the profile turned "hide my teams' scores" off: still hidden in Results (results redesign).
+        val stored = MutableStateFlow<List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>>(emptyList())
+        val protection = kotlinx.coroutines.flow.combine(stored, followed) { games, teams ->
+            com.nuvio.tv.core.sportslive.scores.SpoilerProtection(games = games, myTeams = false, followed = teams, nowMs = base + 60_000L)
+        }
+        every { prefs.spoilerProtection } returns protection
+        io.mockk.coEvery { prefs.updateProtectedGames(any()) } answers {
+            val change = firstArg<(List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>) -> List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>>()
+            stored.value = change(stored.value)
+        }
+        todayHasFinal(true)
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        val row = vm.uiState.value.items.filterIsInstance<ResultListItem.Row>().single().row
+        assertTrue(row.followed)
+        assertFalse(vm.uiState.value.showsScore(row))
+        // Focused long enough (or restored after a replay): still hidden.
+        vm.onRowFocus(row.key)
+        advanceTimeBy(5_000); runCurrent()
+        assertFalse(vm.uiState.value.showsScore(row))
+        vm.setActive(false)
+        advanceTimeBy(60_000); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertFalse(vm.uiState.value.showsScore(row))
+        // Reveal result: shown, for good.
+        vm.reveal(listOf(row))
+        runCurrent()
+        assertTrue(vm.uiState.value.showsScore(row))
+        assertTrue(stored.value.single().endedAtMs != null)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `Reveal all for this day shows every hidden result of the day`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        todayHasFinal(true)
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        val row = vm.uiState.value.items.filterIsInstance<ResultListItem.Row>().single().row
+        assertFalse(vm.uiState.value.showsScore(row))
+        vm.revealDay()
+        runCurrent()
+        assertTrue(vm.uiState.value.showsScore(row))
+        vm.setActive(false)
         vm.close()
     }
 

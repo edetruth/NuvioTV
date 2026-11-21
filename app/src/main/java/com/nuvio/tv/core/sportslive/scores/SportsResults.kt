@@ -94,6 +94,16 @@ object SportsResults {
     fun groupKey(event: ScoreSnapshot): String = "${event.league.sport}:${event.competitionId ?: event.leagueSlug}"
 
     /**
+     * Jump to › Other sports (results redesign): every feed Results can show that [fetched] (My sports' feeds) leaves
+     * out: `soccer/all` when soccer is not in, then each league with its own feed, in [MyLeague] order.
+     */
+    fun otherFeeds(fetched: List<EspnLeague>): List<EspnLeague> {
+        val all = (listOf(EspnLeagueMap.SOCCER_ALL) + MyLeague.entries.mapNotNull { it.feed }).distinct()
+        val skip = fetched.toSet()
+        return all.filterNot { it in skip }
+    }
+
+    /**
      * [rows] in league sections: by sport ([MySport] order), then the picker's league order (NBA before
      * college, internationals and the big soccer leagues before the rest), then name. Rows keep their order.
      */

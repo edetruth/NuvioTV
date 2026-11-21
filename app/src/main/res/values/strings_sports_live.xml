@@ -976,4 +976,28 @@
     <string name="addon_install_failed_server">The addon\'s server had a problem. Try again later.</string>
     <string name="addon_install_failed_other">Couldn\'t add this addon. Check the address and try again.</string>
     <string name="addon_install_failed_detail">Details: %1$s</string>
+    <!-- Results redesign phase 1 (live.23): Jump to, spoiler reasons, next steps. -->
+    <string name="sports_live_results_jump_to">Jump to</string>
+    <string name="sports_live_results_jump_all">All leagues</string>
+    <string name="sports_live_results_jump_your_teams">★ Your teams</string>
+    <string name="sports_live_results_jump_other">Other sports ›</string>
+    <string name="sports_live_results_jump_entry">%1$s · %2$d</string>
+    <string name="sports_live_results_other_title">Other sports</string>
+    <string name="sports_live_results_other_all">All other sports</string>
+    <string name="sports_live_results_other_loading">Looking for games in other sports…</string>
+    <string name="sports_live_results_other_none">No games in other sports this day</string>
+    <plurals name="sports_live_results_see_other">
+        <item quantity="one">See %d game in other sports</item>
+        <item quantity="other">See %d games in other sports</item>
+    </plurals>
+    <string name="sports_live_results_my_sports_empty_on">Nothing from My sports · %1$s</string>
+    <string name="sports_live_results_did_not_play">%1$s didn\'t play</string>
+    <string name="sports_live_results_no_game_today">%1$s: no game today</string>
+    <string name="sports_live_results_next">next: %1$s</string>
+    <string name="sports_live_results_next_today">Today %1$s</string>
+    <string name="sports_live_results_no_game_page">No game page for %1$s yet</string>
+    <string name="sports_live_results_hidden_saved">Saved to watch later. More… › Reveal result shows it.</string>
+    <string name="sports_live_results_hidden_your_team">Your team: hidden until you watch. More… › Reveal result shows it.</string>
+    <string name="sports_live_results_hidden_setting">Hidden by your Scores setting. Rest on the game in the list to reveal it.</string>
+    <string name="sports_live_results_reveal_day">Reveal all for this day</string>
 </resources>

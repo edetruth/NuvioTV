@@ -61,6 +61,12 @@ data class SpoilerProtection(
     /** True when [eventId] was saved for later and is still protected (the More… entry reads "Reveal result"). */
     fun isSaved(eventId: String): Boolean = byId[eventId]?.let { it.endedAtMs == null && nowMs - it.savedAtMs < PROTECT_MS } == true
 
+    /**
+     * True when the viewer chose to see [eventId]'s result, or watched it: its protection ended (Reveal result, the
+     * replay played to its end, watched live). Results shows a followed team's score only then (results redesign).
+     */
+    fun revealed(eventId: String): Boolean = byId[eventId]?.endedAtMs != null
+
     /** The games saved for later and still protected, the newest first: Replays' "Saved for later". */
     val saved: List<ProtectedGame> get() = games.filter { isSaved(it.eventId) }.sortedByDescending { it.savedAtMs }
 

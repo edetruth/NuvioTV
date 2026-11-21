@@ -8,7 +8,6 @@ import com.nuvio.tv.core.sportslive.scores.EspnScoreboardDto
 import com.nuvio.tv.core.sportslive.scores.Fight
 import com.nuvio.tv.core.sportslive.scores.FightMethod
 import com.nuvio.tv.core.sportslive.scores.Fighter
-import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SportsResults
@@ -103,13 +102,14 @@ class SportsLiveIndividualRowsTest {
             parse("espn_tennis_atp_20261116.json", EspnLeagueMap.ATP, day) + parse("espn_golf_pga_20261116.json", EspnLeagueMap.PGA, day),
             emptyList()
         )
-        assertEquals(listOf(MySport.TENNIS, MySport.GOLF), resultSportChips(rows, MySports.DEFAULT))
-        // A profile that did not pick them gets no chip and no row under My sports.
+        assertEquals(listOf("tennis", "golf"), resultsJumpEntries(rows, MySports.DEFAULT).mapNotNull { it.sport })
+        // A profile that did not pick them gets no Jump to league and no row under every league: Other sports has them.
         val picked = MySports.decode(setOf("basketball"))
-        assertTrue(resultSportChips(rows, picked).isEmpty())
-        assertTrue(resultListItems(rows, picked, sport = null, league = null, expanded = emptySet(), replays = emptySet()).isEmpty())
+        assertTrue(resultsJumpEntries(rows, picked).none { it.jump is ResultsJump.League })
+        assertTrue(resultListItems(rows, picked, jump = null, expanded = emptySet(), replays = emptySet()).isEmpty())
+        assertEquals(rows.size, resultsOtherEntries(resultsOtherRows(rows, emptyList(), picked)).first().count)
 
-        val items = resultListItems(rows, MySports.DEFAULT, sport = null, league = null, expanded = emptySet(), replays = emptySet())
+        val items = resultListItems(rows, MySports.DEFAULT, jump = null, expanded = emptySet(), replays = emptySet())
         val headers = items.filterIsInstance<ResultListItem.Header>().map { it.name }
         assertEquals(listOf("Nitto ATP Finals · Men's Singles", "PGA"), headers)
         assertTrue(items.filterIsInstance<ResultListItem.Row>().none { it.hasReplay })

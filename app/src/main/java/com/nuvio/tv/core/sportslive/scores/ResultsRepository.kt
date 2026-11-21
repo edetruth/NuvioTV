@@ -164,6 +164,23 @@ class ResultsRepository internal constructor(
     }
 
     /**
+     * Jump to › Other sports (results redesign): [daysAgo]'s finals in the feeds My sports does not fetch
+     * ([SportsResults.otherFeeds]), through the same caches and score delay as [load]. Asked only when the viewer
+     * wants them (the menu's Other sports, or a day with nothing from My sports). Null under Scores Off (no request)
+     * or when every feed failed; empty when there is no other feed.
+     */
+    suspend fun loadOther(daysAgo: Int): List<ResultRow>? {
+        val settings = settings.first()
+        if (settings.mode == ScoresMode.OFF) return null
+        val followed = followedTeams.first()
+        val feeds = SportsResults.otherFeeds(SportsResults.relevantLeagues(mySports.first(), followed).leagues)
+        if (feeds.isEmpty()) return emptyList()
+        val events = dayEvents(feeds, dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))) ?: return null
+        val held = held(events, settings.effectiveDelayMs)
+        return SportsResults.rows(if (held.isEmpty()) events else events.filter { it.eventId !in held }, followed)
+    }
+
+    /**
      * The Catch up row's day (#58): [daysAgo]'s events on [feeds] (followed teams' feeds, [CatchUp.feeds]),
      * through the same caches as [load] (at most one request per feed and day; past days from the disk
      * cache), with the finals the score delay still holds left out of [CatchUpDay.finals]. Null, with no

@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.GameStatusText
+import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import android.view.KeyEvent as AndroidKeyEvent
@@ -95,6 +96,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.launch
 import java.time.LocalTime
+import java.time.ZoneId
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniDock
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniFocus
@@ -116,12 +118,15 @@ internal fun resultsTodayEmpty(localHour: Int): ResultsTodayEmpty =
 internal fun resultsOffersYesterday(daysAgo: Int?, hasRows: Boolean): Boolean = daysAgo == SportsResults.TODAY && !hasRows
 
 /**
- * The Results tab (V2 P4): the day sits in the header's title ("Results · Yesterday ‹ ›", OK on an arrow changes it) and
- * the sport in its one dropdown, so the list starts right under the header. On Today a small "N games live
- * now →" line leads. The list (400 dp, league section headers, YOUR TEAMS first, long tails collapsed) uses
- * fixed columns as in Live Now, so a score sits right after its names; the stage on the right shows the
- * focused game's drawn matchup, its final score (spoiler rules applied), and **Watch replay** (a strict replay
- * match) and **More…** (Game page, Team page, Follow). OK on a row opens the Game page.
+ * The Results tab (V2 P4, results redesign phase 1): the day sits in the header's title ("Results · Yesterday ‹ ›", OK
+ * on an arrow changes it) and **Jump to ▾** narrows the list to Your teams, a league or Other sports, so the list
+ * starts right under the header. On Today a small "N games live now →" line leads. The list (400 dp, league section
+ * headers, YOUR TEAMS first with the teams that did not play, long tails collapsed) uses fixed columns as in Live
+ * Now, so a score sits right after its names; ◂ ▸ on a row jump to the previous / next league ([resultsLeagueJump]).
+ * The stage on the right shows the focused game's drawn matchup, its final score (spoiler rules applied, or why it
+ * is hidden), and **Watch replay** (a strict replay match) and **More…** (Game page, Reveal, Team page, Follow).
+ * OK on a row opens the Game page. A followed team's score shows only once revealed; a row reveals under Hide until
+ * focused only after a key press in the list, never on entry or when focus comes back ([ResultsRevealGuard], #86).
  */
 @Composable
 internal fun SportsLiveResultsView(
@@ -139,8 +144,8 @@ internal fun SportsLiveResultsView(
     onRowFocus: (String?) -> Unit,
     /** OK on a row: the Game page (#18). */
     onOpen: (ResultRow) -> Unit,
-    /** The stage's Game stats: the Game page on its Box score. */
-    onGameStats: (ResultRow) -> Unit,
+    /** Jump to, Back to all leagues, Reveal result and Reveal all for this day (the ViewModel). */
+    actions: ResultsActions,
     /** The stage's Watch replay: the row's strict replay match, played spoiler-safe. */
     onWatchReplay: (ResultRow, SportsLiveItem) -> Unit,
     /** Whether a followed team is [ScoreSide] of the row's game (the menu's Follow / Following). */
@@ -158,9 +163,8 @@ internal fun SportsLiveResultsView(
     /** The stage's first button: Right from a row, and the header controls' Down while [onStageShown] says it is drawn. */
     stageFocusRequester: FocusRequester = remember { FocusRequester() },
     onStageShown: (Boolean) -> Unit = {},
-    /** More… → Watch later (no spoilers) (#151); Reveal result on a game already saved. */
+    /** More… → Watch later (no spoilers) (#151). */
     onSaveForLater: (ScoreSnapshot) -> Unit = {},
-    onRevealResult: (ScoreSnapshot) -> Unit = {},
     /** More… → Report a problem (#172, TV QA), always last. */
     onReport: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -179,8 +183,9 @@ internal fun SportsLiveResultsView(
     var listHasFocus by remember { mutableStateOf(false) }
     var stageHasFocus by remember { mutableStateOf(false) }
     // The date too: at US Eastern midnight Today becomes a new day, a new list.
-    val selectedDate = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.date
-    val listKey = "${state.daysAgo}|$selectedDate|${state.selectedSport?.id.orEmpty()}|${state.selectedLeague.orEmpty()}|${state.freshOpens}"
+    val selectedDay = state.dates.firstOrNull { it.daysAgo == state.daysAgo }
+    val selectedDate = selectedDay?.date
+    val listKey = "${state.daysAgo}|$selectedDate|${state.jump?.let(::resultsJumpKey).orEmpty()}|${state.freshOpens}"
     val currentListKey by rememberUpdatedState(listKey)
     // The list (by its key) that holds focus; kept when that list goes because its key changed.
     var focusedListKey by remember { mutableStateOf<String?>(null) }
@@ -200,10 +205,23 @@ internal fun SportsLiveResultsView(
         }
     }
     val firstFocusableKey = items.firstOrNull { it.isFocusable }?.key
+    // ◂ ▸ on a row: focus moves to the previous / next league's first game ([resultsLeagueJump]), its header in view.
+    // At either end the key goes on as usual: ▸ into the stage, ◂ nowhere.
+    val jumpLeague: (String, Boolean) -> Boolean = jump@{ key, forward ->
+        if (!RESULTS_ARROWS_JUMP_LEAGUES) return@jump false
+        val listed = currentItems
+        val target = resultsLeagueJump(listed, key, forward) ?: return@jump false
+        val index = listed.indexOfFirst { it.key == target }
+        scope.launch {
+            listState.scrollToItem((index - 1).coerceAtLeast(0))
+            repeat(2) { withFrameNanos { } }
+            runCatching { itemFocusRequester(target).requestFocus() }
+        }
+        true
+    }
     // An empty Today offers Yesterday's results (#78).
     val yesterdayFocusRequester = remember { FocusRequester() }
-    val offersYesterday = ready && resultsOffersYesterday(state.daysAgo, firstFocusableKey != null) &&
-        !(state.selectedSport == null && state.sports.isNotEmpty())
+    val offersYesterday = ready && state.jump == null && resultsOffersYesterday(state.daysAgo, firstFocusableKey != null)
     // An empty or failed day shows the state card (#134): its first button is the list's entry.
     val stateCardShown = state.status == ResultsStatus.NO_LEAGUES || state.status == ResultsStatus.FAILED ||
         (ready && firstFocusableKey == null)
@@ -211,13 +229,29 @@ internal fun SportsLiveResultsView(
     // Up from the list's top: the live line when shown, else the header's date.
     val aboveListFocusRequester = if (showLiveNow) liveNowFocusRequester else headerFocusRequester
 
-    // A real day, sport or league change starts the new list at its top; the saved key survives navigation.
+    // Jump to ▾ or Back to all leagues ([SportsLiveResultsUiState.jumpFocus]): the new list's first game takes focus.
+    var handledJumpFocus by rememberSaveable { mutableStateOf(state.jumpFocus) }
+    val currentFirstFocusableKey by rememberUpdatedState(firstFocusableKey)
+    // A real day or jump change starts the new list at its top; the saved key survives navigation.
     var listedKey by rememberSaveable { mutableStateOf(listKey) }
-    LaunchedEffect(listKey) {
-        if (listKey == listedKey) return@LaunchedEffect
+    LaunchedEffect(listKey, state.jumpFocus) {
+        val jumped = state.jumpFocus != handledJumpFocus
+        handledJumpFocus = state.jumpFocus
+        if (listKey == listedKey && !jumped) return@LaunchedEffect
+        val newList = listKey != listedKey
         listedKey = listKey
-        focusedKey = null
-        listState.scrollToItem(0)
+        if (newList) {
+            focusedKey = null
+            listState.scrollToItem(0)
+        }
+        if (jumped) {
+            // Entry focus, not a key press in the list: it reveals nothing (#86).
+            focusedListKey = null
+            repeat(2) { withFrameNanos { } }
+            val first = currentFirstFocusableKey
+            runCatching { (first?.let { itemFocusRequesters[it] } ?: yesterdayFocusRequester).requestFocus() }
+            return@LaunchedEffect
+        }
         // The list in focus was replaced under it (the day moved on at midnight): focus goes to the date.
         if (focusedListKey != null && focusedListKey != listKey) {
             focusedListKey = null
@@ -258,12 +292,21 @@ internal fun SportsLiveResultsView(
     BackHandler(enabled = listHasFocus || stageHasFocus) {
         runCatching { tabFocusRequester.requestFocus() }
     }
+    // Narrowed by Jump to ▾: Back first returns to every league (registered after the one above, so it runs first).
+    BackHandler(enabled = state.jump != null && (listHasFocus || stageHasFocus)) {
+        actions.jumpTo(null)
+    }
+    // #86 / §4.3: Hide until focused reveals only after a key press inside the list.
+    val revealGuard = remember { ResultsRevealGuard() }
     // Hold OK on a row, or More…: Game page, Team pages and Follow / Following for each side (away first, as listed).
     var menuRowKey by remember { mutableStateOf<String?>(null) }
     // Golf rows whose top five OK has listed.
     var expandedGolf by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // More… → Reveal all for this day: offered while a listed result is hidden.
+    val dayHasHidden = items.any { it is ResultListItem.Row && !state.showsScore(it.row) }
     items.firstNotNullOfOrNull { (it as? ResultListItem.Row)?.row?.takeIf { row -> row.key == menuRowKey } }?.let { row ->
         val sides = listOf(ScoreSide.AWAY to row.event.away, ScoreSide.HOME to row.event.home)
+        val rowHiddenForGood = state.hiddenReason(row).let { it == ResultHiddenReason.SAVED || it == ResultHiddenReason.YOUR_TEAM }
         SportsLiveCardMenu(
             title = stringResource(R.string.sports_live_results_menu_title, row.event.away.listName, row.event.home.listName),
             sides = sides.map { (side, team) -> team.listName to isFollowed(row, side) },
@@ -278,11 +321,12 @@ internal fun SportsLiveResultsView(
                 onOpen(row)
             },
             followingLabel = true,
-            // Watch later (no spoilers) (#151): the row's score hides at once, here and everywhere.
+            // Watch later (no spoilers) (#151): the row's score hides at once, here and everywhere. A score hidden
+            // for good (saved, or a followed team's) offers Reveal result in its place.
             onWatchLater = {
                 menuRowKey = null
-                if (state.protection.isSaved(row.event.eventId)) {
-                    onRevealResult(row.event)
+                if (rowHiddenForGood) {
+                    actions.reveal(listOf(row))
                 } else {
                     onSaveForLater(row.event)
                     SportsLiveToasts.show(
@@ -292,7 +336,11 @@ internal fun SportsLiveResultsView(
                     )
                 }
             },
-            savedForLater = state.protection.isSaved(row.event.eventId),
+            savedForLater = rowHiddenForGood,
+            onRevealDay = if (dayHasHidden) ({
+                menuRowKey = null
+                actions.revealDay()
+            }) else null,
             // Away first, as the row lists them.
             teamPages = TeamPages.refsOf(row.event, homeFirst = false).map { ref ->
                 ref.team.listName to {
@@ -374,11 +422,24 @@ internal fun SportsLiveResultsView(
                         modifier = cardModifier,
                         primaryModifier = cardButton
                     )
-                    // ★ My sports has nothing that day but other sports do: point at the dropdown.
-                    firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() -> SportsLiveStateCard(
-                        title = stringResource(R.string.sports_live_state_my_sports_empty),
-                        line = stringResource(R.string.sports_live_state_my_sports_empty_line),
-                        primary = seeLiveNow,
+                    // Jump to ▾ narrowed to nothing (Other sports with no games): back to every league.
+                    firstFocusableKey == null && state.jump != null -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_state_filter_empty),
+                        line = if (state.otherLoading) stringResource(R.string.sports_live_results_other_loading) else null,
+                        primary = SportsLiveStateAction(stringResource(R.string.sports_live_results_jump_all), { actions.jumpTo(null) }),
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
+                    )
+                    // Nothing from My sports on a past day, but other sports played: a next step, not a dead end.
+                    firstFocusableKey == null && !offersYesterday && (state.otherLoading || (state.otherCount ?: 0) > 0) -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_results_my_sports_empty_on, selectedDay?.let { resultsDayText(it) }.orEmpty()),
+                        line = if (state.otherLoading) stringResource(R.string.sports_live_results_other_loading) else null,
+                        primary = state.otherCount?.takeIf { it > 0 }?.let { count ->
+                            SportsLiveStateAction(
+                                pluralStringResource(R.plurals.sports_live_results_see_other, count, count),
+                                { actions.jumpTo(ResultsJump.OtherSports) }
+                            )
+                        } ?: seeLiveNow,
                         modifier = cardModifier,
                         primaryModifier = cardButton
                     )
@@ -411,7 +472,15 @@ internal fun SportsLiveResultsView(
                                     .onFocusChanged { focus ->
                                         listHasFocus = focus.hasFocus
                                         if (focus.hasFocus) focusedListKey = listKey else if (currentListKey == listKey) focusedListKey = null
-                                        if (!focus.hasFocus) onRowFocus(null)
+                                        if (!focus.hasFocus) {
+                                            revealGuard.onLeave()
+                                            onRowFocus(null)
+                                        }
+                                    }
+                                    // A key pressed in the list arms the reveal (before focus moves on).
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_DOWN) revealGuard.onKey()
+                                        false
                                     }
                                     .focusRestorer(entryFocusRequester ?: itemFocusRequester(firstFocusableKey))
                                     .dpadRepeatThrottle(),
@@ -423,6 +492,8 @@ internal fun SportsLiveResultsView(
                                     val hasStage = isRow && resultsStageButtons((item as ResultListItem.Row).row, state.replays[item.key]).isNotEmpty()
                                     val focusModifier = Modifier
                                         .focusRequester(itemFocusRequester(item.key))
+                                        // ◂ ▸ jump to the previous / next league's first game (results redesign).
+                                        .then(if (item.isFocusable) Modifier.leagueJumps { forward -> jumpLeague(item.key, forward) } else Modifier)
                                         .then(if (item.key == entryKey && !showLiveNow) Modifier.focusRequester(topFocusRequester) else Modifier)
                                         // Up from the first row: the live line when shown, never past it; else the header.
                                         .then(if (item.key == firstFocusableKey) Modifier.upTo(aboveListFocusRequester) else Modifier)
@@ -438,23 +509,29 @@ internal fun SportsLiveResultsView(
                                     }
                                     when (item) {
                                         is ResultListItem.Header -> ResultsHeader(item, first = index == 0)
+                                        is ResultListItem.NotPlayed -> ResultsNotPlayedLine(item)
                                         // Tennis, UFC, F1, golf: the Game page cannot show them. OK on golf lists
-                                        // its top five; on the others OK does nothing (no toast). No Follow menu.
+                                        // its top five; on the others OK plays its replay, else says why nothing opens.
                                         is ResultListItem.Row -> if (item.row.event.individual != null) {
                                             val individual = item.row.event.individual
+                                            val noPage = stringResource(R.string.sports_live_results_no_game_page, sportLabel(item.row.event.league.sport))
                                             IndividualResultCard(
                                                 row = item.row,
                                                 result = individual,
                                                 showScore = state.showsScore(item.row),
                                                 expanded = item.key in expandedGolf,
                                                 onClick = {
-                                                    if (individual is GolfResult) {
-                                                        expandedGolf = toggleGolf(expandedGolf, item.key, showScore = state.showsScore(item.row))
+                                                    when (resultsIndividualOk(individual, state.replays[item.key])) {
+                                                        ResultsIndividualOk.TOGGLE_GOLF ->
+                                                            expandedGolf = toggleGolf(expandedGolf, item.key, showScore = state.showsScore(item.row))
+                                                        ResultsIndividualOk.WATCH_REPLAY ->
+                                                            state.replays[item.key]?.let { onWatchReplay(item.row, it) }
+                                                        ResultsIndividualOk.NO_PAGE -> SportsLiveToasts.show(SportsLiveToastKind.INFO, noPage)
                                                     }
                                                 },
                                                 onFocus = {
                                                     rowFocused(item.key)
-                                                    onRowFocus(item.key)
+                                                    onRowFocus(revealGuard.focusTarget(item.key))
                                                 },
                                                 modifier = focusModifier
                                             )
@@ -468,7 +545,7 @@ internal fun SportsLiveResultsView(
                                             menuOpen = menuRowKey == item.key,
                                             onFocus = {
                                                 rowFocused(item.key)
-                                                onRowFocus(item.key)
+                                                onRowFocus(revealGuard.focusTarget(item.key))
                                             },
                                             modifier = focusModifier
                                         )
@@ -499,11 +576,10 @@ internal fun SportsLiveResultsView(
             if (stageItem != null && firstFocusableKey != null) {
                 ResultsStage(
                     row = stageItem.row,
-                    showScore = state.showsScore(stageItem.row),
+                    hidden = state.hiddenReason(stageItem.row),
                     buttons = stageButtons,
-                    dayName = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.let { resultsDayText(it) },
+                    dayName = selectedDay?.let { resultsDayText(it) },
                     onWatchReplay = { state.replays[stageItem.key]?.let { onWatchReplay(stageItem.row, it) } },
-                    onGameStats = { onGameStats(stageItem.row) },
                     onMore = { menuRowKey = stageItem.key },
                     modifier = Modifier
                         .padding(top = RESULTS_FOCUS_ROOM)
@@ -522,7 +598,78 @@ internal fun SportsLiveResultsView(
     }
 }
 
-private val ResultListItem.isFocusable: Boolean get() = this !is ResultListItem.Header
+private val ResultListItem.isFocusable: Boolean get() = this is ResultListItem.Row || this is ResultListItem.More
+
+/** ◂ (false) or ▸ (true) pressed on a row: [jump] moves focus and returns true, or false to let focus move as usual. */
+private fun Modifier.leagueJumps(jump: (forward: Boolean) -> Boolean): Modifier = onPreviewKeyEvent { event ->
+    val native = event.nativeKeyEvent
+    val forward = when (native.keyCode) {
+        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> false
+        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+        else -> return@onPreviewKeyEvent false
+    }
+    if (native.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+    jump(forward)
+}
+
+/**
+ * ◂ ▸ on a list row (results redesign §4 point 3): the first game of the previous / next league section (YOUR TEAMS
+ * counts as one), or null at either end, where ▸ still enters the stage and ◂ does nothing. One press per league
+ * instead of a ▼ per game.
+ */
+internal fun resultsLeagueJump(items: List<ResultListItem>, fromKey: String, forward: Boolean): String? {
+    val from = items.indexOfFirst { it.key == fromKey }.takeIf { it >= 0 } ?: return null
+    // Each item's section: the index of the header above it.
+    val sectionStarts = items.indices.filter { items[it] is ResultListItem.Header }
+    val section = sectionStarts.lastOrNull { it <= from } ?: return null
+    val order = sectionStarts.indexOf(section)
+    val targets = if (forward) sectionStarts.drop(order + 1) else sectionStarts.take(order).reversed()
+    for (start in targets) {
+        val end = sectionStarts.firstOrNull { it > start } ?: items.size
+        val first = (start + 1 until end).firstOrNull { items[it].isFocusable } ?: continue
+        return items[first].key
+    }
+    return null
+}
+
+/**
+ * Hide until focused's key-press guard (#86, results redesign §4.3): a row focused by itself (entry into the list,
+ * focus coming back from a replay or the Game page, a jump) never starts the reveal; only after a key press inside
+ * the list does a newly focused row count. Leaving the list disarms it again.
+ */
+internal class ResultsRevealGuard {
+    var armed: Boolean = false
+        private set
+
+    /** A key pressed inside the list, before focus moves. */
+    fun onKey() {
+        armed = true
+    }
+
+    /** Focus left the list. */
+    fun onLeave() {
+        armed = false
+    }
+
+    /** The row whose reveal may start on focus: [key] once armed, else none. */
+    fun focusTarget(key: String): String? = key.takeIf { armed }
+}
+
+/** What OK does on an individual sport's row (results redesign): golf its top five, else its replay, else a toast. */
+internal enum class ResultsIndividualOk { TOGGLE_GOLF, WATCH_REPLAY, NO_PAGE }
+
+internal fun resultsIndividualOk(result: com.nuvio.tv.core.sportslive.scores.IndividualResult, replay: SportsLiveItem?): ResultsIndividualOk = when {
+    result is GolfResult -> ResultsIndividualOk.TOGGLE_GOLF
+    replay != null -> ResultsIndividualOk.WATCH_REPLAY
+    else -> ResultsIndividualOk.NO_PAGE
+}
+
+/** A jump's part of the list key: a new jump is a new list (it starts at its top). */
+internal fun resultsJumpKey(jump: ResultsJump): String = when (jump) {
+    ResultsJump.YourTeams -> "teams"
+    ResultsJump.OtherSports -> "other"
+    is ResultsJump.League -> "league:${jump.key}"
+}
 
 /** Up moves focus to [target] itself, before any focus search inside the list can pick another stop. */
 private fun Modifier.upTo(target: FocusRequester): Modifier = onPreviewKeyEvent { event ->
@@ -539,18 +686,18 @@ internal fun toggleGolf(expanded: Set<String>, key: String, showScore: Boolean):
     else -> expanded + key
 }
 
-/** The Results stage's buttons (V2 P4). */
-internal enum class ResultsStageButton { WATCH_REPLAY, GAME_STATS, MORE }
+/** The Results stage's buttons (V2 P4; results redesign: two). */
+internal enum class ResultsStageButton { WATCH_REPLAY, MORE }
 
 /**
  * The Results stage's buttons for [row], the first the primary: **Watch replay** when it has a strict [replay]
- * match, **Game stats** (the Game page on its Box score, what OK on the row opens too), then **More…** (Game page,
- * Team pages, Follow); none for an individual sport (the Game page cannot show it).
+ * match, then **More…** (Game page, Reveal, Team pages, Follow); none for an individual sport (the Game page cannot
+ * show it). No Game stats: OK on the row opens the same page.
  */
 internal fun resultsStageButtons(row: ResultRow, replay: SportsLiveItem?): List<ResultsStageButton> = when {
     row.event.individual != null -> emptyList()
-    replay != null -> listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.GAME_STATS, ResultsStageButton.MORE)
-    else -> listOf(ResultsStageButton.GAME_STATS, ResultsStageButton.MORE)
+    replay != null -> listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.MORE)
+    else -> listOf(ResultsStageButton.MORE)
 }
 
 /** The title's day name: "Today", "Yesterday", else its date ("Sun 15 Nov", the device's locale). */
@@ -591,6 +738,32 @@ private fun ResultsLiveNowLine(count: Int, onClick: () -> Unit, modifier: Modifi
             )
         }
     }
+}
+
+/**
+ * "Bears didn't play · next: Sun 12:00 PM" under YOUR TEAMS (results redesign §4.4): a quiet line, not focusable, so a
+ * followed team that had no game never just vanishes. Without a known next game: "Bears didn't play".
+ */
+@Composable
+private fun ResultsNotPlayedLine(item: ResultListItem.NotPlayed) {
+    val context = LocalContext.current
+    val base = stringResource(if (item.today) R.string.sports_live_results_no_game_today else R.string.sports_live_results_did_not_play, item.team)
+    val next = item.nextStartMs?.let { start ->
+        val label = when (val pill = SportsLivePillTime.of(start, hasTimeOfDay = true, System.currentTimeMillis(), ZoneId.systemDefault(), Locale.getDefault())) {
+            is SportsLivePillTime.Today -> context.getString(R.string.sports_live_results_next_today, pill.time)
+            is SportsLivePillTime.Tomorrow -> context.getString(R.string.sports_live_tomorrow, pill.time)
+            is SportsLivePillTime.Other -> pill.text
+        }
+        stringResource(R.string.sports_live_results_next, label)
+    }
+    Text(
+        text = listOfNotNull(base, next).joinToString(" · "),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+        color = Colors.TextSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
+    )
 }
 
 /** A section header: YOUR TEAMS (gold) or the competition's name, in the Scoreboard's group style. */
@@ -803,22 +976,22 @@ internal object ResultRowColumns {
 
 /**
  * The Results stage (V2 P4): the same fixed 360 dp as the other tabs'. The drawn matchup (logos, league, never
- * a poster); the final score ("BOS 91–88 NYK") or "Score hidden" under spoiler rules; "Final · NBA ·
- * Yesterday"; then **Watch replay** (a strict match) and **More…**.
+ * a poster); the final score ("BOS 91–88 NYK") or "Score hidden" under spoiler rules, with why and how to reveal
+ * ([hidden], results redesign); "Final · NBA · Yesterday"; then **Watch replay** (a strict match) and **More…**.
  */
 @Composable
 private fun ResultsStage(
     row: ResultRow,
-    showScore: Boolean,
+    hidden: ResultHiddenReason?,
     buttons: List<ResultsStageButton>,
     dayName: String?,
     onWatchReplay: () -> Unit,
-    onGameStats: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
     firstModifier: Modifier = Modifier
 ) {
     val event = row.event
+    val showScore = hidden == null
     // A mini player plays (#157): it docks in the media box, and the result's details read as Selected.
     val miniPlaying = SportsLiveMiniPlayers.controller.state.collectAsState().value is SportsLiveMiniState.Playing
     Column(
@@ -888,6 +1061,22 @@ private fun ResultsStage(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // Why it is hidden and how to see it (NN/g: visibility of system status).
+            if (hidden != null) {
+                Text(
+                    text = stringResource(
+                        when (hidden) {
+                            ResultHiddenReason.SAVED -> R.string.sports_live_results_hidden_saved
+                            ResultHiddenReason.YOUR_TEAM -> R.string.sports_live_results_hidden_your_team
+                            ResultHiddenReason.SETTING -> R.string.sports_live_results_hidden_setting
+                        }
+                    ),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                    color = Colors.TextMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         if (buttons.isNotEmpty()) {
             Row(
@@ -904,9 +1093,6 @@ private fun ResultsStage(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(stringResource(R.string.sports_live_game_watch_replay), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
                         }
-                        ResultsStageButton.GAME_STATS -> SportsLiveButton(onClick = onGameStats, role = role, modifier = buttonModifier.widthIn(min = 104.dp)) {
-                            Text(stringResource(R.string.sports_live_game_stats), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
-                        }
                         ResultsStageButton.MORE -> SportsLiveButton(onClick = onMore, role = role, modifier = buttonModifier.widthIn(min = 84.dp)) {
                             Text(stringResource(R.string.sports_live_more), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
                         }
@@ -916,6 +1102,12 @@ private fun ResultsStage(
         }
     }
 }
+
+/**
+ * ◂ ▸ on a row jump between leagues (user decision 2026-11-21, results redesign §4 point 3); ▸ enters the stage from
+ * the last league only. False restores ▸ = stage on every row, the brief's alternative if the emulator check says so.
+ */
+internal const val RESULTS_ARROWS_JUMP_LEAGUES = true
 
 private val RESULTS_FOCUS_ROOM = 8.dp
 private val RESULTS_FADE = 40.dp
@@ -1008,7 +1200,7 @@ internal fun resultNameChoices(team: ScoreTeam): List<String> =
 
 /** An ESPN sport key as a chip or row label. */
 @Composable
-private fun sportLabel(sport: String): String = when (sport) {
+internal fun sportLabel(sport: String): String = when (sport) {
     "basketball" -> stringResource(R.string.sports_live_results_sport_basketball)
     "football" -> stringResource(R.string.sports_live_results_sport_football)
     "hockey" -> stringResource(R.string.sports_live_results_sport_hockey)

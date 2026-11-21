@@ -151,6 +151,8 @@ internal fun SportsLiveCardMenu(
     /** "Watch later (no spoilers)" (#151), or "Reveal result" when [savedForLater]; null hides it. */
     onWatchLater: (() -> Unit)? = null,
     savedForLater: Boolean = false,
+    /** "Reveal all for this day" (Results, results redesign): every hidden result of the day shows; null hides it. */
+    onRevealDay: (() -> Unit)? = null,
     /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
     onScoresAhead: (() -> Unit)? = null,
     /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; last unless [reportFirst]; null hides it. */
@@ -180,6 +182,7 @@ internal fun SportsLiveCardMenu(
             teamReminders = teamReminders.size,
             teamPages = teamPages.size,
             watchLater = onWatchLater != null,
+            revealDay = onRevealDay != null,
             scoresAhead = onScoresAhead != null,
             details = onDetails != null
         )
@@ -258,6 +261,9 @@ internal fun SportsLiveCardMenu(
                         modifier = first()
                     )
                 }
+                SportsLiveMenuSlot.REVEAL_DAY -> onRevealDay?.let {
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_results_reveal_day), onClick = it, modifier = first())
+                }
                 SportsLiveMenuSlot.FOLLOW ->
                     SportsLiveFollowEntry(sides.single(), followingLabel, onClick = { onToggleFollow(0) }, modifier = first())
                 SportsLiveMenuSlot.TEAM_REMINDER ->
@@ -324,7 +330,7 @@ private fun SportsLiveTeamReminderEntry(team: Pair<String, Boolean>, onClick: ()
 /** A top-level entry of the Hold OK / More… sheet (Hold OK menu trim), in [sportsLiveMenuSlots]' order. */
 internal enum class SportsLiveMenuSlot {
     REPORT, FAVORITE, HIDE, POSTGAME, REMIND, CHOOSE_STREAM, WATCH_WITH, GAME_STATS, WATCH_LATER,
-    FOLLOW, TEAM_REMINDER, TEAM_PAGE, TEAMS, SCORES_AHEAD, DETAILS
+    REVEAL_DAY, FOLLOW, TEAM_REMINDER, TEAM_PAGE, TEAMS, SCORES_AHEAD, DETAILS
 }
 
 /** What one sheet offers: each flag an entry it has; the counts, its team entries (Follow per side, #154, #62). */
@@ -344,6 +350,8 @@ internal data class SportsLiveMenuOffer(
     val teamReminders: Int = 0,
     val teamPages: Int = 0,
     val watchLater: Boolean = false,
+    /** Results' "Reveal all for this day" (results redesign). */
+    val revealDay: Boolean = false,
     val scoresAhead: Boolean = false,
     val details: Boolean = false
 )
@@ -354,7 +362,7 @@ internal data class SportsLiveMenuOffer(
  * Report (first only where [SportsLiveMenuOffer.reportFirst], the player menu, #218) · ★ Add to favorites (a channel) ·
  * Hide this ([SportsLiveMenuOffer.hideFirst]) · Watch postgame · Remind me · Choose stream… · Watch with another game
  * (before Choose stream where [SportsLiveMenuOffer.watchWithFirst], the player's "Watch both") · Game stats ·
- * Watch later · **Teams…** · Scores ahead · Details · Hide from Live Now · Report a problem (last, always on screen).
+ * Watch later · Reveal all for this day (Results) · **Teams…** · Scores ahead · Details · Hide from Live Now · Report a problem (last, always on screen).
  * Teams… holds Follow ‹team›, Remind me for every ‹team› game and the team pages when there is more than one of them;
  * a lone one is listed as itself.
  */
@@ -369,6 +377,7 @@ internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMen
     if (offer.watchWith && !offer.watchWithFirst) add(SportsLiveMenuSlot.WATCH_WITH)
     if (offer.gameStats) add(SportsLiveMenuSlot.GAME_STATS)
     if (offer.watchLater) add(SportsLiveMenuSlot.WATCH_LATER)
+    if (offer.revealDay) add(SportsLiveMenuSlot.REVEAL_DAY)
     when {
         offer.follows + offer.teamReminders + offer.teamPages > 1 -> add(SportsLiveMenuSlot.TEAMS)
         offer.follows == 1 -> add(SportsLiveMenuSlot.FOLLOW)

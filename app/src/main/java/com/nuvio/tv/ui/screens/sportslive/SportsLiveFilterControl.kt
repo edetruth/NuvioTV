@@ -261,7 +261,11 @@ fun SportsLiveFilterDropdown(
     modifier: Modifier = Modifier,
     actions: List<Pair<String, () -> Unit>> = emptyList(),
     /** The options opened (true) or closed (false). */
-    onOpenChange: (Boolean) -> Unit = {}
+    onOpenChange: (Boolean) -> Unit = {},
+    /** The pill's text in place of the selected option's (Results' "Jump to"). */
+    faceLabel: String? = null,
+    /** A menu of its own in place of [options] and [actions] (Results' Jump to); it gets the close callback. */
+    menu: (@Composable (close: () -> Unit) -> Unit)? = null
 ) {
     var open by remember { mutableStateOf(false) }
     val currentOnOpenChange by rememberUpdatedState(onOpenChange)
@@ -292,9 +296,9 @@ fun SportsLiveFilterDropdown(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = face?.label.orEmpty(),
+                text = faceLabel ?: face?.label.orEmpty(),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
-                color = if (face?.gold == true) Colors.FollowedGold else Colors.TextPrimary,
+                color = if (faceLabel == null && face?.gold == true) Colors.FollowedGold else Colors.TextPrimary,
                 maxLines = 1,
                 softWrap = false
             )
@@ -306,7 +310,11 @@ fun SportsLiveFilterDropdown(
             )
         }
     }
-    if (open) {
+    if (open && menu != null) {
+        NuvioDialog(onDismiss = { open = false }, title = title, width = 420.dp) {
+            menu { open = false }
+        }
+    } else if (open) {
         val firstFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
         NuvioDialog(onDismiss = { open = false }, title = title, width = 420.dp) {

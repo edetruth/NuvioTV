@@ -55,8 +55,16 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
 internal fun sportsLiveHeaderFilterShown(tab: SportsLiveTab, filterCount: Int, allSports: Boolean = false): Boolean =
     if (tab == SportsLiveTab.LIVE_NOW) allSports else tab in FILTER_TABS && (filterCount >= 2 || allSports)
 
-/** The header's filter drawn as one dropdown (V2 P4: Channels, Replays, Results): the menu's [title] and [actions]. */
-internal data class SportsLiveHeaderDropdown(val title: String, val actions: List<Pair<String, () -> Unit>> = emptyList())
+/**
+ * The header's filter drawn as one dropdown (V2 P4: Channels, Replays, Results): the menu's [title] and [actions].
+ * Results' Jump to ▾ (results redesign) draws its own [menu] (given a close callback) under the pill's [faceLabel].
+ */
+internal data class SportsLiveHeaderDropdown(
+    val title: String,
+    val actions: List<Pair<String, () -> Unit>> = emptyList(),
+    val faceLabel: String? = null,
+    val menu: (@Composable (close: () -> Unit) -> Unit)? = null
+)
 
 /**
  * The day in Results' title (V2 P4): "· Yesterday ‹ ›". OK on ‹ steps to an older day and on › to a newer one
@@ -219,6 +227,8 @@ internal fun SportsLiveHeader(
                         onSelect = onSelectFilter,
                         title = filterDropdown.title,
                         actions = filterDropdown.actions,
+                        faceLabel = filterDropdown.faceLabel,
+                        menu = filterDropdown.menu,
                         modifier = filterModifier
                     )
                 } else {

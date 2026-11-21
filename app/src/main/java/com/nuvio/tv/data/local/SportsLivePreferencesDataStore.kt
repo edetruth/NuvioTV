@@ -56,6 +56,13 @@ class SportsLivePreferencesDataStore @Inject constructor(
 ) {
     companion object {
         const val FEATURE = "sports_live_settings"
+
+        /**
+         * "Hide scores of my teams' games" for a profile that never set it (results redesign Q1, 2026-11-21): on, so a
+         * followed team's result never shows before the viewer chooses to see it. It protects nothing until a team is
+         * followed; a stored choice (Settings → Scores) always wins.
+         */
+        const val MY_TEAMS_SPOILERS_DEFAULT = true
     }
 
     private val gson = Gson()
@@ -272,22 +279,22 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     /**
      * Spoiler protection (#151) of the active profile: the games saved for later (and recently ended ones),
-     * "Hide scores of my teams' games until I've watched" (off by default) and the followed teams it reads.
+     * "Hide scores of my teams' games until I've watched" (on until the profile sets it, results redesign Q1: it protects only once a team is followed) and the followed teams it reads.
      */
     val spoilerProtection: Flow<SpoilerProtection> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
             SpoilerProtection(
                 games = decodeProtected(prefs[watchLaterKey]),
-                myTeams = prefs[myTeamsSpoilersKey] ?: false,
+                myTeams = prefs[myTeamsSpoilersKey] ?: MY_TEAMS_SPOILERS_DEFAULT,
                 followed = decodeFollowed(prefs[followedTeamsKey]),
                 nowMs = nowMs()
             )
         }
     }
 
-    /** "Hide scores of my teams' games until I've watched" (#151); off by default. */
+    /** "Hide scores of my teams' games until I've watched" (#151); on until the profile sets it (results redesign Q1). */
     val hideMyTeamsScores: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.map { it[myTeamsSpoilersKey] ?: false }
+        factory.get(pid, FEATURE).data.map { it[myTeamsSpoilersKey] ?: MY_TEAMS_SPOILERS_DEFAULT }
     }
 
     suspend fun setHideMyTeamsScores(v: Boolean) {
@@ -543,7 +550,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     private fun scoresChoiceOf(prefs: Preferences): ScoresChoice = ScoresChoice.of(
         mode = ScoresMode.entries.firstOrNull { it.name == prefs[scoresModeKey] } ?: ScoresMode.SHOW,
-        myTeams = prefs[myTeamsSpoilersKey] ?: false
+        myTeams = prefs[myTeamsSpoilersKey] ?: MY_TEAMS_SPOILERS_DEFAULT
     )
 
     suspend fun setScoreDelaySeconds(seconds: Int) {

@@ -2,7 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.ResultsNextGames
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
@@ -15,6 +15,7 @@ import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
@@ -33,18 +34,62 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 /** What the Results view shows below its date chips. */
 enum class ResultsStatus { LOADING, OFF, NO_LEAGUES, FAILED, READY }
 
-/** A league chip under the chosen sport: a league section present that day ([SportsResults.groupKey]). */
-data class ResultLeagueChip(val key: String, val name: String?, val sport: String)
+/**
+ * Jump to ▾ (results redesign, replacing the sport dropdown): what the list is narrowed to. Null (in the state) is
+ * every league: YOUR TEAMS, then My sports' leagues. Back returns to it.
+ */
+sealed interface ResultsJump {
+    /** Only the followed teams' games, with the teams that did not play. */
+    data object YourTeams : ResultsJump
 
-/** One line of the Results list: a league header, a result, or a collapsed long tail. */
+    /** Every game outside My sports that day (its sports and leagues fetched on demand). */
+    data object OtherSports : ResultsJump
+
+    /** One league section ([SportsResults.groupKey]), from My sports or another sport. */
+    data class League(val key: String) : ResultsJump
+}
+
+/** One choice of Jump to ▾: [jump] (null: all leagues), its games [count], and a league's [name] (null: [sport]'s name). */
+data class ResultsJumpEntry(val jump: ResultsJump?, val count: Int, val name: String? = null, val sport: String? = null)
+
+/** What Results' actions do beyond opening things: Jump to ▾ and the explicit reveals (the screen wires the ViewModel). */
+interface ResultsActions {
+    /** Jump to ▾ picked [jump] (null: all leagues); the list's first game takes focus. */
+    fun jumpTo(jump: ResultsJump?)
+
+    /** Jump to › Other sports opened: the day's other sports are fetched. */
+    fun loadOtherSports()
+
+    /** More… → Reveal result: [rows]' scores show, a followed team's or a protected game's for good. */
+    fun reveal(rows: List<ResultRow>)
+
+    /** More… → Reveal all for this day: every result of the day shown. */
+    fun revealDay()
+}
+
+/** Why a result's score is hidden (the stage says it, with how to reveal; results redesign). */
+enum class ResultHiddenReason {
+    /** Watch later (no spoilers), #151. */
+    SAVED,
+
+    /** A followed team played: hidden until the viewer reveals or watches it. */
+    YOUR_TEAM,
+
+    /** Scores: Hide until I reveal. */
+    SETTING
+}
+
+/** One line of the Results list: a league header, a result, a collapsed long tail, or a team that did not play. */
 sealed interface ResultListItem {
     val key: String
 
@@ -61,7 +106,15 @@ sealed interface ResultListItem {
     data class More(val groupKey: String, val count: Int, val name: String?, val sport: String, val firstHiddenKey: String) : ResultListItem {
         override val key: String get() = "m|$groupKey"
     }
+
+    /** "‹[team]› didn't play · next: Sun 12:00 PM" under YOUR TEAMS ([nextStartMs] null: not known); not focusable. */
+    data class NotPlayed(val team: String, val nextStartMs: Long?, val today: Boolean) : ResultListItem {
+        override val key: String get() = "np|$team"
+    }
 }
+
+/** A followed team with no game on the day shown, and its next game's start when known. */
+data class ResultsNotPlayed(val team: String, val nextStartMs: Long?)
 
 data class SportsLiveResultsUiState(
     /** 0 = today, 1 = yesterday … 6; null until the opening day is worked out ([defaultResultsDay]). */
@@ -75,32 +128,44 @@ data class SportsLiveResultsUiState(
     /** Today: games of My sports and followed teams being played now ("N games live now →"). */
     val liveNow: Int = 0,
     val status: ResultsStatus = ResultsStatus.LOADING,
-    /** The sport chips after ★ My sports: the user's sports with results that day. */
-    val sports: List<MySport> = emptyList(),
-    /** The chosen sport; null is ★ My sports. */
-    val selectedSport: MySport? = null,
-    /** The chosen sport's league chips (after All): leagues present that day, when there are two or more. */
-    val leagues: List<ResultLeagueChip> = emptyList(),
-    /** The chosen league chip's key; null is All. */
-    val selectedLeague: String? = null,
-    /** Each sport chip's game count that day (#79); null is ★ My sports. */
-    val sportCounts: Map<MySport?, Int> = emptyMap(),
-    /** Each league chip's game count (#79), by key; null is All (the chosen sport's games). */
-    val leagueCounts: Map<String?, Int> = emptyMap(),
+    /** Jump to ▾'s choice; null: all leagues. */
+    val jump: ResultsJump? = null,
+    /** Jump to ▾'s first page: all leagues, ★ Your teams (when they played), then My sports' leagues of the day. */
+    val jumpEntries: List<ResultsJumpEntry> = emptyList(),
+    /** Jump to › Other sports: all of them, then each league; null until fetched ([otherLoading] while it is). */
+    val otherEntries: List<ResultsJumpEntry>? = null,
+    val otherLoading: Boolean = false,
+    /** Bumped by each [ResultsActions.jumpTo]: the list's first game takes focus once the new list is drawn. */
+    val jumpFocus: Int = 0,
     /** The list: YOUR TEAMS first, then league sections, long tails collapsed. */
     val items: List<ResultListItem> = emptyList(),
     val mode: ScoresMode = ScoresMode.SHOW,
     /** False until the Scores setting has been read: the Results tab stays hidden until then. */
     val modeKnown: Boolean = false,
-    /** Rows (event ids) focused long enough to reveal their score under Hide until focused. */
+    /** Rows (event ids) focused long enough to reveal their score under Hide until focused, or revealed by choice. */
     val revealed: Set<String> = emptySet(),
     /** The replay each result opens, by event id (strict matches only). */
     val replays: Map<String, SportsLiveItem> = emptyMap(),
     /** Spoiler protection (#151): a protected game's row hides its score whatever the setting. */
     val protection: SpoilerProtection = SpoilerProtection()
 ) {
-    fun showsScore(row: ResultRow): Boolean =
-        ResultSpoilerReveal.showsScore(mode, revealed, row.event.eventId, spoilerProtected = protection.protects(row.event))
+    fun showsScore(row: ResultRow): Boolean = hiddenReason(row) == null
+
+    /**
+     * Why [row]'s score is hidden, or null when it shows (results redesign §4.3): a protected game (#151) never shows;
+     * a followed team's game shows only once revealed or watched ([SpoilerProtection.revealed]), never on focus; the
+     * rest follow the Scores setting ([ResultSpoilerReveal.showsScore]).
+     */
+    fun hiddenReason(row: ResultRow): ResultHiddenReason? {
+        val id = row.event.eventId
+        return when {
+            protection.protects(row.event) -> if (protection.isSaved(id)) ResultHiddenReason.SAVED else ResultHiddenReason.YOUR_TEAM
+            mode == ScoresMode.OFF -> ResultHiddenReason.SETTING
+            row.followed -> if (protection.revealed(id)) null else ResultHiddenReason.YOUR_TEAM
+            ResultSpoilerReveal.showsScore(mode, revealed, id) -> null
+            else -> ResultHiddenReason.SETTING
+        }
+    }
 
     /**
      * The "N games live now" line: on Today, once loaded, while [liveGames] (Live now's own live games,
@@ -108,6 +173,9 @@ data class SportsLiveResultsUiState(
      * applied, so following it never lands on a tab without that game (QA pass 3).
      */
     fun showsLiveNow(liveGames: Int): Boolean = daysAgo == SportsResults.TODAY && status == ResultsStatus.READY && liveGames > 0
+
+    /** Jump to ▾'s other-sports games, once fetched (the "See N games in other sports" button); null: not known yet. */
+    val otherCount: Int? get() = otherEntries?.firstOrNull { it.jump == ResultsJump.OtherSports }?.count ?: otherEntries?.let { 0 }
 }
 
 @HiltViewModel
@@ -115,18 +183,25 @@ class SportsLiveResultsViewModel internal constructor(
     private val results: ResultsRepository,
     private val prefs: SportsLivePreferencesDataStore,
     // Where the replays and the list are built; tests pass their dispatcher, so it runs in virtual time.
-    computeDispatcher: CoroutineDispatcher
-) : ViewModel() {
+    computeDispatcher: CoroutineDispatcher,
+    /** A followed team's next game start ([ResultsNextGames]); null when not known. */
+    private val nextGame: suspend (FollowedTeam) -> Long? = { null }
+) : ViewModel(), ResultsActions {
 
     @Inject constructor(
         results: ResultsRepository,
-        prefs: SportsLivePreferencesDataStore
-    ) : this(results, prefs, Dispatchers.Default)
+        prefs: SportsLivePreferencesDataStore,
+        nextGames: ResultsNextGames
+    ) : this(results, prefs, Dispatchers.Default, nextGames::nextStartMs)
 
     /** Results is on screen, showing [days] (null: the opening day is still to be worked out). */
     private data class Shown(val days: Int?)
 
-    private data class Selection(val sport: MySport? = null, val league: String? = null, val expanded: Set<String> = emptySet())
+    /** [focusRequests] counts Jump to picks: each sends focus to the new list's first game (with the list it built). */
+    private data class Selection(val jump: ResultsJump? = null, val expanded: Set<String> = emptySet(), val focusRequests: Int = 0)
+
+    /** The other sports' finals of ESPN day [date] ([ResultsRepository.loadOther]); [rows] null: every feed failed. */
+    private data class OtherDay(val date: LocalDate, val rows: List<ResultRow>?)
 
     private val active = MutableStateFlow(false)
     /** The day shown; null until worked out on first open, unless one was chosen earlier in this process. */
@@ -144,65 +219,83 @@ class SportsLiveResultsViewModel internal constructor(
     internal val earlierShown: StateFlow<Boolean> = earlierOpen.asStateFlow()
     private val selection = MutableStateFlow(Selection())
     private val freshOpens = MutableStateFlow(0)
+    /** The ESPN day Jump to › Other sports was opened on: its other sports are fetched. */
+    private val otherAsked = MutableStateFlow<LocalDate?>(null)
+    private val other = MutableStateFlow<OtherDay?>(null)
     private val replayItems = MutableStateFlow<List<SportsLiveItem>>(emptyList())
     private val load = MutableStateFlow<ResultsLoad?>(null)
 
     /** The day's load on screen (null: loading, nothing shown). */
     internal val shownLoad: StateFlow<ResultsLoad?> = load.asStateFlow()
-    private val reveal = ResultSpoilerReveal(viewModelScope)
+    private val revealer = ResultSpoilerReveal(viewModelScope)
     private val mode = prefs.scoreSettings.map { it.mode }.distinctUntilChanged()
 
-    private val replayIndex = combine(load, replayItems) { load, replays ->
+    /** The other sports' rows of the day on screen; null while not fetched for it. */
+    private val otherRows = combine(load, other) { load, other ->
+        val loaded = load as? ResultsLoad.Loaded
+        if (loaded == null || other == null || other.date != loaded.date) null else other.rows.orEmpty()
+    }
+
+    private val replayIndex = combine(load, otherRows, replayItems) { load, otherRows, replays ->
         val loaded = load as? ResultsLoad.Loaded ?: return@combine emptyMap()
-        SportsResults.replaysByEvent(loaded.events, loaded.date, replays, System.currentTimeMillis())
+        val events = if (otherRows.isNullOrEmpty()) loaded.events else loaded.events + otherRows.map { it.event }
+        SportsResults.replaysByEvent(events, loaded.date, replays, System.currentTimeMillis())
     }.flowOn(computeDispatcher)
 
-    /** The chips and the list: built off the main thread, and only when the day, selection or replays change. */
+    /** The followed teams (followed from ESPN) with no game on the day loaded, each with its next game when known. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val notPlayed = combine(load, prefs.followedTeams) { load, followed ->
+        (load as? ResultsLoad.Loaded)?.let { resultsNotPlayedTeams(followed, it.events) }.orEmpty()
+    }
+        .distinctUntilChanged()
+        .mapLatest { teams -> teams.map { ResultsNotPlayed(it.name, runCatching { nextGame(it) }.getOrNull()) } }
+        .onStart { emit(emptyList()) }
+        .flowOn(computeDispatcher)
+
+    /** Jump to ▾ and the list: built off the main thread, and only when the day, selection or replays change. */
     private class Listing(
-        val sports: List<MySport>,
-        val sport: MySport?,
-        val leagues: List<ResultLeagueChip>,
-        val league: String?,
+        val jump: ResultsJump?,
+        val focusRequests: Int,
+        val entries: List<ResultsJumpEntry>,
+        val otherEntries: List<ResultsJumpEntry>?,
         val items: List<ResultListItem>,
-        val replays: Map<String, SportsLiveItem>,
-        val counts: ResultChipCounts
+        val replays: Map<String, SportsLiveItem>
     )
 
-    private val listing = combine(load, selection, replayIndex) { load, selected, replays ->
+    private val listing = combine(load, selection, replayIndex, otherRows, notPlayed) { load, selected, replays, otherRows, notPlayed ->
         val loaded = load as? ResultsLoad.Loaded
         val rows = loaded?.rows.orEmpty()
         val mySports = loaded?.mySports ?: MySports.DEFAULT
-        val sports = resultSportChips(rows, mySports)
-        val sport = selected.sport?.takeIf { it in sports }
-        val leagues = resultLeagueChips(rows, sport)
-        val league = selected.league?.takeIf { key -> leagues.any { it.key == key } }
-        val items = resultListItems(rows, mySports, sport, league, selected.expanded, replays.keys)
-        Listing(sports, sport, leagues, league, items, replays, resultChipCounts(rows, mySports, sports, sport))
+        val others = resultsOtherRows(rows, otherRows.orEmpty(), mySports)
+        val jump = selected.jump?.takeIf { resultsJumpValid(it, rows, others) }
+        val today = loaded != null && loaded.date == results.dateFor(SportsResults.TODAY)
+        val items = resultListItems(rows, mySports, jump, selected.expanded, replays.keys, others, notPlayed, today)
+        Listing(jump, selected.focusRequests, resultsJumpEntries(rows, mySports), otherRows?.let { resultsOtherEntries(others) }, items, replays)
     }.flowOn(computeDispatcher)
 
     private data class DayShown(val days: Int?, val load: ResultsLoad?, val earlier: Boolean, val freshOpens: Int)
 
     val uiState: StateFlow<SportsLiveResultsUiState> = combine(
         combine(daysAgo, load, earlierOpen, freshOpens, ::DayShown),
-        mode,
-        reveal.revealed,
+        combine(mode, prefs.spoilerProtection, ::Pair),
+        revealer.revealed,
         listing,
-        prefs.spoilerProtection
-    ) { (days, load, earlier, fresh), mode, revealed, listing, protection ->
+        combine(otherAsked, other, selection) { asked, other, selected -> Triple(asked, other, selected.jump) }
+    ) { (days, load, earlier, fresh), (mode, protection), revealed, listing, (asked, other, jump) ->
+        val loaded = load as? ResultsLoad.Loaded
         SportsLiveResultsUiState(
             daysAgo = days,
             freshOpens = fresh,
             // Every day (P4): the title's ‹ › steps through them, so no Earlier toggle hides any.
             dates = results.days(),
             earlierOpen = earlier,
-            liveNow = (load as? ResultsLoad.Loaded)?.liveNow ?: 0,
+            liveNow = loaded?.liveNow ?: 0,
             status = if (mode == ScoresMode.OFF) ResultsStatus.OFF else statusOf(load),
-            sports = listing.sports,
-            selectedSport = listing.sport,
-            leagues = listing.leagues,
-            selectedLeague = listing.league,
-            sportCounts = listing.counts.sports,
-            leagueCounts = listing.counts.leagues,
+            jump = listing.jump,
+            jumpEntries = listing.entries,
+            otherEntries = listing.otherEntries,
+            otherLoading = loaded != null && other?.date != loaded.date && otherWanted(loaded, asked, jump),
+            jumpFocus = listing.focusRequests,
             items = listing.items,
             mode = mode,
             modeKnown = true,
@@ -293,7 +386,24 @@ class SportsLiveResultsViewModel internal constructor(
                     }
                 }
         }
+        // Other sports are fetched only when wanted (results redesign): Jump to › Other sports opened, a jump that
+        // needs them, or a past day with nothing from My sports (its "See N games in other sports").
+        viewModelScope.launch {
+            combine(active, load, otherAsked, selection) { isActive, load, asked, selected ->
+                val loaded = load as? ResultsLoad.Loaded
+                if (!isActive || loaded == null || !otherWanted(loaded, asked, selected.jump)) null else loaded.date
+            }
+                .distinctUntilChanged()
+                .collectLatest { date ->
+                    if (date == null || other.value?.date == date) return@collectLatest
+                    val days = results.days().firstOrNull { it.date == date }?.daysAgo ?: return@collectLatest
+                    other.value = OtherDay(date, results.loadOther(days))
+                }
+        }
     }
+
+    private fun otherWanted(loaded: ResultsLoad.Loaded, asked: LocalDate?, jump: ResultsJump?): Boolean =
+        resultsOtherWanted(asked == loaded.date, jump, loaded.rows, loaded.hasMyFinals, today = loaded.date == results.dateFor(SportsResults.TODAY))
 
     /**
      * True while Results is the selected tab. Back on it after [SportsLiveRefreshPlan.OPEN_STALE_MS] away or on a new day
@@ -310,7 +420,7 @@ class SportsLiveResultsViewModel internal constructor(
             results.resultsAway.leave(now)
         }
         active.value = isActive
-        if (!isActive) reveal.onFocus(null)
+        if (!isActive) revealer.onFocus(null)
         // Debug timing (#143): back on the day it shows, its list is kept (ready at once); else when the load lands.
         openedAtNs = if (isActive) System.nanoTime() else null
         if (isActive && loadedDays == daysAgo.value) logReady(load.value)
@@ -333,9 +443,9 @@ class SportsLiveResultsViewModel internal constructor(
         results.chosenDay = SportsResults.TODAY
         daysAgo.value = SportsResults.TODAY
         earlierOpen.value = false
-        selection.value = Selection()
+        selection.update { Selection(focusRequests = it.focusRequests) }
         // A fresh open hides again what Hide until focused revealed.
-        reveal.clear()
+        revealer.clear()
         freshOpens.update { it + 1 }
     }
 
@@ -356,7 +466,7 @@ class SportsLiveResultsViewModel internal constructor(
         results.chosenDay = days
         daysAgo.value = days
         selection.update { it.copy(expanded = emptySet()) }
-        reveal.onFocus(null)
+        revealer.onFocus(null)
     }
 
     /** OK on Earlier: opens the 5 older days after it, or closes them (an older day shown goes back to Yesterday). */
@@ -366,14 +476,38 @@ class SportsLiveResultsViewModel internal constructor(
         if (!open && daysAgo.value in SportsResults.EARLIER) selectDay(SportsResults.YESTERDAY)
     }
 
-    /** ★ My sports (null) or a sport; its league chips start at All. */
-    fun selectSport(sport: MySport?) {
-        selection.update { if (it.sport == sport) it else Selection(sport = sport) }
+    /** Jump to ▾ (results redesign): the list narrows to [jump], or every league again (null, also Back). */
+    override fun jumpTo(jump: ResultsJump?) {
+        selection.update { Selection(jump = jump, expanded = if (it.jump == jump) it.expanded else emptySet(), focusRequests = it.focusRequests + 1) }
     }
 
-    /** A league chip of the chosen sport; null is All. */
-    fun selectLeague(key: String?) {
-        selection.update { if (it.league == key) it else it.copy(league = key, expanded = emptySet()) }
+    /** Jump to › Other sports opened: the day on screen fetches its other sports ([ResultsRepository.loadOther]). */
+    override fun loadOtherSports() {
+        (load.value as? ResultsLoad.Loaded)?.let { otherAsked.value = it.date }
+    }
+
+    /**
+     * More… → Reveal result (results redesign): [rows]' scores show now; a followed team's game or a protected one
+     * ends its protection for good ([SpoilerProtection.ended], as the Game page's Reveal result), so it stays shown
+     * on every surface and after a fresh open.
+     */
+    override fun reveal(rows: List<ResultRow>) {
+        if (rows.isEmpty()) return
+        revealer.add(rows.map { it.key })
+        viewModelScope.launch {
+            val protection = prefs.spoilerProtection.first()
+            val lasting = rows.filter { it.followed || protection.protects(it.event) }.map { it.event }
+            if (lasting.isEmpty()) return@launch
+            val now = results.nowMs()
+            prefs.updateProtectedGames { games -> lasting.fold(games) { acc, event -> SpoilerProtection.ended(acc, event, now) } }
+        }
+    }
+
+    /** More… → Reveal all for this day: every result of the day on screen, other sports' included once fetched. */
+    override fun revealDay() {
+        val loaded = load.value as? ResultsLoad.Loaded ?: return
+        val others = other.value?.takeIf { it.date == loaded.date }?.rows.orEmpty()
+        reveal(loaded.rows + others.filter { row -> loaded.rows.none { it.key == row.key } })
     }
 
     /** OK on "+ N more": the section lists all its games. */
@@ -382,7 +516,7 @@ class SportsLiveResultsViewModel internal constructor(
     }
 
     /** The row now focused (null when none): under Hide until focused its score shows after 1 s. */
-    fun onRowFocus(eventId: String?) = reveal.onFocus(eventId)
+    fun onRowFocus(eventId: String?) = revealer.onFocus(eventId)
 
     /**
      * Hold OK on a row → Follow / Following ‹team› (#54): follows [side]'s team with ESPN's name, a sport
@@ -479,86 +613,128 @@ internal const val RESULTS_COLLAPSE_ABOVE = 8
 
 /** ...to its first games and a "+ N more" row. */
 internal const val RESULTS_SHOWN_COLLAPSED = 5
-
-/** The sport chips after ★ My sports: the user's sports (followed teams' included) with results that day. */
-internal fun resultSportChips(rows: List<ResultRow>, mySports: MySports): List<MySport> {
-    val present = rows.mapTo(HashSet()) { it.event.league.sport }
-    return mySports.effectiveSports.filter { it.espnSport in present }
-}
-
-/** [sport]'s league chips: its league sections present that day, when there are two or more; none for ★ My sports. */
-internal fun resultLeagueChips(rows: List<ResultRow>, sport: MySport?): List<ResultLeagueChip> {
-    if (sport == null) return emptyList()
-    val groups = SportsResults.groups(rows.filter { it.event.league.sport == sport.espnSport })
-    return if (groups.size < 2) emptyList() else groups.map { ResultLeagueChip(it.key, it.name, it.sport) }
-}
-
-/** The Results chips' game counts (#79): [sports] by sport (null: ★ My sports), [leagues] by key (null: All). */
-internal data class ResultChipCounts(val sports: Map<MySport?, Int>, val leagues: Map<String?, Int>)
+/** True when [row] is listed under every league (null jump): a followed team's game or one of My sports. */
+private fun ResultRow.isMine(mySports: MySports): Boolean = followed || mySports.includes(event)
 
 /**
- * The Results chips' counts over the day's [rows] (#79): ★ My sports counts what it lists (followed
- * teams' games and My sports' games), each of [sports] its games, and the chosen [sport]'s league chips
- * their sections' games (All: the sport's). A count is no score: Hide until focused shows it too.
+ * Jump to ▾'s first page (results redesign): all leagues (every game listed under it), ★ Your teams when a followed
+ * team played, then each of My sports' league sections that day with its games, in [SportsResults.groups] order.
+ * A count is no score: it shows under every Scores setting.
  */
-internal fun resultChipCounts(rows: List<ResultRow>, mySports: MySports, sports: List<MySport>, sport: MySport?): ResultChipCounts {
-    val bySport = HashMap<MySport?, Int>()
-    bySport[null] = rows.count { it.followed || mySports.includes(it.event) }
-    sports.forEach { chip -> bySport[chip] = rows.count { it.event.league.sport == chip.espnSport } }
-    val leagues = HashMap<String?, Int>()
-    if (sport != null) {
-        val sportRows = rows.filter { it.event.league.sport == sport.espnSport }
-        leagues[null] = sportRows.size
-        sportRows.forEach { row -> SportsResults.groupKey(row.event).let { leagues[it] = (leagues[it] ?: 0) + 1 } }
+internal fun resultsJumpEntries(rows: List<ResultRow>, mySports: MySports): List<ResultsJumpEntry> {
+    val mine = rows.filter { it.isMine(mySports) }
+    return buildList {
+        add(ResultsJumpEntry(null, mine.size))
+        mine.count { it.followed }.takeIf { it > 0 }?.let { add(ResultsJumpEntry(ResultsJump.YourTeams, it)) }
+        SportsResults.groups(mine).forEach { add(ResultsJumpEntry(ResultsJump.League(it.key), it.rows.size, it.name, it.sport)) }
     }
-    return ResultChipCounts(bySport, leagues)
 }
 
 /**
- * The list for ★ My sports ([sport] null: followed teams' games and My sports' games) or a sport (all
- * its games fetched, or one league section): YOUR TEAMS first, then league sections in
- * [SportsResults.groups] order. A section of more than [RESULTS_COLLAPSE_ABOVE] games shows
- * [RESULTS_SHOWN_COLLAPSED] and a "+ N more" row until [expanded]. [replays] are the event ids with
- * a strict replay match: only they carry the Replay tag.
+ * The day's games outside My sports: the fetched rows My sports leaves out (another soccer competition) and
+ * [other] ([ResultsRepository.loadOther]), each game once.
+ */
+internal fun resultsOtherRows(rows: List<ResultRow>, other: List<ResultRow>, mySports: MySports): List<ResultRow> {
+    val listed = rows.mapTo(HashSet()) { it.key }
+    return rows.filterNot { it.isMine(mySports) } + other.filterNot { it.key in listed || it.isMine(mySports) }
+}
+
+/** Jump to › Other sports: all of them ([others]), then each league section. */
+internal fun resultsOtherEntries(others: List<ResultRow>): List<ResultsJumpEntry> =
+    if (others.isEmpty()) emptyList()
+    else listOf(ResultsJumpEntry(ResultsJump.OtherSports, others.size)) +
+        SportsResults.groups(others).map { ResultsJumpEntry(ResultsJump.League(it.key), it.rows.size, it.name, it.sport) }
+
+/** Whether [jump] still names something that day (a new day keeps the jump when it has that league). */
+internal fun resultsJumpValid(jump: ResultsJump, rows: List<ResultRow>, others: List<ResultRow>): Boolean = when (jump) {
+    ResultsJump.YourTeams -> true
+    ResultsJump.OtherSports -> true
+    is ResultsJump.League -> (rows.asSequence() + others.asSequence()).any { SportsResults.groupKey(it.event) == jump.key }
+}
+
+/**
+ * Whether the day's other sports are fetched (results redesign): Jump to › Other sports was opened ([asked]), the
+ * jump needs them, or a past day has nothing from My sports ([hasMyFinals] false; Today offers Yesterday instead).
+ */
+internal fun resultsOtherWanted(asked: Boolean, jump: ResultsJump?, rows: List<ResultRow>, hasMyFinals: Boolean, today: Boolean): Boolean = when {
+    asked -> true
+    jump == ResultsJump.OtherSports -> true
+    jump is ResultsJump.League -> rows.none { SportsResults.groupKey(it.event) == jump.key }
+    jump == ResultsJump.YourTeams -> false
+    else -> !hasMyFinals && !today
+}
+
+/** At most this many "didn't play" lines under YOUR TEAMS. */
+internal const val RESULTS_NOT_PLAYED_MAX = 3
+
+/**
+ * The followed teams with no game at all in [events] (the day's events, live and upcoming included): only teams
+ * followed from ESPN (by id), which match ESPN's games exactly, so a name-only follow never reads "didn't play" by
+ * mistake. At most [RESULTS_NOT_PLAYED_MAX], one per name.
+ */
+internal fun resultsNotPlayedTeams(followed: List<FollowedTeam>, events: List<ScoreSnapshot>): List<FollowedTeam> =
+    followed.asSequence()
+        .filter { !it.espnId.isNullOrBlank() && !it.league.isNullOrBlank() }
+        .filter { team -> events.none { it.individual == null && SportsResults.follows(team, it) } }
+        .distinctBy { it.name.lowercase() }
+        .take(RESULTS_NOT_PLAYED_MAX)
+        .toList()
+
+/**
+ * The list (results redesign): every league ([jump] null: YOUR TEAMS with the [notPlayed] lines, then My sports'
+ * league sections, long tails collapsed), ★ Your teams only, Other sports ([others], in league sections), or one
+ * league section listed whole (from My sports or [others]). A section of more than [RESULTS_COLLAPSE_ABOVE] games
+ * shows [RESULTS_SHOWN_COLLAPSED] and a "+ N more" row until [expanded]. [replays] are the event ids with a strict
+ * replay match: only they carry the Replay tag. [today]: the not-played lines say "no game today".
  */
 internal fun resultListItems(
     rows: List<ResultRow>,
     mySports: MySports,
-    sport: MySport?,
-    league: String?,
+    jump: ResultsJump?,
     expanded: Set<String>,
-    replays: Set<String>
+    replays: Set<String>,
+    others: List<ResultRow> = emptyList(),
+    notPlayed: List<ResultsNotPlayed> = emptyList(),
+    today: Boolean = false
 ): List<ResultListItem> {
-    val shown = rows.filter { row ->
-        when {
-            sport == null -> row.followed || mySports.includes(row.event)
-            row.event.league.sport != sport.espnSport -> false
-            else -> league == null || SportsResults.groupKey(row.event) == league
-        }
-    }
     val items = ArrayList<ResultListItem>()
     fun add(row: ResultRow) {
         items += ResultListItem.Row(row, hasReplay = row.key in replays)
     }
-    val yourTeams = shown.filter { it.followed }
-    if (yourTeams.isNotEmpty()) {
+    fun yourTeams(listed: List<ResultRow>) {
+        val teams = listed.filter { it.followed }
+        if (teams.isEmpty() && notPlayed.isEmpty()) return
         items += ResultListItem.Header(YOUR_TEAMS_KEY, name = null, sport = null, yourTeams = true)
-        yourTeams.forEach(::add)
+        teams.forEach(::add)
+        notPlayed.forEach { items += ResultListItem.NotPlayed(it.team, it.nextStartMs, today) }
     }
-    for (group in SportsResults.groups(shown.filterNot { it.followed })) {
-        items += ResultListItem.Header(group.key, group.name, group.sport, yourTeams = false)
-        if (group.rows.size <= RESULTS_COLLAPSE_ABOVE || group.key in expanded) {
-            group.rows.forEach(::add)
-            continue
+    fun sections(listed: List<ResultRow>, whole: Boolean) {
+        for (group in SportsResults.groups(listed)) {
+            items += ResultListItem.Header(group.key, group.name, group.sport, yourTeams = false)
+            if (whole || group.rows.size <= RESULTS_COLLAPSE_ABOVE || group.key in expanded) {
+                group.rows.forEach(::add)
+                continue
+            }
+            group.rows.take(RESULTS_SHOWN_COLLAPSED).forEach(::add)
+            items += ResultListItem.More(
+                groupKey = group.key,
+                count = group.rows.size - RESULTS_SHOWN_COLLAPSED,
+                name = group.name,
+                sport = group.sport,
+                firstHiddenKey = group.rows[RESULTS_SHOWN_COLLAPSED].key
+            )
         }
-        group.rows.take(RESULTS_SHOWN_COLLAPSED).forEach(::add)
-        items += ResultListItem.More(
-            groupKey = group.key,
-            count = group.rows.size - RESULTS_SHOWN_COLLAPSED,
-            name = group.name,
-            sport = group.sport,
-            firstHiddenKey = group.rows[RESULTS_SHOWN_COLLAPSED].key
-        )
+    }
+    when (jump) {
+        null -> {
+            val mine = rows.filter { it.isMine(mySports) }
+            yourTeams(mine)
+            sections(mine.filterNot { it.followed }, whole = false)
+        }
+        ResultsJump.YourTeams -> yourTeams(rows)
+        ResultsJump.OtherSports -> sections(others, whole = false)
+        // One league: its games whole, a followed team's among them (gold bar), in the day's order.
+        is ResultsJump.League -> sections((rows + others).filter { SportsResults.groupKey(it.event) == jump.key }, whole = true)
     }
     return items
 }
@@ -585,6 +761,11 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
             delay(revealAfterMs)
             _revealed.update { it + id }
         }
+    }
+
+    /** Reveals [ids] at once (Reveal result, Reveal all for this day). */
+    fun add(ids: Collection<String>) {
+        _revealed.update { it + ids }
     }
 
     /** Hides every revealed score again (Results opened afresh). */
@@ -614,10 +795,13 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
 
 /**
  * OK on a Results row: the Game page for its event (#18), carrying the row's strict replay match (Watch
- * replay) and whether its score already shows here (Hide until focused: a revealed row opens revealed).
+ * replay) and whether its score already shows here (Hide until focused: a revealed row opens revealed). A
+ * followed team's game hidden here opens spoiler-safe, so the page hides it under Show too (results redesign).
  */
-internal fun SportsLiveResultsUiState.gameRequestFor(row: ResultRow): SportsLiveGameRequest =
-    SportsLiveGameRequest(event = row.event, replay = replays[row.key], revealed = showsScore(row))
+internal fun SportsLiveResultsUiState.gameRequestFor(row: ResultRow): SportsLiveGameRequest {
+    val shows = showsScore(row)
+    return SportsLiveGameRequest(event = row.event, replay = replays[row.key], revealed = shows, spoilerSafe = !shows && row.followed)
+}
 
 /** A result row's list key. */
 internal val ResultRow.key: String get() = event.eventId
