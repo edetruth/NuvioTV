@@ -5,9 +5,11 @@ import java.util.Locale
 
 /**
  * A channel remembered for Favorites or Recent (Channels phase 1): its addon, its id in that addon, and its [name] key
- * ([SportsLiveChannelFavorites.nameKey]), which finds it again when the addon gives it a new id.
+ * ([SportsLiveChannelFavorites.nameKey]), which finds it again when the addon gives it a new id. A pick synced from
+ * another TV has neither addon nor id (blank: only the name key leaves a TV) and is found by name in any addon.
+ * [playedAt]: when a recent pick was played (0: unknown, or a favorite), which the account sync merges Recent by.
  */
-data class SportsLiveChannelRef(val addonId: String, val id: String, val name: String)
+data class SportsLiveChannelRef(val addonId: String, val id: String, val name: String, val playedAt: Long = 0L)
 
 /**
  * A profile's channel picks: [favorites] in the order added, [recent] plays newest first, and [plays] (phase 2: when
@@ -89,7 +91,7 @@ object SportsLiveChannelFavorites {
         val exact = favorites.filterNot { it.addonId == item.addonId && it.id == item.id }
         if (exact.size < favorites.size) return picks.copy(favorites = exact)
         val name = nameKey(item.meta.name)
-        return picks.copy(favorites = favorites.filterNot { it.addonId == item.addonId && it.name == name })
+        return picks.copy(favorites = favorites.filterNot { (it.addonId == item.addonId || it.addonId.isEmpty()) && it.name == name })
     }
 
     /**
@@ -97,8 +99,9 @@ object SportsLiveChannelFavorites {
      * plays older than 30 days dropped, at most [PLAYS_PER_CHANNEL] per channel and [PLAYS_CHANNELS] channels.
      */
     fun played(picks: SportsLiveChannelPicks, item: SportsLiveItem, nowMs: Long = System.currentTimeMillis()): SportsLiveChannelPicks {
-        val ref = refOf(item)
-        val rest = picks.recent.filterNot { it.addonId == ref.addonId && it.id == ref.id }
+        val ref = refOf(item).copy(playedAt = nowMs)
+        // A synced pick of the same name (no addon) is this play too.
+        val rest = picks.recent.filterNot { (it.addonId == ref.addonId && it.id == ref.id) || (it.addonId.isEmpty() && it.name == ref.name) }
         val key = SportsLiveChannelList.mergeKey(item)
         val since = nowMs - SportsLiveChannelList.PLAYS_WINDOW_MS
         val plays = (picks.plays + (key to (picks.plays[key].orEmpty() + nowMs)))
@@ -114,7 +117,8 @@ object SportsLiveChannelFavorites {
 
     /**
      * The channels of [channels] that [refs] name, in [refs]' order, each once: by addon and id, else by name key in
-     * the same addon (the first such channel listed). A ref found in neither way is left out.
+     * the same addon (the first such channel listed); a synced ref (no addon) by name key in any addon, a merged
+     * channel's copies too. A ref found in neither way is left out.
      */
     fun resolve(refs: List<SportsLiveChannelRef>, channels: List<SportsLiveItem>): List<SportsLiveItem> {
         if (refs.isEmpty() || channels.isEmpty()) return emptyList()
@@ -126,7 +130,8 @@ object SportsLiveChannelFavorites {
         val byName = HashMap<String, Map<String, SportsLiveItem>>()
         fun namesOf(addonId: String): Map<String, SportsLiveItem> = byName.getOrPut(addonId) {
             val names = HashMap<String, SportsLiveItem>()
-            channels.forEach { if (it.addonId == addonId) names.putIfAbsent(nameKey(it.meta.name), it) }
+            channels.forEach { if (addonId.isEmpty() || it.addonId == addonId) names.putIfAbsent(nameKey(it.meta.name), it) }
+            if (addonId.isEmpty()) channels.forEach { channel -> channel.alternates.forEach { names.putIfAbsent(nameKey(it.meta.name), channel) } }
             names
         }
         val found = LinkedHashMap<String, SportsLiveItem>()

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -24,12 +25,14 @@ import java.util.Locale
  * Sports & Live settings in the account's profile settings (#141). Only an allow-list goes up: followed
  * teams, reminder-only teams, My sports, Scores and Score delay, "When I open a game", "When a game ends",
  * the alert switches (close-game alerts too), the Catch up row,
- * reminders (without their addon source keys, and only those not past), hidden titles and spoiler protection.
+ * reminders (without their addon source keys, and only those not past), hidden titles, spoiler protection, and
+ * Channels' favorites and recent plays (live.25 J: by channel name key alone, never the addon or its channel id).
  * Addon catalog choices, source memory, hints and catch-up marks stay on the TV: nothing tied to an addon's
  * ids, URLs or hosts is ever exported.
  *
  * Conflicts: each setting is last-write-wins by the time it was changed; the list settings merge per entry
- * (a union), with removals kept as dated tombstones so an entry removed on one TV is removed on the others.
+ * (a union), with removals kept as dated tombstones so an entry removed on one TV is removed on the others;
+ * recent channels instead keep the latest plays of both, newest first, at most [SportsLiveChannelFavorites.RECENT_KEPT].
  * The times are kept in two local keys, written by [stamp] on every change made through
  * [com.nuvio.tv.data.local.SportsLivePreferencesDataStore]. A tie goes to the copy being merged in, so two
  * TVs converge.
@@ -69,7 +72,11 @@ object SportsLiveSettingsSync {
         /** The entry as uploaded; null leaves it out (a reminder whose game is long past). */
         val export: (JsonElement, Long) -> JsonElement? = { item, _ -> item },
         /** The entry kept when the other copy wins: [local] is this TV's own, when it had one. */
-        val adopt: (remote: JsonElement, local: JsonElement?) -> JsonElement = { remote, _ -> remote }
+        val adopt: (remote: JsonElement, local: JsonElement?) -> JsonElement = { remote, _ -> remote },
+        /** Removals are kept as tombstones; false: an entry gone is just forgotten (Recent, which [arrange] caps). */
+        val tombstones: Boolean = true,
+        /** The merged entries as stored. */
+        val arrange: (List<JsonElement>) -> List<JsonElement> = { it }
     )
 
     private const val FOLLOWED = "sports_live_followed_teams"
@@ -78,6 +85,8 @@ object SportsLiveSettingsSync {
     private const val REMINDERS = "sports_live_reminders"
     private const val OPT_OUTS = "sports_live_reminder_opt_outs"
     const val WATCH_LATER = "sports_live_watch_later"
+    private const val CHANNEL_FAVORITES = "sports_live_channel_favorites"
+    private const val CHANNEL_RECENT = "sports_live_channel_recent"
 
     /** Local only: when each setting last changed (`{"key": ms}`). */
     const val STAMPS_KEY = "sports_live_sync_stamps"
@@ -100,7 +109,33 @@ object SportsLiveSettingsSync {
         ListField(HIDDEN, stringSet = true, idOf = { item -> lower((item as? JsonPrimitive)?.contentOrNull) }),
         reminders(REMINDERS),
         reminders(OPT_OUTS),
-        ListField(WATCH_LATER, idOf = { item -> item.field("eventId")?.takeIf { it.isNotBlank() } })
+        ListField(WATCH_LATER, idOf = { item -> item.field("eventId")?.takeIf { it.isNotBlank() } }),
+        channels(CHANNEL_FAVORITES, setOf("name")),
+        channels(CHANNEL_RECENT, setOf("name", "at"), recent = true)
+    )
+
+    /**
+     * Channels' picks ([com.nuvio.tv.core.sportslive.SportsLiveChannelRef]), by name key ("us espn": region and clean
+     * name, quality and source tags such as "[BK]" left out), the one identity a pick has that names no addon. Only
+     * [synced] fields go up: never the addon id or the channel's id in it (a stream link for some addons); a TV
+     * that has the pick keeps its own, one that has not finds it by name ([SportsLiveChannelFavorites.resolve]).
+     */
+    private fun channels(key: String, synced: Set<String>, recent: Boolean = false) = ListField(
+        key,
+        idOf = { item -> lower(item.field("name"))?.takeIf { "://" !in it } },
+        export = { item, _ -> (item as? JsonObject)?.let { obj -> JsonObject(obj.filterKeys { it in synced }) } },
+        // Stored as the TV writes a pick (blank addon and id when it has none), so the next save is no change.
+        adopt = { remote, local ->
+            val own = (local as? JsonObject)?.filterKeys { it == "addon" || it == "id" }?.takeIf { it.isNotEmpty() }
+                ?: mapOf("addon" to JsonPrimitive(""), "id" to JsonPrimitive(""))
+            if (remote !is JsonObject) remote else JsonObject(remote.filterKeys { it in synced } + own)
+        },
+        tombstones = !recent,
+        // Recent: the latest plays of both TVs, newest first, as many as a TV keeps.
+        arrange = { items ->
+            if (!recent) items
+            else items.sortedByDescending { it.field("at")?.toLongOrNull() ?: 0L }.take(SportsLiveChannelFavorites.RECENT_KEPT)
+        }
     )
 
     private fun reminders(key: String) = ListField(
@@ -136,9 +171,10 @@ object SportsLiveSettingsSync {
             val old = itemsOf(before, field)
             val new = itemsOf(after, field)
             if (old == new) return@mapNotNull null
-            val changes = HashMap<String, Boolean>()
+            // Each entry changed: removed (a tombstone), or null to forget it (a list without tombstones).
+            val changes = HashMap<String, Boolean?>()
             new.forEach { (id, item) -> if (old[id] != item) changes[id] = false }
-            old.keys.filterNot { it in new }.forEach { changes[it] = true }
+            old.keys.filterNot { it in new }.forEach { changes[it] = if (field.tombstones) true else null }
             field.key to changes
         }
         if (changedScalars.isEmpty() && listChanges.isEmpty()) return after
@@ -152,7 +188,13 @@ object SportsLiveSettingsSync {
             val meta = itemMetaOf(prefs).mapValues { it.value.toMutableMap() }.toMutableMap()
             listChanges.forEach { (key, changes) ->
                 val entries = meta.getOrPut(key) { mutableMapOf() }
-                changes.forEach { (id, removed) -> entries[id] = Meta(nowMs, removed) }
+                changes.forEach { (id, removed) ->
+                    if (removed == null) {
+                        entries.remove(id)
+                    } else {
+                        entries[id] = Meta(nowMs, removed)
+                    }
+                }
             }
             writeItemMeta(prefs, meta, nowMs)
         }
@@ -256,7 +298,9 @@ object SportsLiveSettingsSync {
                     }
                     entries[id] = Meta(at, removed)
                 }
-                if (merged != local) writeItems(prefs, field, merged.values.toList())
+                val arranged = field.arrange(merged.values.toList())
+                if (!field.tombstones) entries.keys.retainAll(arranged.mapNotNullTo(HashSet<String>(), field.idOf))
+                if (arranged != local.values.toList()) writeItems(prefs, field, arranged)
             }
             writeItemMeta(prefs, meta, nowMs)
         }

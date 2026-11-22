@@ -515,12 +515,22 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
-    fun `channel picks stay on this TV and never reach the account sync`() = runTest {
+    fun `channel picks reach the account sync without their addon or channel ids`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         store.updateChannelPicks { it.copy(favorites = listOf(SportsLiveChannelRef("addon.one", "ch-1", "sports one"))) }
         val exported = com.nuvio.tv.core.sync.SportsLiveSettingsSync.export(profile1Store.data.first(), 0L).toString()
         assertFalse(exported.contains("addon.one"))
         assertFalse(exported.contains("ch-1"))
+        assertTrue(exported.contains("sports one"))
+    }
+
+    @Test
+    fun `a synced channel pick and a play time are kept`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val synced = SportsLiveChannelRef("", "", "us sports one")
+        val played = SportsLiveChannelRef("addon.two", "ch-2", "sports two", playedAt = 5_000L)
+        store.updateChannelPicks { it.copy(favorites = listOf(synced), recent = listOf(played, synced)) }
+        assertEquals(SportsLiveChannelPicks(listOf(synced), listOf(played, synced)), store.channelPicks.first())
     }
 
     @Test

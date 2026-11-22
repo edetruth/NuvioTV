@@ -101,7 +101,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     // Local only (not in SportsLiveSettingsSync): where each followed team's replay was left, by ESPN event id.
     private val replayPositionsKey = stringPreferencesKey("sports_live_replay_positions")
-    // Local only (not in SportsLiveSettingsSync: they hold addon ids): Channels' favorites and recent plays (phase 1).
+    // Channels' favorites and recent plays (phase 1): synced by name key only (SportsLiveSettingsSync, live.25 J).
     private val channelFavoritesKey = stringPreferencesKey("sports_live_channel_favorites")
     private val channelRecentKey = stringPreferencesKey("sports_live_channel_recent")
     // Phase 2: plays per channel in the last 30 days ({"key": "ms,ms"}), and the countries Channels lists (unset: yours).
@@ -436,7 +436,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }.getOrDefault(emptyMap())
     }
 
-    /** Channels' favorites and recent plays (phase 1) of the active profile; this TV only. */
+    /** Channels' favorites and recent plays (phase 1) of the active profile (synced without their addon ids). */
     val channelPicks: Flow<SportsLiveChannelPicks> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map(::channelPicksOf)
     }
@@ -479,17 +479,26 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }
     }
 
-    // [{"addon": addon id, "id": channel id, "name": name key}]; plain maps, like the follows.
-    private fun encodeChannelRefs(refs: List<SportsLiveChannelRef>): List<Map<String, String>> =
-        refs.map { mapOf("addon" to it.addonId, "id" to it.id, "name" to it.name) }
+    // [{"addon": addon id, "id": channel id, "name": name key, "at": played ms when known}]; plain maps, like the follows.
+    private fun encodeChannelRefs(refs: List<SportsLiveChannelRef>): List<Map<String, String>> = refs.map {
+        val ref = mapOf("addon" to it.addonId, "id" to it.id, "name" to it.name)
+        if (it.playedAt > 0L) ref + ("at" to it.playedAt.toString()) else ref
+    }
 
     private fun decodeChannelRefs(json: String?): List<SportsLiveChannelRef> {
         if (json.isNullOrBlank()) return emptyList()
         return runCatching {
             gson.fromJson<List<Map<String, String?>?>?>(json, followedType).orEmpty().mapNotNull { stored ->
-                val addon = stored?.get("addon")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val id = stored["id"]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                SportsLiveChannelRef(addon, id, stored["name"].orEmpty())
+                val addon = stored?.get("addon").orEmpty()
+                val id = stored?.get("id").orEmpty()
+                val name = stored?.get("name").orEmpty()
+                val at = stored?.get("at")?.toLongOrNull() ?: 0L
+                when {
+                    addon.isNotBlank() && id.isNotBlank() -> SportsLiveChannelRef(addon, id, name, at)
+                    // Synced from another TV: its name key alone.
+                    name.isNotBlank() -> SportsLiveChannelRef("", "", name, at)
+                    else -> null
+                }
             }
         }.getOrDefault(emptyList())
     }
