@@ -2374,4 +2374,15 @@ class LiveScoresRepositoryTest {
         assertEquals(listOf(nba15), provider.calls)
         assertEquals("401909985", repo.scores.value.getValue(pacersCard.streamKey).eventId)
     }
+
+    // ---- live.25 #226: a sport with no score feed reads just "Live" ----
+
+    @Test
+    fun `race and fight cards have no score feed, while team games and tennis do`() {
+        assertFalse(LiveScoresRepository.hasScoreFeed(item("Jon Jones vs Stipe Miocic", "MMA", "2026-11-15T20:00:00Z")))
+        assertFalse(LiveScoresRepository.hasScoreFeed(item("Las Vegas Grand Prix", "Motorsport", "2026-11-15T20:00:00Z")))
+        assertFalse(LiveScoresRepository.hasScoreFeed(item("Canelo vs Crawford", "Boxing", "2026-11-15T20:00:00Z")))
+        assertTrue(LiveScoresRepository.hasScoreFeed(pacersCard))
+        assertTrue(LiveScoresRepository.hasScoreFeed(item("Sinner vs Alcaraz", "Tennis", "2026-11-15T20:00:00Z")))
+    }
 }

@@ -1395,6 +1395,19 @@ class LiveScoresRepository internal constructor(
         leagues.flatMap { league -> dates.map { ScoreFeed(league, it) } }
 
     companion object {
+        /**
+         * Whether [track] would follow [item] for a score at all (live.25 #226): a game a feed covers by its league, a
+         * tennis match, or two sides with no sport anywhere (#206). False for a race, a fight card or any sport with no
+         * score feed, which therefore never gets a score: it reads just "Live", never "Live · No score yet". Mirrors
+         * [track]'s choices without its directory work.
+         */
+        fun hasScoreFeed(item: SportsLiveItem): Boolean {
+            if (ScoreCard.from(item) == null) return false
+            val sources = listOf(item) + item.alternates
+            if (sources.any { EspnLeagueMap.leaguesFor(it).isNotEmpty() || EspnLeagueMap.tennisLeaguesFor(it).isNotEmpty() }) return true
+            return !item.isChannel && item.teams != null && sources.none { SportsLiveSportKind.tagOf(it) != null }
+        }
+
         /** [track] screen ids. */
         const val SCREEN_HOME = "home"
         const val SCREEN_SECTION = "sports_live"
