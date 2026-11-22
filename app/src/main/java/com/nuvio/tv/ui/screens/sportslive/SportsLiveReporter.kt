@@ -1,8 +1,10 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import android.view.KeyEvent
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
@@ -30,7 +32,9 @@ import com.nuvio.tv.domain.model.AuthState
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.ui.screens.player.LoggingDataSource
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +46,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.ZoneId
 import javax.inject.Inject
@@ -52,7 +57,8 @@ import javax.inject.Singleton
  * adb ([SportsLiveReportFiles]), shows its summary as a QR code where adb is not at hand, and takes a short voice note.
  * Triggered by holding Play/Pause or Info ([SportsLiveReportKey], from MainActivity), from Hold OK → More… → Report a
  * problem on a Sports & Live row or in the player ([report]), or from Settings → Sports & Live → More → Report a problem.
- * Nothing leaves the TV by itself.
+ * A report asked for from the remote also keeps a screenshot next to its file (live.25, [SportsLiveScreenCapture]), so a
+ * report needs no phone photo; it is a local file only, never in the QR code. Nothing leaves the TV by itself.
  */
 @Singleton
 class SportsLiveReporter @Inject constructor(
@@ -126,19 +132,27 @@ class SportsLiveReporter @Inject constructor(
 
     /**
      * Saves a report asked for by [trigger] from the remote (a held key, or Hold OK → More… → Report a problem) and says
-     * so: "Report #N saved" with how to send it, or, with adb off and no video playing, the QR dialog at once.
+     * so: "Report #N saved" with how to send it, or, with adb off and no video playing, the QR dialog at once. Its
+     * screenshot is taken a moment later ([REPORT_SHOT_DELAY_MS]): a More… sheet Report a problem was picked in has
+     * closed by then, and the toast is not up yet.
      */
     fun report(trigger: String) {
-        scope.launch { announce(runCatching { save(trigger) }.getOrNull()) }
+        val shot = startShot(REPORT_SHOT_DELAY_MS)
+        scope.launch {
+            val saved = runCatching { save(trigger) }.getOrNull()
+            saveShot(saved, shot)
+            announce(saved)
+        }
     }
 
     /**
      * #218: the report's snapshot taken now (Hold OK in the player, before its menu draws, so the report says what was
      * on screen); the function returned saves it when Report a problem is picked, with the same toast as [report].
-     * Nothing is saved when it is never called.
+     * Nothing is saved when it is never called. The screenshot is taken now too, before the menu draws.
      */
     fun capture(trigger: String): () -> Unit {
         val captured = input(0, System.currentTimeMillis(), ZoneId.systemDefault(), trigger, scoresNow ?: "unknown")
+        val shot = startShot(0L)
         return {
             scope.launch {
                 val saved = runCatching {
@@ -151,8 +165,32 @@ class SportsLiveReporter @Inject constructor(
                         Saved(number, files.save(number, text, input.savedAtMs, input.zone), text)
                     }
                 }.getOrNull()
+                saveShot(saved, shot)
                 announce(saved)
             }
+        }
+    }
+
+    /** Where no other app can read the reports folder ([SportsLiveReportFiles.shotsAllowed]); asked once. */
+    private val shotsAllowed: Boolean by lazy {
+        SportsLiveReportFiles.shotsAllowed(Build.VERSION.SDK_INT, externalFolder = context.getExternalFilesDir(null) != null)
+    }
+
+    /** The screenshot for a report, copied [delayMs] from now; null where shots are not allowed or the copy fails. */
+    private fun startShot(delayMs: Long): Deferred<Bitmap?> =
+        runCatching { if (shotsAllowed) SportsLiveScreenCapture.take(delayMs) else null }.getOrNull() ?: CompletableDeferred<Bitmap?>(null)
+
+    /** Keeps [shot] next to [saved]'s file as a JPEG; a failure only loses the screenshot, never the report. */
+    private suspend fun saveShot(saved: Saved?, shot: Deferred<Bitmap?>) {
+        val bitmap = withTimeoutOrNull(SHOT_WAIT_MS) { shot.await() } ?: return
+        try {
+            if (saved == null) return
+            val jpeg = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, SHOT_JPEG_QUALITY, it) }.toByteArray()
+            lock.withLock { files.saveShot(saved.file, jpeg) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Report screenshot not saved: ${e.javaClass.simpleName}")
+        } finally {
+            bitmap.recycle()
         }
     }
 
@@ -277,7 +315,15 @@ class SportsLiveReporter @Inject constructor(
     private fun addonSecretsOf(addons: List<com.nuvio.tv.domain.model.Addon>): List<String> = SportsLiveReport.addonSecrets(addons)
 
     private companion object {
+        const val TAG = "SportsLiveReporter"
         const val LOOKUP_MS = 2_000L
+
+        /** How long after a remote Report a problem its screenshot is taken: a closing sheet's fade is over by then. */
+        const val REPORT_SHOT_DELAY_MS = 400L
+
+        /** The longest a report waits for its screenshot before it is told as saved without one. */
+        const val SHOT_WAIT_MS = 2_000L
+        const val SHOT_JPEG_QUALITY = 80
         const val MAX_UNPLACED = 30
 
         /** Settings.Global.ADB_WIFI_ENABLED (Android 11), by name so older SDK stubs compile. */

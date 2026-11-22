@@ -123,4 +123,83 @@ class SportsLiveReportFilesTest {
         val text = "Nuvio Live report #4\nCrash: java.lang.IllegalStateException\nFrom: crash\n${SportsLiveReport.DETAILS}\n"
         assertTrue(SportsLiveReportFiles.showsAsIs(name, text, 0L, 3 * 24 * 60 * 60_000L))
     }
+
+    @Test
+    fun `a screenshot is named after its report`() {
+        assertEquals("report-012-20251120-194205.jpg", SportsLiveReportFiles.shotName("report-012-20251120-194205.txt"))
+        assertNull(SportsLiveReportFiles.shotName(SportsLiveReportFiles.LATEST))
+        assertNull(SportsLiveReportFiles.shotName("notes.txt"))
+        assertNull(SportsLiveReportFiles.shotName("report-012-20251120-194205.jpg"))
+    }
+
+    @Test
+    fun `a screenshot is saved next to its report and never counts as one`() {
+        val files = SportsLiveReportFiles(dir())
+        val report = files.save(1, "first", at, utc)
+        val shot = files.saveShot(report, byteArrayOf(1, 2, 3))
+        assertEquals(File(dir(), "report-001-20251120-194205.jpg"), shot)
+        assertEquals(shot, files.shotOf(report))
+        assertEquals(listOf(report), files.reports())
+        assertEquals(2, files.nextNumber())
+    }
+
+    @Test
+    fun `no screenshot is saved for a file that is not a saved report`() {
+        val files = SportsLiveReportFiles(dir())
+        files.save(1, "first", at, utc)
+        assertNull(files.saveShot(File(dir(), SportsLiveReportFiles.LATEST), byteArrayOf(1)))
+        assertNull(files.saveShot(File(dir(), "report-009-20251120-194205.txt"), byteArrayOf(1)))
+        assertEquals(listOf("report-001-20251120-194205.txt", SportsLiveReportFiles.LATEST), dir().list()!!.sorted())
+    }
+
+    @Test
+    fun `a dropped report takes its screenshot with it`() {
+        val files = SportsLiveReportFiles(dir(), keep = 2)
+        for (n in 1..3) {
+            val report = files.save(n, "report $n", at + n * 1_000L, utc)
+            files.saveShot(report, byteArrayOf(n.toByte()))
+        }
+        files.save(4, "report 4", at + 4_000L, utc)
+        val shots = dir().list()!!.filter { it.endsWith(".jpg") }.sorted()
+        assertEquals(listOf("report-003-20251120-194208.jpg"), shots)
+        assertEquals(listOf(3, 4), files.reports().map { SportsLiveReportFiles.numberOf(it.name) })
+    }
+
+    @Test
+    fun `a screenshot whose report was deleted goes at the next save and other images stay`() {
+        val files = SportsLiveReportFiles(dir())
+        val first = files.save(1, "first", at, utc)
+        files.saveShot(first, byteArrayOf(1))
+        val other = File(dir(), "keep-me.jpg").apply { writeBytes(byteArrayOf(9)) }
+        first.delete()
+        files.save(2, "second", at + 1_000, utc)
+        assertFalse(File(dir(), "report-001-20251120-194205.jpg").exists())
+        assertTrue(other.exists())
+    }
+
+    @Test
+    fun `the report text its latest copy and its QR code never mention the screenshot`() {
+        val files = SportsLiveReportFiles(dir())
+        val text = "Nuvio Live report #1
+From: Hold OK
+${SportsLiveReport.DETAILS}
+"
+        val report = files.save(1, text, at, utc)
+        val shot = files.saveShot(report, byteArrayOf(1, 2, 3))!!
+        files.rewrite(report, SportsLiveReport.withNote(report.readText(), "the score is wrong", emptyList()))
+        val latest = File(dir(), SportsLiveReportFiles.LATEST).readText()
+        for (shared in listOf(report.readText(), latest, SportsLiveReport.qrPayload(report.readText()))) {
+            assertFalse(shared.contains(shot.name))
+            assertFalse(shared.contains(".jpg", ignoreCase = true))
+            assertFalse(shared.contains("screenshot", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun `screenshots only where no other app can read the reports folder`() {
+        assertFalse(SportsLiveReportFiles.shotsAllowed(sdkInt = 25, externalFolder = false))
+        assertTrue(SportsLiveReportFiles.shotsAllowed(sdkInt = 26, externalFolder = false))
+        assertFalse(SportsLiveReportFiles.shotsAllowed(sdkInt = 29, externalFolder = true))
+        assertTrue(SportsLiveReportFiles.shotsAllowed(sdkInt = 30, externalFolder = true))
+    }
 }
