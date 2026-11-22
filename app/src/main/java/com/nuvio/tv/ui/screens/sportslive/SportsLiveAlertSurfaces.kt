@@ -15,6 +15,7 @@ import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualAvailable
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveSecondDecoders
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -197,7 +198,7 @@ internal fun sportsLivePlayerAlertSurface(
 ): SportsLiveAlertSurface = object : SportsLiveAlertSurface {
     override fun watch(item: SportsLiveItem): Boolean = !partyActive() && zap.watchFromAlert(item)
 
-    override fun offersBoth(): Boolean = openDual != null && !partyActive() && zap.hasSession
+    override fun offersBoth(): Boolean = openDual != null && !partyActive() && zap.hasSession && sportsLiveDualAvailable()
 
     override fun watchBoth(item: SportsLiveItem): Boolean {
         val open = openDual ?: return false

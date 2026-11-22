@@ -33,6 +33,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerRows
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualAvailable
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveGameHomeFirst
 import com.nuvio.tv.ui.screens.sportslive.toggleFollowTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -79,7 +80,7 @@ internal fun homeCardMenuEntries(item: SportsLiveItem, game: ScoreSnapshot?, fol
         gameStats = game != null,
         followSides = if (item.isChannel) 0 else followSides,
         watchLater = game != null && !item.isChannel,
-        watchWith = partners > 0
+        watchWith = partners > 0 && sportsLiveDualAvailable()
     )
 
 /**

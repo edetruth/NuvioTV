@@ -236,9 +236,35 @@ class ZapPanelFocusTest {
             assertEquals(revision + 2, book.revision.value)
         }
 
-    private fun TestScope.panelViewModel(latest: MutableStateFlow<SportsLiveLoad>, playing: SportsLiveItem): SportsLiveZapViewModel {
+    @Test
+    fun `from Channels the panel and guide list the channel group CH plus and minus walk, not Live now's games (audit G15)`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val games = listOf(item("a", now - HOUR), item("b", now - HOUR / 2))
+            fun channel(id: String, group: String) =
+                item(id, null).copy(isChannel = true, kind = SportsLiveKind.CHANNELS, teams = null, group = group)
+            val us1 = channel("us1", "US")
+            val uk1 = channel("uk1", "UK")
+            val uk2 = channel("uk2", "UK")
+            val latest = MutableStateFlow(SportsLiveLoad(games, emptyList(), 0L, setOf(CATALOG)))
+            // Started on UK's second channel: CH+/- walk the UK group first, then the rest.
+            val viewModel = panelViewModel(latest, uk2, sessionItems = listOf(us1, uk1, uk2), tab = SportsLiveTab.CHANNELS, filter = "UK")
+            try {
+                viewModel.openPanel()
+                assertEquals(listOf("uk1", "uk2", "us1"), viewModel.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
+            } finally {
+                viewModel.closePanel()
+            }
+        }
+
+    private fun TestScope.panelViewModel(
+        latest: MutableStateFlow<SportsLiveLoad>,
+        playing: SportsLiveItem,
+        sessionItems: List<SportsLiveItem> = latest.value.items,
+        tab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
+        filter: String? = null
+    ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
-            SportsLiveZapSession.of(latest.value.items, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
+            SportsLiveZapSession.of(sessionItems, playing.streamKey, tab, filter, returnToHomeOnBack = false)!!
         )
         val scores = LiveScoresRepository(
             provider = object : ScoreProvider {

@@ -182,6 +182,14 @@ internal fun sportsLiveZapSource(
     else -> (if (liveNow.any { it.streamKey == item.streamKey }) liveNow else listOf(item) + liveNow) to SportsLiveTab.LIVE_NOW
 }
 
+/**
+ * The guide's list for a session started on Channels (live.25, audit G15): its channels in the order CH± walks them
+ * (the group it was started under first, whatever chip the panel picked since), so the guide and CH± agree. Null on
+ * every other tab: the guide lists the shared Live now lineup ([com.nuvio.tv.core.sportslive.SportsLiveLineup]).
+ */
+internal fun SportsLiveZapSession.channelGuideItems(): List<SportsLiveItem>? =
+    if (tab != SportsLiveTab.CHANNELS) null else copy(panelChip = null).zapOrder.map { items[it] }
+
 /** A chip of the player's live games panel (#68): [filter] is a sport or "★ My teams"; null is All. */
 data class ZapPanelChip(val filter: String?)
 

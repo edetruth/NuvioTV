@@ -123,6 +123,8 @@ class SportsLiveReporter @Inject constructor(
 
     /** MainActivity's dispatchKeyEvent: true when the key is the shortcut's (eaten); a long enough hold saves a report. */
     fun onKey(event: KeyEvent): Boolean {
+        // Audit G30: over a movie the keys are the player's as upstream, never a sports report about the last game.
+        if (SportsLiveOverMovie.now) return false
         val action = key.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, event.eventTime)
         if (action == SportsLiveReportKeyAction.REPORT) {
             report(if (event.keyCode == KeyEvent.KEYCODE_INFO) "Hold Info" else "Hold Play/Pause")

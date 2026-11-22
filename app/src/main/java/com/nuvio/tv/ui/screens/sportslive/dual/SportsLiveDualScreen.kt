@@ -348,9 +348,10 @@ fun SportsLiveDualScreen(
     DisposableEffect(Unit) { onDispose { SportsLiveDualHandoffFrame.clear() } }
 
     // OK on the ringed pane, or Full screen in the menu: a playing pane's stream goes straight to the full player.
-    fun playFullScreen() {
-        val pane = dual.pane(dual.highlighted)
-        val stream = pane.okStream
+    fun playFullScreen(side: Side = dual.highlighted) {
+        val pane = dual.pane(side)
+        // The device limit card's link is fine (audit G11): only the second decoder was missing, so no new lookup.
+        val stream = pane.okStream ?: pane.stream?.takeIf { pane.status == PaneStatus.DeviceLimit }
         if (stream != null) playViewModel.playResolved(pane.item, stream) else playViewModel.play(pane.item)
     }
 
@@ -441,7 +442,8 @@ fun SportsLiveDualScreen(
                                 DualOk.CHOOSE_STREAM -> playViewModel.chooseStream(pane.item)
                                 DualOk.MAKE_BIG -> viewModel.swap()
                                 // A playing pane's stream goes straight to the full player.
-                                DualOk.FULL_SCREEN -> playFullScreen()
+                                // The ringed pane, or the device limit card's pane (audit G11), wherever it sits.
+                                DualOk.FULL_SCREEN -> playFullScreen(keySide)
                             }
                         }
                         null -> Unit
@@ -929,7 +931,12 @@ private fun BoxScope.PaneStatusOverlay(
             hint = if (highlighted) stringResource(R.string.sports_live_dual_recovery_choices) else null,
             small = small
         )
-        PaneStatus.DeviceLimit -> PaneMessage(text = stringResource(R.string.sports_live_dual_device_limit), hint = null, small = small)
+        // Audit G11: the next step, on the pane OK and Back act on (its game alone full screen, or the other game).
+        PaneStatus.DeviceLimit -> PaneMessage(
+            text = stringResource(R.string.sports_live_dual_device_limit),
+            hint = if (highlighted) stringResource(R.string.sports_live_dual_device_limit_choices) else null,
+            small = small
+        )
         // The game ended (#161): the end card in the pane; once closed (Stay), "Game over".
         PaneStatus.Ended -> pane.end?.let { card ->
             SportsLiveEndCardView(

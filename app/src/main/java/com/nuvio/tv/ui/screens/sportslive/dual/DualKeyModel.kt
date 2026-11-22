@@ -107,9 +107,12 @@ internal fun dualKeySide(state: DualState): Side {
     return if (dualPaneOwnsKeys(state.pane(ringed.other))) ringed.other else ringed
 }
 
-/** A pane card that takes OK and Back: the error card after every link failed, or an end card still up. */
+/**
+ * A pane card that takes OK and Back: the error card after every link failed, the device limit card ("OK Full screen ·
+ * BACK Close this side", audit G11), or an end card still up.
+ */
 internal fun dualPaneOwnsKeys(pane: DualPane): Boolean =
-    pane.status == PaneStatus.Error || (pane.status == PaneStatus.Ended && pane.end != null)
+    pane.status == PaneStatus.Error || pane.status == PaneStatus.DeviceLimit || (pane.status == PaneStatus.Ended && pane.end != null)
 
 /** What a short OK does in [state] (see the key model above), on the pane [dualKeySide] picks. */
 internal fun dualOkRoute(state: DualState): DualOk = dualRingedOkRoute(state.copy(highlighted = dualKeySide(state)))
@@ -119,6 +122,8 @@ private fun dualRingedOkRoute(state: DualState): DualOk {
     return when {
         dualCardButtons(pane) > 0 || (pane.status == PaneStatus.Ended && pane.end != null) -> DualOk.CARD_BUTTON
         pane.status == PaneStatus.Error -> DualOk.CHOOSE_STREAM
+        // This TV can't play two streams (audit G11): its game plays alone, full screen, wherever the pane sits.
+        pane.status == PaneStatus.DeviceLimit -> DualOk.FULL_SCREEN
         state.layout == DualLayout.BIG_SMALL && state.highlighted == Side.RIGHT -> DualOk.MAKE_BIG
         else -> DualOk.FULL_SCREEN
     }

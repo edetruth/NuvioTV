@@ -105,6 +105,8 @@ internal fun SportsLiveZapSession.dualSessionOnBack(playingStream: Stream?): Spo
  * true; false otherwise, and Back goes on as before.
  */
 internal fun sportsLiveBackToDual(contentId: String?, openDual: () -> Unit): Boolean {
+    // A TV that can't play two streams (audit G11) never goes back into that failure: Back goes on as before.
+    if (!sportsLiveDualAvailable()) return false
     val zap = SportsLiveZapSessions.activeFor(contentId) ?: return false
     val session = zap.dualSessionOnBack(SportsLiveWorkingLinks.shared.playing(zap.current.id)) ?: return false
     SportsLiveDualSessions.start(session)

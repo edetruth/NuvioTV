@@ -172,8 +172,15 @@ internal fun dualZapLineup(frozen: List<SportsLiveItem>, now: List<SportsLiveIte
     }
 }
 
-/** Dual screen is offered on Live now and Channels only. */
-internal fun SportsLiveTab.offersDual(): Boolean = this == SportsLiveTab.LIVE_NOW || this == SportsLiveTab.CHANNELS
+/** Dual screen is offered on Live now and Channels only, and only on a TV that can play two streams ([sportsLiveDualAvailable]). */
+internal fun SportsLiveTab.offersDual(): Boolean =
+    (this == SportsLiveTab.LIVE_NOW || this == SportsLiveTab.CHANNELS) && sportsLiveDualAvailable()
+
+/**
+ * Dual screen may be offered at all (audit G11): not once this TV showed it can't play two streams at once
+ * ([SportsLiveDecoderLimit]). Every "Watch with another game" / "Watch both" offer checks it, so none leads to that failure.
+ */
+internal fun sportsLiveDualAvailable(): Boolean = !SportsLiveDecoderLimit.seen
 
 /**
  * True when this card and [other] play the same game from a common source: one of the two, or one of
@@ -572,7 +579,8 @@ class SportsLiveDualViewModel internal constructor(
         val state = _state.value ?: return null
         // The failed pane's card owns Back wherever it sits (audit G1): the small pane of big + small too.
         val failed = dualKeySide(state)
-        if (state.pane(failed).status != PaneStatus.Error) return null
+        // The device limit card too (audit G11): "BACK Close this side" plays the other game alone.
+        if (state.pane(failed).status != PaneStatus.Error && state.pane(failed).status != PaneStatus.DeviceLimit) return null
         val other = state.pane(failed.other)
         return other.okStream?.let { other.item to it }
     }
