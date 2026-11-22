@@ -316,6 +316,8 @@ class SportsLiveViewModel internal constructor(
         val moreLiveOpen: Boolean = false,
         /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
         val holdOver: Boolean = false,
+        /** O (live.25): back after a long absence, at most [SportsLiveCalmOpen.HOLD_MS] ago: Live now may still wait. */
+        val freshHold: Boolean = false,
         /** The sport of a More live game just played, to offer adding to My sports ([SportsLiveAddSportPrompt]). */
         val addSport: MySport? = null,
         /** Its card is on screen now (Live now shown since the game was played): leaving it unanswered counts. */
@@ -402,6 +404,7 @@ class SportsLiveViewModel internal constructor(
     private var absentListAtMs: Long? = null
     @Volatile
     private var lastListAtMs: Long? = null
+    private var freshHoldJob: Job? = null
 
     // The mini player's game while it plays (TV QA BUG7): it stays listed.
     @Volatile
@@ -1295,7 +1298,24 @@ class SportsLiveViewModel internal constructor(
         if (SportsLiveCalmOpen.longAbsence(since, now, zone)) {
             absentListAtMs = lastListAtMs
             freshAfterAbsence = true
+            // Review M1: the list the absence left waits behind the loading rows, not shown as built, for at most HOLD_MS.
+            selectionState.update { it.copy(freshHold = true) }
+            freshHoldJob?.cancel()
+            freshHoldJob = viewModelScope.launch {
+                delay(SportsLiveCalmOpen.HOLD_MS)
+                selectionState.update { it.copy(freshHold = false) }
+            }
         }
+    }
+
+    /**
+     * O (live.25, review M2): the return refresh brought no newer load (it failed, or the list stayed): the fresh open ends,
+     * and the list the absence left is calm again, so rows never move under focus for as long as no load lands.
+     */
+    private fun endFreshIfNothingNewer() {
+        if (!freshAfterAbsence || repo.latest.value?.loadedAtMs != absentListAtMs) return
+        freshAfterAbsence = false
+        selectionState.update { it.copy(freshHold = false) }
     }
 
     /** [returning]: the section came back on screen (from the player, another screen, or the app in the background). */
@@ -1304,15 +1324,21 @@ class SportsLiveViewModel internal constructor(
         autoRefreshJob = null
         if (!screenVisible || ambientShowing) return
         val plan = SportsLiveRefreshPlan.of(selectionState.value.tab)
-        if (plan == null && !returning) return
+        val fresh = freshAfterAbsence
+        if (plan == null && !returning && !fresh) return
         autoRefreshJob = viewModelScope.launch {
             // The section's opening load (or a manual refresh) first: it fetched this tab's catalogs too.
             fullLoadJob?.join()
             // live.20 C1: back on the section with a list over RETURN_STALE_MS old, the live catalogs (and the tab's own)
             // refresh at once, whatever the tab's cadence: the list must not wait minutes for its next round.
-            if (returning) {
+            // O (review M2): after a long absence whatever the age (a short one into another day too); if that refresh
+            // brings nothing newer, the fresh open ends.
+            if (returning || fresh) {
                 val kinds = setOf(SportsLiveKind.EVENTS) + plan?.kinds.orEmpty()
-                if (ageOf(kinds) >= RETURN_STALE_MS) refreshKinds(kinds)
+                if (freshAfterAbsence || ageOf(kinds) >= RETURN_STALE_MS) {
+                    refreshKinds(kinds)
+                    endFreshIfNothingNewer()
+                }
             }
             if (plan == null) return@launch
             val every = plan.everyMs
@@ -1494,7 +1520,10 @@ class SportsLiveViewModel internal constructor(
         var otherEvents = emptyList<SportsLiveItem>()
         // J1 (live.23): Live now shows its loading rows, not the saved list of an earlier visit, until this visit's load
         // (most addons answered) lands or HOLD_MS passed; then the whole list at once.
-        val holdLiveNow = !bucketed.fromLoad && !selection.holdOver
+        // O (live.25, review M1): back after a long absence, the same way the list the absence left waits for the newer load,
+        // at most HOLD_MS from the return; then that load's board shows once, as built.
+        val freshHolding = selection.freshHold && freshAfterAbsence && bucketed.listAtMs == absentListAtMs
+        val holdLiveNow = (!bucketed.fromLoad && !selection.holdOver) || freshHolding
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
             if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
                 emptyList<SportsLiveItem>()
@@ -1673,7 +1702,8 @@ class SportsLiveViewModel internal constructor(
             isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
             // #214: until the first load of this visit lands (or fails), an empty tab is loading, never "nothing here".
             firstLoadPending = (hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
-                (selection.isRefreshing || selection.lastRefreshedMs == null)) || selection.tab in bucketed.sortingTabs,
+                (selection.isRefreshing || selection.lastRefreshedMs == null)) || selection.tab in bucketed.sortingTabs ||
+                (freshHolding && selection.tab == SportsLiveTab.LIVE_NOW),
             hasClaimedCatalogs = hasClaimed,
             tabs = if (allSports) scopedTabs + (selection.tab to fullItems) else scopedTabs,
             selectedTab = selection.tab,

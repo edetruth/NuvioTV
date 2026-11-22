@@ -48,6 +48,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -90,6 +91,10 @@ class SportsLiveViewModelTest {
     private val includeChannelsFlags = mutableListOf<Boolean>()
     private val kindsAsked = mutableListOf<Set<SportsLiveKind>?>()
 
+    // A load waits for this gate when set; with loadFails it then fails (offline) and the last load stays.
+    private var loadGate: CompletableDeferred<Unit>? = null
+    private var loadFails = false
+
     private val repo = mockk<SportsLiveRepository> {
         every { claimedCatalogs } returns claimedFlow
         every { latest } returns latestFlow
@@ -104,6 +109,8 @@ class SportsLiveViewModelTest {
             forcedFlags += firstArg<Boolean>()
             includeChannelsFlags += secondArg<Boolean>()
             kindsAsked += thirdArg<Set<SportsLiveKind>?>()
+            loadGate?.await()
+            if (loadFails) throw java.io.IOException("offline")
             latestFlow.value = nextLoad
             nextLoad
         }
@@ -619,6 +626,137 @@ class SportsLiveViewModelTest {
         assertEquals(setOf("c", "d"), back.visibleItems.map { it.id }.toSet())
         assertEquals(2, back.visibleItems.size)
         assertEquals(0, back.newLiveRows)
+    } }
+
+    @Test
+    fun `back after a short absence the browsed rows stay and the fresh ones wait (O)`() = runTest { hidingShownAtEnd {
+        val tonight = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(tonight)
+        var clock = NOW
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { clock },
+            endedInputs = flowOf(EndedInputs()),
+            endedGames = SportsLiveEndedGames(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { clock }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        // Five minutes away (the player, say): the list is stale, so it refreshes, but the return is no fresh open.
+        viewModel.onScreenVisible(false)
+        runCurrent()
+        clock += 5 * MINUTE
+        nextLoad = load(listOf("c", "d").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }).copy(loadedAtMs = clock)
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        assertEquals("the return refreshed", 2, kindsAsked.size)
+        val back = viewModel.uiState.value
+        assertEquals(setOf("a", "b"), back.visibleItems.map { it.id }.toSet())
+        assertEquals(2, back.newLiveRows)
+    } }
+
+    @Test
+    fun `back after a long absence Live now waits behind its loading rows, and a failed refresh ends the fresh open (O)`() = runTest { hidingShownAtEnd {
+        val tonight = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(tonight)
+        var clock = NOW
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { clock },
+            endedInputs = flowOf(EndedInputs()),
+            endedGames = SportsLiveEndedGames(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { clock }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        // Eleven hours away; the return refresh is slow, then fails (offline).
+        viewModel.onScreenVisible(false)
+        runCurrent()
+        clock += 11 * HOUR
+        val gate = CompletableDeferred<Unit>()
+        loadGate = gate
+        loadFails = true
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        assertEquals("the return refreshed", 2, kindsAsked.size)
+        val waiting = viewModel.uiState.value
+        assertEquals("last night's rows are not shown", emptyList<String>(), waiting.visibleItems.map { it.id })
+        assertTrue("loading rows", waiting.firstLoadPending)
+
+        gate.complete(Unit)
+        runCurrent()
+        val failed = viewModel.uiState.value
+        assertEquals("a failed load keeps the previous items", setOf("a", "b"), failed.visibleItems.map { it.id }.toSet())
+        assertFalse(failed.firstLoadPending)
+
+        // The fresh open is over: a later load is held as usual while browsed, never shown as built.
+        loadGate = null
+        loadFails = false
+        val later = tonight + item("c", isLive = true, sport = "Soccer", name = "C")
+        latestFlow.value = load(later).copy(loadedAtMs = clock + MINUTE)
+        runCurrent()
+        val held = viewModel.uiState.value
+        assertEquals(setOf("a", "b"), held.visibleItems.map { it.id }.toSet())
+        assertEquals(1, held.newLiveRows)
+    } }
+
+    @Test
+    fun `a short absence across midnight refreshes at once and opens fresh, once (O)`() = runTest { hidingShownAtEnd {
+        val zone = java.time.ZoneOffset.UTC
+        var clock = java.time.Instant.parse("2026-11-21T23:58:00Z").toEpochMilli()
+        val tonight = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(tonight).copy(loadedAtMs = clock)
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { clock },
+            endedInputs = flowOf(EndedInputs()),
+            endedGames = SportsLiveEndedGames(),
+            computeDispatcher = compute,
+            zone = zone
+        )
+        viewModel.nowMs = { clock }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+        assertEquals(1, kindsAsked.size)
+
+        // Two minutes away, into the next day: under the 3 min return refresh, still another day's games.
+        viewModel.onScreenVisible(false)
+        runCurrent()
+        clock += 2 * MINUTE
+        val morning = listOf("c", "d").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(morning).copy(loadedAtMs = clock)
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        assertEquals("the return refreshed", 2, kindsAsked.size)
+        val back = viewModel.uiState.value
+        assertEquals(setOf("c", "d"), back.visibleItems.map { it.id }.toSet())
+        assertEquals(0, back.newLiveRows)
+
+        // Shown once: the next load is held as usual while browsed.
+        latestFlow.value = load(morning + item("e", isLive = true, sport = "Soccer", name = "E")).copy(loadedAtMs = clock + MINUTE)
+        runCurrent()
+        val held = viewModel.uiState.value
+        assertEquals(setOf("c", "d"), held.visibleItems.map { it.id }.toSet())
+        assertEquals(1, held.newLiveRows)
     } }
 
     @Test
