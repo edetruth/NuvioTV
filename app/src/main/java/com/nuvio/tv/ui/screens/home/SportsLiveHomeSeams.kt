@@ -218,9 +218,9 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
     val unmatchedScores = liveScoresViewModel.unmatched.collectAsStateWithLifecycle()
     val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores)
     val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
-    val liveNowEnded = uiState.liveNowEnded
-    val liveGameCount = remember(uiState.liveNowItems, liveNowEnded) {
-        viewModel.liveNowAllItems.count { !it.isChannel && it.streamKey !in liveNowEnded }
+    val liveNowOver = uiState.liveNowOver
+    val liveGameCount = remember(uiState.liveNowItems, liveNowOver) {
+        sportsLiveHomeLiveGames(viewModel.liveNowAllItems, liveNowOver).count { !it.isChannel }
     }
     val liveNowSeeAll = if (liveGameCount > 0) stringResource(R.string.sports_live_home_see_all_live, liveGameCount) else null
     return SportsLiveHome(router = router, cardArt = sportsCardArt, seeAll = liveNowSeeAll)
@@ -257,7 +257,11 @@ private fun SportsLiveHomeScores(
     // Games ESPN shows final leave the row (#60), at once (l24 polish P1: in the postgame grace too, so a final never
     // reads "Live now"); an estimate never drops one.
     val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.finalKeys(items, current, clockMs) }
-    LaunchedEffect(ended) { viewModel.setLiveNowEnded(ended) }
+    // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
+    val over = remember(items, current, clockMs) {
+        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs)
+    }
+    LaunchedEffect(ended, over) { viewModel.setLiveNowEnded(ended, over) }
 }
 
 /** Provides Home's content the Sports & Live drawn card art, Live now's See all line and My games today. */

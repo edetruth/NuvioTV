@@ -11,6 +11,7 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.ui.screens.home.HomeUiState
+import com.nuvio.tv.ui.screens.home.sportsLiveHomeLiveGames
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -494,5 +495,30 @@ class SportsLiveEndedGamesTest {
         const val LATE = SportsLiveGameLength.LATE_START_MS
         /** Basketball's estimated length with the late-start allowance. */
         const val BASKETBALL = SportsLiveGameLength.BASKETBALL_MS + LATE
+    }
+
+    @Test
+    fun `Home's live count and zap list keep a final through the grace, as Live Now's list does`() {
+        val games = SportsLiveEndedGames()
+        val card = item()
+        // Kicked off 40 minutes before the end of the grace: in play by any estimate.
+        val running = item(name = "Leeds vs Everton", sport = "Soccer", startMs = START + HOUR + 30 * MINUTE)
+        val all = listOf(card, running)
+        games.verdict(card, live(pacersFinal), START + HOUR)
+        val end = START + 2 * HOUR
+        val scores = mapOf(card.streamKey to pacersFinal)
+        games.verdict(card, pacersFinal, end)
+        // In the grace: Home's row drops the card (a final never reads "Live now"), but the count and zap list keep it,
+        // as Live Now keeps it in its main list.
+        val inGrace = end + 5 * MINUTE
+        assertEquals(setOf(card.streamKey), games.finalKeys(all, scores, inGrace))
+        val homeLive = sportsLiveHomeLiveGames(all, games.confirmedEndedKeys(all, scores, inGrace))
+        assertEquals(games.split(all, scores, inGrace).live, homeLive)
+        assertEquals(all, homeLive)
+        // Past the grace: both leave it out at the same moment.
+        val after = end + 10 * MINUTE
+        val homeAfter = sportsLiveHomeLiveGames(all, games.confirmedEndedKeys(all, scores, after))
+        assertEquals(games.split(all, scores, after).live, homeAfter)
+        assertEquals(listOf(running), homeAfter)
     }
 }

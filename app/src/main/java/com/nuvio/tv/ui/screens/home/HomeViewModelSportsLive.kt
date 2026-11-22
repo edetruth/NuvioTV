@@ -36,9 +36,8 @@ internal fun HomeViewModel.observeSportsLiveClaimedKeysPipeline() {
  * row's first (#68: not only the ones the row has room for). With no session to start, any earlier one ends.
  */
 internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
-    val ended = _uiState.value.liveNowEnded
     val session = SportsLiveZapSession.of(
-        items = liveNowAllItems.filterNot { it.streamKey in ended },
+        items = sportsLiveHomeLiveGames(liveNowAllItems, _uiState.value.liveNowOver),
         itemKey = item.streamKey,
         tab = SportsLiveTab.LIVE_NOW,
         filter = null,
@@ -86,12 +85,24 @@ private fun HomeViewModel.replaceLiveNowRow() {
  * rebuilt in place at once, never after the debounced full rebuild (seconds while Home's catalogs load at a cold
  * start), so a finished game kept from the last session never shows under "Live now" with its final score.
  */
-internal fun HomeViewModel.setLiveNowEnded(keys: Set<String>) {
-    if (keys == _uiState.value.liveNowEnded) return
-    _uiState.update { it.copy(liveNowEnded = keys) }
+internal fun HomeViewModel.setLiveNowEnded(keys: Set<String>, over: Set<String> = _uiState.value.liveNowOver) {
+    if (keys == _uiState.value.liveNowEnded) {
+        if (over != _uiState.value.liveNowOver) _uiState.update { it.copy(liveNowOver = over) }
+        return
+    }
+    _uiState.update { it.copy(liveNowEnded = keys, liveNowOver = over) }
     replaceLiveNowRow()
     if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
 }
+
+/**
+ * The Live now games Home still counts as live and zaps through (live.25 #226): [all] without those [over], the ESPN
+ * finals past the postgame grace ([com.nuvio.tv.core.sportslive.SportsLiveEndedGames.confirmedEndedKeys]). Live Now's
+ * own rule: a final keeps its place there for the grace, so Home's "N live" and zap list keep it as long. Home's row
+ * still drops a final at once (l24 polish P1), so a card never reads "Live now" over a final score.
+ */
+internal fun sportsLiveHomeLiveGames(all: List<SportsLiveItem>, over: Set<String>): List<SportsLiveItem> =
+    if (over.isEmpty()) all else all.filterNot { it.streamKey in over }
 
 /** The Catch up row's items (#58, from Home's screen): the rows are rebuilt only when they change. */
 internal fun HomeViewModel.setCatchUpItems(items: List<CatchUpItem>) {
