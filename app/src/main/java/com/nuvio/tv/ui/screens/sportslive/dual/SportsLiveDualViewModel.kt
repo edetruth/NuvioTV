@@ -21,6 +21,9 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import com.nuvio.tv.core.sportslive.SportsLiveLineup
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.displayName
@@ -140,6 +143,20 @@ internal fun dualPickerCandidates(
 }
 
 /**
+ * "Pick another to watch"'s games (live.25, #225): [games] (Live now's games of My sports and followed teams) in the one
+ * shared order, with the same inputs as Live now and the player's panel, so the picker lists them as Live now does.
+ */
+internal fun dualPickerGames(
+    games: Flow<List<SportsLiveItem>>,
+    mySports: Flow<MySports>,
+    scores: Flow<Map<String, ScoreSnapshot>>,
+    mode: Flow<ScoresMode?>
+): Flow<List<SportsLiveItem>> =
+    combine(games, mySports, scores, mode) { list, sports, snapshots, scoresMode ->
+        SportsLiveLineup.order(list, sports, snapshots, scoresMode)
+    }
+
+/**
  * The games dual screen's ▲ ▼ step through (live.24): [frozen], the order taken at the first zap, kept as it is (an
  * ended or unavailable game is skipped in place by the zap, never removed, so its neighbours never shift); then the
  * games of [now] it does not hold yet, at the end: games that started since, and every game played in this session
@@ -246,7 +263,7 @@ class SportsLiveDualViewModel internal constructor(
     /** "Are you still watching?" after a few automatic moves or hours with no key press (#161). */
     private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared,
     /**
-     * Every live game of My sports and followed teams, in importance order (J2, [com.nuvio.tv.core.sportslive.SportsLiveImportance]):
+     * Every live game of My sports and followed teams, in the shared order ([SportsLiveLineup], live.25):
      * what "Pick another to watch" offers (live.24), not only the list dual screen was opened from.
      */
     liveGames: Flow<List<SportsLiveItem>> = flowOf(emptyList()),
@@ -289,7 +306,8 @@ class SportsLiveDualViewModel internal constructor(
         },
         savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) },
         reminders = preferences.reminders,
-        liveGames = repo.liveNow(limit = PICKER_LIMIT, forHomeRow = false),
+        // live.25 (#225): the one shared order, with the inputs Live now and the player's panel use ([SportsLiveLineup]).
+        liveGames = dualPickerGames(repo.liveNow(limit = PICKER_LIMIT, forHomeRow = false), preferences.mySports, liveScores.scores, liveScores.mode),
         claimKeysHint = { preferences.claimDualKeysHint(::shouldShowDualKeysHint) }
     )
 
