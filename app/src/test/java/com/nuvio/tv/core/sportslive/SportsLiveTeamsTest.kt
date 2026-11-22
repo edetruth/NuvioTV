@@ -15,6 +15,12 @@ import org.junit.Test
 class SportsLiveTeamsTest {
 
     @Test
+    fun `Real Racing Club is Racing Santander but not Racing Club of Argentina`() {
+        assertTrue(SportsLiveTeams.matches("Real Racing Club", "Racing Santander"))
+        assertFalse(SportsLiveTeams.matches("Racing Club", "Racing Santander"))
+    }
+
+    @Test
     fun `game names parse with every separator, case-insensitively, and at puts home second without rankings`() {
         val cases = listOf(
             // Highfly "vs" names.

@@ -163,6 +163,8 @@ object SportsLiveTeamAliases {
             "alaves" to listOf("deportivo alaves"),
             "atletico madrid" to listOf("atletico de madrid", "club atletico de madrid"),
             "real sociedad ii" to listOf("real sociedad b"),
+            // Report #24: the Spanish club addons write in full, ESPN as "Racing Santander". Never plain "Racing Club" (Argentina).
+            "racing santander" to listOf("real racing club", "real racing club de santander", "racing de santander"),
             "lyon" to listOf("olympique lyonnais", "olympique lyon", "ol lyon"),
             "lille" to listOf("losc lille", "losc"),
             "brest" to listOf("stade brestois", "stade brestois 29"),
