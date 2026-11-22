@@ -40,6 +40,8 @@ class SportsLiveDualViewModelTest {
     @After
     fun tearDown() {
         SportsLiveDualSessions.clear()
+        // A test that hits the device limit notes it for the whole run: later tests must see dual offered again (G11).
+        com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit.reset()
     }
 
     private fun newViewModel(left: SportsLiveItem = a, right: SportsLiveItem = b) = SportsLiveDualViewModel(
@@ -197,6 +199,26 @@ class SportsLiveDualViewModelTest {
         advanceTimeBy(2)
         runCurrent()
         assertEquals(PaneStatus.Error, viewModel.current().left.status)
+    }
+
+    @Test
+    fun `Back on the device limit card closes that side and plays the other game alone (audit G11)`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        answer("a", dualStream("a"))
+        answer("b", dualStream("b"))
+        runCurrent()
+        viewModel.onFirstFrame(a)
+        viewModel.onPlayerError(b, decoderInit = true)
+        advanceTimeBy(SportsLiveDualViewModel.DEVICE_LIMIT_RETRY_MS + 1)
+        runCurrent()
+        viewModel.onPlayerError(b, decoderInit = true)
+        assertEquals(PaneStatus.DeviceLimit, viewModel.current().right.status)
+        // Side by side with the ring on the playing game: Back is that game's, not the card's.
+        assertNull(viewModel.closeFailedSide())
+        // The ring on the card: "BACK Close this side" plays the other game, with its stream.
+        viewModel.highlight(Side.RIGHT)
+        assertEquals(a to dualStream("a"), viewModel.closeFailedSide())
     }
 
     @Test

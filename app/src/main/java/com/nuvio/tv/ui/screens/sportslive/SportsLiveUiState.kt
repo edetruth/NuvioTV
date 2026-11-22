@@ -159,7 +159,7 @@ internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: S
     if (item.isChannel) {
         selectedTab.offersDual()
     } else {
-        selectedTab == SportsLiveTab.LIVE_NOW && item.kind == SportsLiveKind.EVENTS &&
+        selectedTab == SportsLiveTab.LIVE_NOW && selectedTab.offersDual() && item.kind == SportsLiveKind.EVENTS &&
             endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot)
     }
 
