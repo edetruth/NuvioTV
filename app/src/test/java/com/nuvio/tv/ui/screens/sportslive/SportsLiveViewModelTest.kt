@@ -633,7 +633,8 @@ class SportsLiveViewModelTest {
         morning: List<String>,
         focus: String,
         viaPlayer: Boolean,
-        awayMs: Long = 11 * HOUR
+        awayMs: Long = 11 * HOUR,
+        zapTo: String? = null
     ): SportsLiveUiState {
         nextLoad = load(evening.map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) })
         var clock = NOW
@@ -653,6 +654,10 @@ class SportsLiveViewModelTest {
         viewModel.selectItem(focus)
         runCurrent()
         if (viaPlayer) viewModel.startZapSession(item(focus, isLive = true, sport = "Soccer", name = focus.uppercase()))
+        // The player zapped on (Up/Down): the session's current game is now the one playing.
+        if (zapTo != null) SportsLiveZapSessions.current()!!.let { s ->
+            SportsLiveZapSessions.update(s.copy(index = s.items.indexOfFirst { it.id == zapTo }))
+        }
         viewModel.onScreenVisible(false)
         runCurrent()
         clock += awayMs
@@ -675,6 +680,20 @@ class SportsLiveViewModelTest {
         val back = returnTrip(listOf("a", "b", "c", "d"), listOf("a", "b", "d", "e"), focus = "c", viaPlayer = true)
         assertEquals("b", back.selectedItemId)
         assertEquals(setOf("a", "b", "d", "e"), back.visibleItems.map { it.id }.toSet())
+    } }
+
+    @Test
+    fun `after zapping A to B, back from the player focuses B, after a long or a short absence (M3)`() = runTest { hidingShownAtEnd {
+        val long = returnTrip(listOf("a", "b", "c"), listOf("d", "c", "b", "a"), focus = "a", viaPlayer = true, zapTo = "b")
+        assertEquals("b", long.selectedItemId)
+        val short = returnTrip(listOf("a", "b", "c"), listOf("a", "b", "c"), focus = "a", viaPlayer = true, awayMs = 60_000L, zapTo = "c")
+        assertEquals("c", short.selectedItemId)
+    } }
+
+    @Test
+    fun `after zapping A to B with B gone, back focuses the row nearest B, not the first (M3)`() = runTest { hidingShownAtEnd {
+        val back = returnTrip(listOf("a", "b", "c", "d"), listOf("a", "b", "d", "e"), focus = "a", viaPlayer = true, zapTo = "c")
+        assertEquals("b", back.selectedItemId)
     } }
 
     @Test

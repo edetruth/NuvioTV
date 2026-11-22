@@ -406,11 +406,12 @@ class SportsLiveViewModel internal constructor(
     private var lastListAtMs: Long? = null
     private var freshHoldJob: Job? = null
 
-    // M3 (live.25 RC2): a Player round trip is no idle absence. The game played (and when its player opened) is noted at
-    // launch; if the section is then left within PLAYER_LEAVE_MS, a long absence keeps focus on that game, or on its
-    // nearest row when the fresh board dropped it ([returnAnchor]), instead of falling to the first row.
-    private var playerLaunch: Pair<String, Long>? = null
-    private var leftForPlayerId: String? = null
+    // M3 (live.25 RC2): a Player round trip is no idle absence. When a player opens it is noted (with the time); if the
+    // section is then left within PLAYER_LEAVE_MS, coming back (at any length of absence) puts focus on the game PLAYING
+    // now (the mini player's, else the zap session's: the last game zapped to, not the one launched), or on its nearest
+    // row when the board dropped it ([returnAnchor]), instead of falling to the first row.
+    private var playerLaunchAtMs: Long? = null
+    private var leftForPlayer = false
     private var returnAnchor: ReturnAnchor? = null
 
     private class ReturnAnchor(val id: String, val rowIds: List<String>)
@@ -1229,7 +1230,7 @@ class SportsLiveViewModel internal constructor(
             }
         }
         val playedFromMoreLive = moreLive.any { it.streamKey == item.streamKey }
-        playerLaunch = item.id to nowMs()
+        playerLaunchAtMs = nowMs()
         val (items, tab) = if (playedFromMoreLive) {
             moreLive to state.selectedTab
         } else {
@@ -1310,20 +1311,22 @@ class SportsLiveViewModel internal constructor(
         val now = nowMs()
         if (!watching) {
             unwatchedSinceMs = now
-            leftForPlayerId = playerLaunch?.takeIf { now - it.second in 0..PLAYER_LEAVE_MS }?.first
-            playerLaunch = null
+            leftForPlayer = playerLaunchAtMs?.let { now - it in 0..PLAYER_LEAVE_MS } == true
+            playerLaunchAtMs = null
             return
         }
         val since = unwatchedSinceMs ?: return
         unwatchedSinceMs = null
+        // M3: back from the Player (any absence), focus goes to the game playing now (its nearest row if it is gone).
+        val playingId = if (leftForPlayer) miniPlayingNow ?: SportsLiveZapSessions.current()?.current?.id else null
+        leftForPlayer = false
+        returnAnchor = playingId?.let { ReturnAnchor(it, shownLiveNow.map { row -> row.id }) }
+        if (playingId != null && selectionState.value.tab == SportsLiveTab.LIVE_NOW) {
+            selectionState.update { it.copy(itemId = playingId) }
+        }
         if (SportsLiveCalmOpen.longAbsence(since, now, zone)) {
             absentListAtMs = lastListAtMs
             freshAfterAbsence = true
-            // M3: back from the Player, focus stays on the game watched (its nearest row if the fresh board drops it).
-            returnAnchor = leftForPlayerId?.let { ReturnAnchor(it, shownLiveNow.map { row -> row.id }) }
-            if (returnAnchor != null && selectionState.value.tab == SportsLiveTab.LIVE_NOW) {
-                selectionState.update { it.copy(itemId = leftForPlayerId) }
-            }
             // Review M1: the list the absence left waits behind the loading rows, not shown as built, for at most HOLD_MS.
             selectionState.update { it.copy(freshHold = true) }
             freshHoldJob?.cancel()
