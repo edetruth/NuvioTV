@@ -23,7 +23,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
-import com.nuvio.tv.core.sportslive.SportsLiveImportance
+import com.nuvio.tv.core.sportslive.SportsLiveLineup
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
@@ -1193,18 +1193,21 @@ class SportsLiveViewModel internal constructor(
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
         }
-        val (items, tab) = if (moreLive.any { it.streamKey == item.streamKey }) {
+        val playedFromMoreLive = moreLive.any { it.streamKey == item.streamKey }
+        val (items, tab) = if (playedFromMoreLive) {
             moreLive to state.selectedTab
         } else {
             sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
         }
+        // live.25 (#225): started from Live now's list, the panel, the guide and CH± follow it as shown (calm order kept).
+        val seed = if (!playedFromMoreLive && state.selectedTab == SportsLiveTab.LIVE_NOW) items.map { it.streamKey } else null
         val session = SportsLiveZapSession.of(
             items = items,
             itemKey = item.streamKey,
             tab = tab,
             filter = state.selectedFilter.takeIf { tab == state.selectedTab },
             returnToHomeOnBack = false
-        )
+        )?.copy(seed = seed)
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
     }
 
@@ -1496,16 +1499,12 @@ class SportsLiveViewModel internal constructor(
                         }
                     }
                 }
-                // J2 (live.23): by importance (followed, My sports by tier, other leagues, unplaced); a close or late game
-                // leads its tier only with the scores shown (the badges exist only then), so no hidden score moves a row.
-                // live.24 (audit A6, sorting model): followed teams' games first as a section; inside each league tier the
-                // games with a score of ours before the scoreless ones. Here, before the calm step (J1), not on the board:
-                // a score landing later never moves a shown row; the order is applied on the first build, a thaw ("N new")
-                // and a re-rank. Under Off nothing has a score, so nothing moves; under Hide a hidden score counts (it tells
-                // only that ESPN has the game, never the score).
-                val scored = live.filter { item -> ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) != null }
-                    .mapTo(HashSet()) { it.streamKey }
-                val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys, scored = scored)
+                // The one shared order (live.25, #225): the panel, its table guide, CH± and the dual picker take the same
+                // (SportsLiveLineup). Followed teams first, league priority, matched to a feed inside the tier, then start;
+                // no key reads a score, so the excitement badge above never moves a row and Show and Hide list alike.
+                // Here, before the calm step (J1), not on the board: a match landing later never moves a shown row; the
+                // order is applied on the first build, a thaw ("N new") and a re-rank.
+                val ranked = SportsLiveLineup.order(live, mySports, scores, mode)
                 val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
                 lastBuiltLiveCount = ranked.size

@@ -63,18 +63,6 @@ class SportsLiveImportanceTest {
     }
 
     @Test
-    fun `a close or late game moves up within its tier only, and only when it is bumped`() {
-        val first = game("Arsenal vs Spurs", "Premier League", start = 1)
-        val close = game("Wolves vs Fulham", "Premier League", start = 5)
-        val ucl = game("Inter vs Porto", "Champions League", start = 9)
-        val items = listOf(first, close, ucl)
-        // Scores hidden or off: the caller passes no bumps, so no score can move a row.
-        assertEquals(listOf(ucl, first, close), SportsLiveImportance.sort(items, mine, directory = directory))
-        // Scores shown: the close game leads its tier, never above a higher tier.
-        assertEquals(listOf(ucl, close, first), SportsLiveImportance.sort(items, mine, bumped = setOf(close.streamKey), directory = directory))
-    }
-
-    @Test
     fun `a followed game with no score still leads every scored game (sorting model)`() {
         val followed = game("Liverpool vs Chelsea", "Premier League", start = 9).copy(followed = true)
         val ucl = game("Inter vs Porto", "Champions League", start = 1)

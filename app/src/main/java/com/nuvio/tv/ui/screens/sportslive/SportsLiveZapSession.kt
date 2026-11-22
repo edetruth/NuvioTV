@@ -28,7 +28,14 @@ data class SportsLiveZapSession(
     /** Rows of [lineup] CH+/CH− pass over (F11): finals and just ended games, which the panel still lists. */
     val skipped: Set<String> = emptySet(),
     /** Opened full screen from dual screen: Back returns to dual with both games (coordinator decision 1). */
-    val dualReturn: com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualReturn? = null
+    val dualReturn: com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualReturn? = null,
+    /**
+     * Live Now's order as shown when the game was started there (live.25, #225: stream keys, calm order included); null
+     * from anywhere else (Home, an alert, Upcoming, a Game page: the shared order fresh). The panel lists its games in this
+     * order ([panelLineup]), so CH± follow the list you launched from until the panel or the guide is first opened
+     * ([PlayerZapController.thaw]), which takes the fresh shared order.
+     */
+    val seed: List<String>? = null
 ) {
     init {
         require(index in items.indices) { "index $index outside ${items.size} items" }

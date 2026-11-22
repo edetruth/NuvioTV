@@ -65,6 +65,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
+import com.nuvio.tv.core.sportslive.SportsLiveLineup
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -478,7 +479,7 @@ class SportsLiveZapViewModel internal constructor(
             val scopedKeys = scoped.mapTo(HashSet()) { it.streamKey }
             val moreLive = SportsLiveMoreLive.groups(games.filter { it.streamKey !in scopedKeys }, others)
             val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) moreLive.flatMap { it.items } else scoped
-            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive, mySportsPicked = !sports.isDefault)
+            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive, mySportsPicked = !sports.isDefault, mySports = sports)
         }
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
@@ -510,14 +511,25 @@ class SportsLiveZapViewModel internal constructor(
             // H: a listing that is no game (More live's Other) says LIVE only when ESPN has it in play.
             val unconfirmed = panelList.moreLive.firstOrNull { it.key == SportsLiveMoreLive.OTHER }?.items
                 ?.filter(SportsLiveOtherEvents::isOtherEvent)?.mapTo(HashSet()) { it.streamKey }.orEmpty()
-            val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, ended, logos, unconfirmed = unconfirmed)
+            // The one shared order (live.25, #225): Live now's, the guide's and CH±'s ([SportsLiveLineup], same inputs), kept
+            // inside each status group. More live (the All sports value) keeps its own grouping by sport, as on Live now.
+            val ordered = if (panelList.chip == SportsLiveUiState.ALL_SPORTS_FILTER) {
+                split.live
+            } else {
+                SportsLiveLineup.order(split.live, panelList.mySports, scores, scoresMode)
+            }
+            val grouped = groupPanelRows(
+                ordered + split.justEnded, boardScores, scoresMode, revealed, nowMs, ended, logos, keepOrder = true, unconfirmed = unconfirmed
+            )
             // #164: while the panel is open its order stays as it opened (rows update in place, new ones go to the end of
             // their group, gone ones stay dimmed); a new chip or two idle minutes take the fresh order. Closed: fresh.
             val open = _panelOpen.value
             val keep = frozenOrder?.takeIf {
                 open && frozenChip == panelList.chip && nowMs - lastPanelKeyAtMs < PANEL_IDLE_REORDER_MS
             }
-            val (rows, frozen) = freezePanelLineup(panelLineup(grouped, favorites), keep)
+            // Started from Live now's list: its order as shown (the calm order) leads inside each group (live.25, #225).
+            val seed = SportsLiveZapSessions.current()?.takeIf { it.tab == SportsLiveTab.LIVE_NOW }?.seed
+            val (rows, frozen) = freezePanelLineup(panelLineup(grouped, favorites, seed), keep)
             if (open) {
                 frozenOrder = frozen
                 frozenChip = panelList.chip
@@ -1140,14 +1152,15 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     internal fun openPanel() {
+        // live.25 (coordinator): opening the panel or the guide takes the fresh shared order, for the list and for the
+        // next flips (frozen again from the first of them); CH± between two opens keep their order.
+        controller.thaw(contentId)
         var session = controller.session(contentId) ?: return
         scoreTracker.onStart()
         panelKeyPressed = false
         focusedRowKey = null
         // #164: the order is taken afresh as the panel opens, then kept while it is open.
         frozenOrder = null
-        // CH± keep the zap order frozen at the session's first zap (user, live.24: ▲ then ▼ always returns to the game
-        // you were on); opening the guide no longer re-takes it, picking a game from it does ([PlayerZapController.pick]).
         lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
@@ -1522,7 +1535,9 @@ private data class PanelList(
     /** More live's groups (user 2026-11-21): the live games My sports leaves out and the listings that are no game. */
     val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
     /** My sports is picked (not the default): the first chip reads "My sports" (TV report #14). */
-    val mySportsPicked: Boolean = false
+    val mySportsPicked: Boolean = false,
+    /** The profile's My sports: the shared order's league priority (live.25, [SportsLiveLineup]). */
+    val mySports: MySports = MySports.DEFAULT
 )
 
 /**

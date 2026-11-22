@@ -10,8 +10,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
-import com.nuvio.tv.core.sportslive.scores.BigGame
-import com.nuvio.tv.core.sportslive.scores.CrunchTime
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameSituation
 import com.nuvio.tv.core.sportslive.scores.GameSituations
@@ -222,10 +220,12 @@ private fun sectionOf(group: ZapPanelGroup): ScoreboardGroup = when (group) {
 }
 
 /**
- * The panel's [items] grouped by game state (#17): **Live now** first, the game furthest in (earliest
- * start) on top and games with no start after them, then **Starting soon** (within [SOON_WINDOW_MS]),
- * soonest first ([lineupRankOf] first inside each: followed teams, then live-scored games), then the rest (channels, later games, finished or postponed ones; under Hide until
- * focused too, as the cards label it final, its score still hidden). Followed teams' games stay first inside each group. A game's state comes
+ * The panel's [items] grouped by game state (#17): **Live now** first, then **Starting soon** (within [SOON_WINDOW_MS]),
+ * then the rest (channels, later games, finished or postponed ones; under Hide until focused too, as the cards label it
+ * final, its score still hidden). With [keepOrder] (Live now, the panel, the guide and CH±: [items] in the shared order,
+ * [com.nuvio.tv.core.sportslive.SportsLiveLineup], live.25) each group keeps [items]' order. Otherwise (Upcoming) the
+ * game furthest in (earliest start) on top and games with no start after them, starting soon soonest first, and
+ * [lineupRankOf] first inside each: followed teams, then live-scored games. A game's state comes
  * from its matched score event only when the card's sides sit on it one way round (the chip's rule);
  * otherwise from its start time. [scores] is ignored while Scores is Off. Games found over (#60, [ended]
  * by card key: the Just ended verdicts of [SportsLiveEndedGames.split]) form a last **Just ended** group.
@@ -240,7 +240,7 @@ internal fun groupPanelRows(
     known: TeamLogoBook = TeamLogoBook.shared,
     /** The list says its games are live (Live now, the panel); Upcoming's are not: ESPN alone makes one live there. */
     listedLive: Boolean = true,
-    /** Live now (J2, live.23): [items] come in importance order ([SportsLiveImportance]), kept inside each group. */
+    /** [items] come in the shared order ([com.nuvio.tv.core.sportslive.SportsLiveLineup], live.25), kept inside each group. */
     keepOrder: Boolean = false,
     /** Card keys never taken as live on the list's word (H: listings that are no game): live only when ESPN says so. */
     unconfirmed: Set<String> = emptySet()
@@ -265,9 +265,8 @@ internal fun groupPanelRows(
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
         // A live score shows only for a game in play that strictly matches its event (any score provider).
         val liveScored = group == ZapPanelGroup.LIVE_NOW && event != null
-        // The big-game lift (#137) only under Scores Show (sorting model, live.24): under Hide until focused a game moving
-        // up for its crunch time would tell the score is close; under Off there is no score.
-        val rank = lineupRankOf(item, liveScored, bigGame = liveScored && mode == ScoresMode.SHOW && isLiveBigGame(event!!))
+        // No big-game or crunch-time lift (live.25, Fable sorting audit): excitement is a badge in place, never a sort key.
+        val rank = lineupRankOf(item, liveScored)
         Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item), matched = event != null), start, index, rank)
     }
     val order = if (keepOrder) {
@@ -282,29 +281,19 @@ internal fun groupPanelRows(
 }
 
 /**
- * Where a game sits inside its group (the panel, CH± and Live now share it): followed teams' games first
- * ([LINEUP_RANK_FOLLOWED]), then games with a live score ([liveScored], [LINEUP_RANK_SCORED]), then the rest; the
- * group's own order breaks ties. Big games in play ([LINEUP_RANK_BIG_GAME], #137: crunch time or big stakes) sit between the first two.
+ * Where a game sits inside its group when [groupPanelRows] ranks (Upcoming; live lists come in the shared order):
+ * followed teams' games first ([LINEUP_RANK_FOLLOWED]), then games with a live score ([liveScored],
+ * [LINEUP_RANK_SCORED]), then the rest; the group's own order breaks ties. No big-game or crunch-time slot (live.25).
  */
-internal fun lineupRankOf(item: SportsLiveItem, liveScored: Boolean, bigGame: Boolean = false): Int = when {
+internal fun lineupRankOf(item: SportsLiveItem, liveScored: Boolean): Int = when {
     item.followed -> LINEUP_RANK_FOLLOWED
-    // #137: a big game in play, by its stakes or its crunch time, comes next.
-    bigGame -> LINEUP_RANK_BIG_GAME
     liveScored -> LINEUP_RANK_SCORED
     else -> LINEUP_RANK_REST
 }
 
-/**
- * A live game for Live Now's big-game slot (#137): in crunch time, or big by its stakes ([BigGame]). A
- * spoiler-protected game (#151) is placed by its stakes only: moving up for its crunch time would tell the score.
- */
-internal fun isLiveBigGame(event: ScoreSnapshot): Boolean =
-    (!event.spoilerProtected && CrunchTime.isCrunch(event)) || BigGame.rate(event).isBig
-
 internal const val LINEUP_RANK_FOLLOWED = 0
-internal const val LINEUP_RANK_BIG_GAME = 1
-internal const val LINEUP_RANK_SCORED = 2
-internal const val LINEUP_RANK_REST = 3
+internal const val LINEUP_RANK_SCORED = 1
+internal const val LINEUP_RANK_REST = 2
 
 /** The panel group of a game's [status]: live, starting soon, just ended, or the rest. */
 internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
@@ -320,13 +309,21 @@ internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
  * games first inside each group, then the profile's [favorites] channels (by stream key, Channels phase 1: so a
  * Channels session zaps between favorites first), then as grouped. While the panel is open its order is frozen
  * ([freezePanelLineup]).
+ *
+ * [seed] (live.25, #225): Live Now's order as shown when the game was started there ([SportsLiveZapSession.seed], stream
+ * keys): inside each group its games keep that order, so the panel, the guide and CH± follow the list you launched
+ * from, calm order included; games it did not show (held behind "N new", or started since) follow, in the shared order.
+ * Opening the panel or the guide lets the seed go ([PlayerZapController.thaw]): from then on the shared order, fresh.
  */
-internal fun panelLineup(grouped: List<ZapPanelRow>, favorites: Set<String> = emptySet()): List<ZapPanelRow> =
-    grouped.sortedWith(
+internal fun panelLineup(grouped: List<ZapPanelRow>, favorites: Set<String> = emptySet(), seed: List<String>? = null): List<ZapPanelRow> {
+    val seedAt = seed?.withIndex()?.associate { (at, key) -> key to at }.orEmpty()
+    return grouped.sortedWith(
         compareBy<ZapPanelRow> { it.section.ordinal }
+            .thenBy { seedAt[it.item.streamKey] ?: Int.MAX_VALUE }
             .thenByDescending { it.item.followed }
             .thenByDescending { it.item.isChannel && it.item.streamKey in favorites }
     )
+}
 
 /**
  * The open panel's order (#164), taken when it opened: the rows' stream [keys] top to bottom, the group each is

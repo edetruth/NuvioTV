@@ -97,18 +97,11 @@ class SportsLiveGamesToWatchTest {
     }
 
     @Test
-    fun `Live Now puts big games in play between followed teams and other scored games`() {
+    fun `a big game in play gets no slot of its own, only followed teams then scored games lead (live 25)`() {
         val game = item("Florida vs Duke", at(18, 12))
-        assertEquals(LINEUP_RANK_FOLLOWED, lineupRankOf(game.copy(followed = true), liveScored = true, bigGame = true))
-        assertEquals(LINEUP_RANK_BIG_GAME, lineupRankOf(game, liveScored = true, bigGame = true))
-        assertEquals(LINEUP_RANK_SCORED, lineupRankOf(game, liveScored = true, bigGame = false))
-        fun team(name: String, score: Int) = ScoreTeam(null, null, name, name, name, null, null, score, emptyList())
-        val close = ScoreSnapshot(
-            eventId = "c", league = EspnLeagueMap.NBA, startMs = 0L, state = ScoreState.IN, clockText = "1:00 - 4th",
-            isFinal = false, home = team("A", 100), away = team("B", 98)
-        )
-        assertTrue(isLiveBigGame(close))
-        assertFalse(isLiveBigGame(close.copy(clockText = "1:00 - 2nd")))
+        assertEquals(LINEUP_RANK_FOLLOWED, lineupRankOf(game.copy(followed = true), liveScored = true))
+        assertEquals(LINEUP_RANK_SCORED, lineupRankOf(game, liveScored = true))
+        assertEquals(LINEUP_RANK_REST, lineupRankOf(game, liveScored = false))
     }
 
     @Test
