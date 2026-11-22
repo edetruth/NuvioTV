@@ -155,14 +155,16 @@ class PlayerZapController(
 
     /**
      * The zap order of the player showing [contentId] is taken afresh at the next zap, from the list the panel shows
-     * (BUG6/Q10: until then CH± keep the order frozen at the first zap). Nothing changes while a lookup runs. Since
-     * live.24 opening the guide no longer does this (▲ then ▼ must return to the game you were on); a pick from the guide
-     * takes the order afresh by itself ([pick]).
+     * (BUG6/Q10: until then CH± keep the order frozen at the first zap), and Live now's order the session started from
+     * ([SportsLiveZapSession.seed]) is let go. Opening the panel or the guide does this (live.25, coordinator): the panel
+     * shows the fresh shared order, a game started since in its league's place, and the next flips follow it, frozen
+     * again until the next open. Nothing changes while a lookup runs. A pick from the guide takes the order afresh by
+     * itself ([pick]).
      */
     fun thaw(contentId: String?) {
         if (job?.isActive == true) return
         val base = SportsLiveZapSessions.activeFor(contentId) ?: return
-        if (base.lineup != null) SportsLiveZapSessions.update(base.copy(lineup = null))
+        if (base.lineup != null || base.seed != null) SportsLiveZapSessions.update(base.copy(lineup = null, seed = null))
     }
 
     /**

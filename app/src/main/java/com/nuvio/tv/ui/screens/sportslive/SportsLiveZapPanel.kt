@@ -313,6 +313,7 @@ internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
  * [seed] (live.25, #225): Live Now's order as shown when the game was started there ([SportsLiveZapSession.seed], stream
  * keys): inside each group its games keep that order, so the panel, the guide and CH± follow the list you launched
  * from, calm order included; games it did not show (held behind "N new", or started since) follow, in the shared order.
+ * Opening the panel or the guide lets the seed go ([PlayerZapController.thaw]): from then on the shared order, fresh.
  */
 internal fun panelLineup(grouped: List<ZapPanelRow>, favorites: Set<String> = emptySet(), seed: List<String>? = null): List<ZapPanelRow> {
     val seedAt = seed?.withIndex()?.associate { (at, key) -> key to at }.orEmpty()
