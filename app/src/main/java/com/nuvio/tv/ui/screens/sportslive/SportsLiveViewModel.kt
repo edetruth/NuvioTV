@@ -391,6 +391,18 @@ class SportsLiveViewModel internal constructor(
     @Volatile
     private var liveNowShown = false
 
+    // O (live.25): when the section stopped being watched (hidden, or ambient up); null while watched.
+    private var unwatchedSinceMs: Long? = null
+
+    // O (live.25): back after a long absence ([SportsLiveCalmOpen.longAbsence]), Live now is a fresh open: as built, with
+    // no calm or browse hold, until the first board of a newer load than the one the absence left ([absentListAtMs]).
+    @Volatile
+    private var freshAfterAbsence = false
+    @Volatile
+    private var absentListAtMs: Long? = null
+    @Volatile
+    private var lastListAtMs: Long? = null
+
     // The mini player's game while it plays (TV QA BUG7): it stays listed.
     @Volatile
     private var miniPlayingNow: String? = null
@@ -1237,6 +1249,7 @@ class SportsLiveViewModel internal constructor(
      * screen, the background), nothing refreshes.
      */
     fun onScreenVisible(visible: Boolean) {
+        val wasWatched = watched()
         // The preview stops while the screen is hidden; coming back, it waits for a fresh settle.
         previewController.onVisible(visible)
         if (!visible) prefetcher?.stop()
@@ -1251,6 +1264,7 @@ class SportsLiveViewModel internal constructor(
         }
         if (visible == screenVisible) return
         screenVisible = visible
+        noteWatched(wasWatched)
         if (visible) takeChannelOrder()
         restartAutoRefresh(returning = visible)
     }
@@ -1259,8 +1273,29 @@ class SportsLiveViewModel internal constructor(
     fun onAmbient(showing: Boolean) {
         previewController.onAmbient(showing)
         if (showing == ambientShowing) return
+        val wasWatched = watched()
         ambientShowing = showing
+        noteWatched(wasWatched)
         restartAutoRefresh()
+    }
+
+    private fun watched() = screenVisible && !ambientShowing
+
+    /** O (live.25): watched again after a long absence, Live now's next fresh board shows as built ([freshAfterAbsence]). */
+    private fun noteWatched(wasWatched: Boolean) {
+        val watching = watched()
+        if (watching == wasWatched) return
+        val now = nowMs()
+        if (!watching) {
+            unwatchedSinceMs = now
+            return
+        }
+        val since = unwatchedSinceMs ?: return
+        unwatchedSinceMs = null
+        if (SportsLiveCalmOpen.longAbsence(since, now, zone)) {
+            absentListAtMs = lastListAtMs
+            freshAfterAbsence = true
+        }
     }
 
     /** [returning]: the section came back on screen (from the player, another screen, or the app in the background). */
@@ -1382,10 +1417,26 @@ class SportsLiveViewModel internal constructor(
      * row a load dropped goes, new rows wait for "N new"); otherwise as built. The focused card is never taken away.
      * [liveCount]: [built]'s first rows that are live; calm keeps their order, but a game that ended (or came back) still
      * moves between the live rows and the Just ended strip, which comes last as built.
+     * [overIds]: the cards ESPN confirms over (O, live.25): browsed, they leave their rows at once, for the strip as built.
      */
-    private fun keptLiveNow(selection: Selection, built: List<SportsLiveItem>, liveCount: Int, focusedId: String?, thawed: Boolean): SportsLiveFrozenList {
+    private fun keptLiveNow(
+        selection: Selection,
+        built: List<SportsLiveItem>,
+        liveCount: Int,
+        focusedId: String?,
+        thawed: Boolean,
+        overIds: Set<String> = emptySet()
+    ): SportsLiveFrozenList {
         if (!thawed) {
-            if (selection.tab == SportsLiveTab.LIVE_NOW && selection.browsing) return sportsLiveFreeze(shownLiveNow, built)
+            if (selection.tab == SportsLiveTab.LIVE_NOW && selection.browsing) {
+                val frozen = sportsLiveFreeze(shownLiveNow, built)
+                if (overIds.isEmpty()) return frozen
+                // O (live.25): a game ESPN confirms final is never held in a live row (it was, until a tab switch).
+                val frozenIds = frozen.items.mapTo(HashSet()) { it.id }
+                val items = frozen.items.filter { it.id !in overIds } +
+                    built.drop(liveCount).filter { it.id in overIds && it.id in frozenIds }
+                return frozen.copy(items = sportsLiveKeepFocused(shownLiveNow, items, focusedId))
+            }
             // Calm on another tab too (#143): Live now's kept board is what shows on return, so its rows keep their order.
             if (liveNowShown) {
                 val calm = sportsLiveCalm(shownLiveNow, built)
@@ -1518,9 +1569,18 @@ class SportsLiveViewModel internal constructor(
                 val rankedFor = bucketed.followed to mySports
                 val reranked = liveNowRankedFor.let { it != null && it != rankedFor }
                 liveNowRankedFor = rankedFor
-                val thawed = selection.thaw != thawApplied || reranked
+                // O (live.25): back after a long absence, a fresh open: as built until a newer load's board has shown.
+                val fresh = freshAfterAbsence
+                if (fresh && bucketed.fromLoad && bucketed.listAtMs != absentListAtMs) freshAfterAbsence = false
+                lastListAtMs = bucketed.listAtMs
+                val thawed = selection.thaw != thawApplied || reranked || fresh
                 thawApplied = selection.thaw
-                val kept = keptLiveNow(selection, built, ranked.size, focusedId, thawed).also { heldBack = it.heldBack }.items.let { listed ->
+                // O: the games ESPN confirms over leave at once, even focused (kept, a dropped one would read as live); and a
+                // fresh open after a long absence keeps no card of the list the absence left.
+                val overIds = endedGames.confirmedEndedKeys(tabItems, scores, now)
+                    .let { keys -> tabItems.filter { it.streamKey in keys }.mapTo(HashSet()) { it.id } }
+                val keptId = focusedId?.takeUnless { fresh || it in overIds }
+                val kept = keptLiveNow(selection, built, ranked.size, keptId, thawed, overIds).also { heldBack = it.heldBack }.items.let { listed ->
                     // The game playing in the mini player stays listed while it plays (BUG7: its row vanished).
                     sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow)
                 }

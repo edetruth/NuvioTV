@@ -583,6 +583,73 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `back after a long absence the first fresh board replaces the held rows like a fresh open (O)`() = runTest { hidingShownAtEnd {
+        // User TV report 2026-11-22: left on Live now overnight, the morning refresh landed but last night's rows stayed.
+        val tonight = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(tonight)
+        var clock = NOW
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { clock },
+            endedInputs = flowOf(EndedInputs()),
+            endedGames = SportsLiveEndedGames(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { clock }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+        assertEquals(setOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        assertEquals(1, kindsAsked.size)
+
+        // Eleven hours away; on return focus is back in the list at once, and the stale list forces a refresh.
+        viewModel.onScreenVisible(false)
+        runCurrent()
+        clock += 11 * HOUR
+        val morning = listOf("c", "d").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(morning).copy(loadedAtMs = clock)
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        assertEquals("the return refreshed", 2, kindsAsked.size)
+        val back = viewModel.uiState.value
+        assertEquals(setOf("c", "d"), back.visibleItems.map { it.id }.toSet())
+        assertEquals(2, back.visibleItems.size)
+        assertEquals(0, back.newLiveRows)
+    } }
+
+    @Test
+    fun `a game ESPN confirms final leaves the browsed Live now at once, never held as live (O)`() = runTest {
+        val game = item("p", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - HOUR)
+        val other = item("o", isLive = true, sport = "Soccer", name = "O")
+        nextLoad = load(listOf(game, other))
+        val inputs = MutableStateFlow(EndedInputs(canEstimate = { false }))
+        val viewModel = SportsLiveViewModel(repo, endedInputs = inputs, endedGames = SportsLiveEndedGames(), computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        // Browsed, with focus on the game itself: still it must not stay as a live row.
+        viewModel.setBrowsing(true)
+        viewModel.selectItem("p")
+        runCurrent()
+        assertEquals(setOf("p", "o"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+
+        // ESPN: final, long past the postgame grace and the half hour after it (dated at its start plus its length).
+        val pacers = nbaGames.first { it.eventId == "401909985" }
+        val over = pacers.copy(
+            state = ScoreState.POST, isFinal = true, clockText = "Final", startMs = NOW - 5 * HOUR, timeValid = true,
+            home = pacers.home.copy(score = 110), away = pacers.away.copy(score = 100)
+        )
+        inputs.value = EndedInputs(mapOf(game.streamKey to over), canEstimate = { false })
+        runCurrent()
+        assertEquals(listOf("o"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals("o", viewModel.uiState.value.selectedItemId)
+    }
+
+    @Test
     fun `N new names a followed team's game when one is among the new rows (sorting model)`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Lakers", null))
         val items = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
