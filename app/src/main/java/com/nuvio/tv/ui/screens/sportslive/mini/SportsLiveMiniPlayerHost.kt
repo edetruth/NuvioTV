@@ -91,6 +91,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
@@ -105,6 +106,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveFullScreenHold
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHealthTicker
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolvingDialog
@@ -267,7 +269,24 @@ internal class SportsLiveMiniPlayback(
     }
 
     fun release() {
-        val current = player ?: return
+        detach()?.release()
+    }
+
+    /**
+     * Full screen on the link this player plays (L, live.25): its player is returned as it plays, no longer this mini
+     * player's (health checks stopped, its events ignored), for the full player to show until its own first frame
+     * ([SportsLiveFullScreenHold]); its picture is copied first, so the full screen shows it at once. Null, with
+     * nothing changed, while no link draws frames (not started yet, or reconnecting): the expand releases it then.
+     */
+    fun handOver(): ExoPlayer? {
+        val current = player?.takeIf { sportsLiveMiniHandsOver(rendered, reconnecting) } ?: return null
+        SportsLiveFullScreenHold.captureStill(current, view?.videoSurfaceView)
+        return detach()
+    }
+
+    /** Lets the player go from this mini player (no reports, checks or view) and returns it; null when none. */
+    private fun detach(): ExoPlayer? {
+        val current = player ?: return null
         reportLink(loadedSessionId, false)
         ticker.stop()
         recoveryJob?.cancel()
@@ -279,7 +298,7 @@ internal class SportsLiveMiniPlayback(
         reportPlaying(false)
         reconnecting = false
         view?.player = null
-        current.release()
+        return current
     }
 
     /**
@@ -398,7 +417,7 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
 
     /** The game whose stream is looked up for an expand; the progress dialog shows meanwhile. */
     val expanding: StateFlow<SportsLiveItem?> = expander.expanding
-    val targets: Flow<SportsLiveZapTarget> = expander.targets
+    val targets: Flow<SportsLiveMiniExpand> = expander.targets
 
     init {
         viewModelScope.launch {
@@ -527,10 +546,17 @@ fun SportsLiveMiniPlayerHost(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.targets.collect { target ->
-            // The mini player's sound stops before the full player starts.
+        viewModel.targets.collect { expand ->
+            // L (live.25): on the link it plays, the mini player's player goes on, held over the full player until
+            // that one's first frame (as a dual pane's, #39), so the game never stops and buffers again on the way.
+            if (expand.handOver) {
+                val kept = playback.handOver()
+                SportsLiveDebugTiming.log { "miniHandOver kept=${kept != null}" }
+                kept?.let { SportsLiveFullScreenHold.holdPlayer(expand.target.item.id, it) }
+            }
+            // Otherwise the mini player's sound stops before the full player starts.
             controller.stop(SportsLiveMiniStop.EXPANDED)
-            currentOnExpand(target)
+            currentOnExpand(expand.target)
         }
     }
 

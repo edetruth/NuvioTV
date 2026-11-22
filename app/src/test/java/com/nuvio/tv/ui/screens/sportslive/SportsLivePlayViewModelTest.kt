@@ -19,6 +19,9 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerController
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -530,6 +533,121 @@ class SportsLivePlayViewModelTest {
         assertEquals(listOf(SportsLivePlayEvent.NoStream("Away at Home")), events)
     }
 
+    // --- L (live.25): Watch on the mini player's game takes it back full screen: no lookup, no new player ---
+
+    private class Mini(val controller: SportsLiveMiniPlayerController) {
+        /** Watches that took the mini player back full screen. */
+        var expands = 0
+        val sessionId: Long get() = (controller.state.value as SportsLiveMiniState.Playing).sessionId
+    }
+
+    /** The mini player playing [game] on [MINI_STREAM]; [linkPlaying]: that link draws frames. */
+    private fun TestScope.miniPlaying(game: SportsLiveItem = MERGED, linkPlaying: Boolean = true): Mini {
+        // No idle timeout in these tests: advanceUntilIdle never stops it.
+        val controller = SportsLiveMiniPlayerController(backgroundScope, idleTimeoutMs = Long.MAX_VALUE)
+        controller.onBackFromPlayer(game.id, SportsLiveZapSession(listOf(game), 0, SportsLiveTab.LIVE_NOW, null, false), MINI_STREAM)
+        return Mini(controller).also { if (linkPlaying) controller.onLinkPlaying(it.sessionId, true) }
+    }
+
+    private fun SportsLivePlayViewModel.backTo(mini: Mini) = apply {
+        backToMini = { item, stream -> sportsLiveBackToMiniGame(item, stream, mini.controller).also { if (it) mini.expands++ } }
+    }
+
+    @Test
+    fun `every Watch on the mini player's game takes it back full screen with no lookup and no new player`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val mini = miniPlaying()
+            var takeOvers = 0
+            val viewModel = newViewModel().backTo(mini)
+            val events = eventsOf(viewModel)
+
+            // The stage's Watch, the Game and Team pages' Watch, an alert's Watch now.
+            viewModel.play(SINGLE)
+            // Home's Live now card.
+            viewModel.play(SINGLE, returnToHomeOnBack = true)
+            // OK on its card in a list, with its hover preview playing.
+            viewModel.playCard(MERGED) { takeOvers++; STREAM }
+            // Another addon's copy of the game.
+            viewModel.play(item("other-game", "two"))
+            viewModel.playResolved(SINGLE, STREAM)
+            viewModel.rejoin(SINGLE, STREAM)
+            advanceUntilIdle()
+
+            assertEquals(6, mini.expands)
+            assertEquals("no player opens on a new stream", emptyList<SportsLivePlayEvent>(), events)
+            assertEquals(0, takeOvers)
+            assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
+            coVerify(exactly = 0) { resolver.lookup(any()) }
+            coVerify(exactly = 0) { resolver.resolveAll(any()) }
+            assertTrue(mini.controller.isActive)
+        }
+
+    @Test
+    fun `another game opens its own stream as usual while the mini player plays`() = runTest(mainDispatcherRule.dispatcher) {
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+        val mini = miniPlaying()
+        val viewModel = newViewModel().backTo(mini)
+        val events = eventsOf(viewModel)
+
+        viewModel.play(CHANNEL)
+        advanceUntilIdle()
+
+        assertEquals(0, mini.expands)
+        val play = events.single() as SportsLivePlayEvent.Play
+        assertEquals(CHANNEL, play.target.item)
+        assertEquals(STREAM.url, play.target.playback?.url)
+        coVerify(exactly = 1) { resolver.lookup(CHANNEL) }
+    }
+
+    @Test
+    fun `Choose stream on the mini player's game still lists its streams, and only its playing link goes back to it`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            coEvery { resolver.resolveAll(any()) } returns listOf(MINI_STREAM, STREAM)
+            val mini = miniPlaying()
+            val viewModel = newViewModel().backTo(mini)
+            val events = eventsOf(viewModel)
+
+            viewModel.chooseStream(MERGED)
+            advanceUntilIdle()
+            assertEquals(SportsLivePlayState.Picking(MERGED, listOf(MINI_STREAM, STREAM)), viewModel.state.value)
+            assertEquals(0, mini.expands)
+
+            viewModel.pick(MINI_STREAM)
+            advanceUntilIdle()
+            assertEquals(1, mini.expands)
+            assertEquals(emptyList<SportsLivePlayEvent>(), events)
+            assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
+
+            // Another of the game's links opens as usual.
+            viewModel.chooseStream(MERGED)
+            advanceUntilIdle()
+            viewModel.pick(STREAM)
+            advanceUntilIdle()
+            assertEquals(1, mini.expands)
+            assertEquals(STREAM.url, (events.single() as SportsLivePlayEvent.Play).target.playback?.url)
+        }
+
+    @Test
+    fun `the mini player expands only for its own game, and a picked stream only for the link it plays`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val mini = miniPlaying(linkPlaying = false)
+            val requests = mutableListOf<SportsLiveMiniState.Playing>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { mini.controller.expandRequests.collect { requests += it } }
+
+            assertFalse(sportsLiveBackToMiniGame(CHANNEL, null, mini.controller))
+            assertFalse("its link draws no frames yet", sportsLiveBackToMiniGame(SINGLE, MINI_STREAM, mini.controller))
+            assertTrue(requests.isEmpty())
+            assertTrue(sportsLiveBackToMiniGame(SINGLE, null, mini.controller))
+            assertEquals(1, requests.size)
+
+            mini.controller.onLinkPlaying(mini.sessionId, true)
+            assertFalse("another link of the game", sportsLiveBackToMiniGame(SINGLE, STREAM, mini.controller))
+            assertTrue(sportsLiveBackToMiniGame(SINGLE, MINI_STREAM, mini.controller))
+
+            mini.controller.stop(SportsLiveMiniStop.USER_STOP)
+            assertFalse("no mini player", sportsLiveBackToMiniGame(SINGLE, null, mini.controller))
+        }
+
     private companion object {
         fun item(id: String, addon: String) = SportsLiveItem(
             meta = MetaPreview(
@@ -578,5 +696,7 @@ class SportsLivePlayViewModelTest {
             addonName = "two",
             addonLogo = null
         )
+
+        val MINI_STREAM = STREAM.copy(name = "One 1080p", url = "https://cdn.example.invalid/one.m3u8", addonName = "one")
     }
 }

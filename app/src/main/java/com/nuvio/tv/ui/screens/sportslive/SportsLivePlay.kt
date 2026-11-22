@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
@@ -16,6 +17,9 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.SportsLiveLaunchHeaders
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerController
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -126,6 +130,24 @@ internal suspend fun sportsLiveZapTarget(
     return SportsLiveZapTarget(item, playback, returnToHomeOnBack, autoPicked)
 }
 
+/**
+ * L (live.25): Watch or OK on the game the mini player plays (it, or another addon's copy of it:
+ * [SportsLivePlayingGame.isSameGame], as J5) takes the mini player back to full screen
+ * ([SportsLiveMiniPlayerController.requestExpand]): no lookup, and its link plays on, handed to the full player. With
+ * [stream] (one the user picked), only the link the mini player plays, while it plays, does so; another of the game's
+ * streams opens as usual. True when the mini player expands.
+ */
+internal fun sportsLiveBackToMiniGame(
+    item: SportsLiveItem,
+    stream: Stream? = null,
+    mini: SportsLiveMiniPlayerController = SportsLiveMiniPlayers.controller
+): Boolean {
+    val playing = mini.state.value as? SportsLiveMiniState.Playing ?: return false
+    if (!SportsLivePlayingGame.isSameGame(item, playing.item)) return false
+    if (stream != null && (stream.getStreamUrl() != playing.stream.getStreamUrl() || !mini.isLinkPlaying(playing))) return false
+    return mini.requestExpand()
+}
+
 sealed interface SportsLivePlayState {
     data object Idle : SportsLivePlayState
     data class Resolving(val item: SportsLiveItem) : SportsLivePlayState
@@ -205,6 +227,21 @@ class SportsLivePlayViewModel @Inject constructor(
     /** Whether Back from the played stream returns to Home (the Home Live now row) rather than the section. */
     private var returnToHomeOnBack = false
 
+    /** [sportsLiveBackToMiniGame], replaced in tests. */
+    internal var backToMini: (SportsLiveItem, Stream?) -> Boolean = { item, stream -> sportsLiveBackToMiniGame(item, stream) }
+
+    /**
+     * L (live.25): [item] (with [stream], that link) is the mini player's game, which went back full screen on its own
+     * player ([backToMini]): no lookup and no new player; a start still in flight is dropped. False otherwise.
+     */
+    private fun backToMiniGame(item: SportsLiveItem, stream: Stream? = null): Boolean {
+        if (!backToMini(item, stream)) return false
+        gate.invalidate()
+        job?.cancel()
+        _state.value = SportsLivePlayState.Idle
+        return true
+    }
+
     /** OK on [item]: see [sportsLivePlayAction]. */
     fun play(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) = start(item, returnToHomeOnBack, choose = false)
 
@@ -259,6 +296,7 @@ class SportsLivePlayViewModel @Inject constructor(
      */
     /** OK on Live now's Resume chip (#148): [stream], the link the paused player had, at the live edge. */
     fun rejoin(item: SportsLiveItem, stream: Stream) {
+        if (backToMiniGame(item)) return
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
@@ -267,6 +305,7 @@ class SportsLivePlayViewModel @Inject constructor(
     }
 
     fun playCard(item: SportsLiveItem, takeOverPreview: () -> Stream?) {
+        if (backToMiniGame(item)) return
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
@@ -294,6 +333,8 @@ class SportsLivePlayViewModel @Inject constructor(
     )
 
     private fun start(item: SportsLiveItem, returnToHomeOnBack: Boolean, choose: Boolean) {
+        // Watch on the mini player's game (Home's Live now card, the Game or Team page, an alert): back full screen.
+        if (!choose && backToMiniGame(item)) return
         job?.cancel()
         this.returnToHomeOnBack = returnToHomeOnBack
         _state.value = SportsLivePlayState.Idle
@@ -353,6 +394,7 @@ class SportsLivePlayViewModel @Inject constructor(
      * Stream screen, with [item]'s other sources registered as on the auto play path.
      */
     fun playResolved(item: SportsLiveItem, stream: Stream) {
+        if (backToMiniGame(item)) return
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
@@ -366,6 +408,8 @@ class SportsLivePlayViewModel @Inject constructor(
     /** A stream picked in the picker plays. */
     fun pick(stream: Stream) {
         val picking = _state.value as? SportsLivePlayState.Picking ?: return
+        // The very link the mini player plays, picked in Choose stream: back full screen on it (L).
+        if (backToMiniGame(picking.item, stream)) return
         _state.value = SportsLivePlayState.Idle
         val token = gate.begin(picking.item.streamKey)
         job = viewModelScope.launch { playStream(picking.item, stream, token = token) }
