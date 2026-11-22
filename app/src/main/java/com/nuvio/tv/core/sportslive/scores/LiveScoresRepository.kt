@@ -468,9 +468,14 @@ class LiveScoresRepository internal constructor(
             // NFL and college football are both its own feeds, budgeted as any live game's, college football's games matched
             // with both sides STRONG. As a fallback, college football came after every other game's feeds and found no slot.
             // A "Basketball" card goes so only when the loaded lists name both sides as schools, not as NBA teams: addons
-            // tag most NBA games "Basketball", which would otherwise poll college basketball for each.
+            // tag most NBA games "Basketball", which would otherwise poll college basketball for each. So does a bare
+            // "Football" card (live.25, TV report #21: FOOTBALL rows among NCAAF ones, no score) whose two sides the college
+            // football list names as schools: most such cards are soccer, whose clubs that list never holds.
             val bothOwn = (leagues == listOf(EspnLeagueMap.NFL) && college == EspnLeagueMap.COLLEGE_FOOTBALL) ||
-                (leagues == listOf(EspnLeagueMap.NBA) && college == EspnLeagueMap.COLLEGE_BASKETBALL && schoolsOnly(card.teams))
+                (leagues == listOf(EspnLeagueMap.NBA) && college == EspnLeagueMap.COLLEGE_BASKETBALL &&
+                    schoolsOnly(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.NBA, card.teams)) ||
+                (leagues == listOf(EspnLeagueMap.SOCCER_ALL) && college == EspnLeagueMap.COLLEGE_FOOTBALL &&
+                    schoolsOnly(EspnLeagueMap.COLLEGE_FOOTBALL, null, card.teams))
             if (bothOwn && college != null) {
                 return@mapNotNull TrackedCard(card, leagues + college, item.followed, live, fallback = null, liveKeys = liveKeys, strictLeague = college)
             }
@@ -1247,15 +1252,17 @@ class LiveScoresRepository internal constructor(
     }
 
     /**
-     * True when the loaded men's college basketball list holds both of [teams] as two schools and the NBA list does not
-     * hold both (live.24): a "Basketball" card of two schools. False while the lists are not loaded.
+     * True when the loaded [college] list holds both of [teams] as two schools and the [pro] list (if any) does not hold
+     * both: a "Basketball" card of two schools (live.24), or a bare "Football" card of two schools (live.25, [pro] null:
+     * soccer has no team list here). False while the lists are not loaded.
      */
-    private fun schoolsOnly(teams: com.nuvio.tv.core.sportslive.TeamPair): Boolean {
+    private fun schoolsOnly(college: EspnLeague, pro: EspnLeague?, teams: com.nuvio.tv.core.sportslive.TeamPair): Boolean {
         val directory = logos.directory
-        val home = directory.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, teams.home) ?: return false
-        val away = directory.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, teams.away) ?: return false
+        val home = directory.resolve(college, teams.home) ?: return false
+        val away = directory.resolve(college, teams.away) ?: return false
         if (home.id == away.id) return false
-        return directory.resolve(EspnLeagueMap.NBA, teams.home) == null || directory.resolve(EspnLeagueMap.NBA, teams.away) == null
+        if (pro == null) return true
+        return directory.resolve(pro, teams.home) == null || directory.resolve(pro, teams.away) == null
     }
 
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher, tennis: Boolean = false): ScoreSnapshot? {

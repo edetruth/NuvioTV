@@ -2413,4 +2413,52 @@ class LiveScoresRepositoryTest {
         assertTrue(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16)) !in provider.calls)
         assertTrue(undated.streamKey !in repo.unmatched.value)
     }
+
+    // ---- live.25, TV report #21: generic "Football" cards (no league) of two schools ----
+
+    /** The college football list holding Illinois and Iowa, as the directory loads it. */
+    private fun footballLists() = TeamLogoBook(directory = TeamDirectory().apply {
+        put(
+            EspnLeagueMap.COLLEGE_FOOTBALL,
+            listOf(school("356", "Illinois Fighting Illini", "Illinois", "ILL", "Fighting Illini"), school("2294", "Iowa Hawkeyes", "Iowa", "IOWA", "Hawkeyes")),
+            1L
+        )
+    })
+
+    private fun bareFootball(name: String, start: String) = item(name, "Football", start, genres = listOf("Football"))
+
+    @Test
+    fun `a bare Football card of two schools polls college football as its own feed, at once and with both sides strong`() = runTest {
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.COLLEGE_FOOTBALL) cfb21 else emptyList()) }
+        // soccer/all hangs: as a fallback, college football would wait for it.
+        val soccerHangs = CompletableDeferred<Unit>()
+        provider.gateFor = mapOf(ScoreFeed(EspnLeagueMap.SOCCER_ALL, LocalDate.of(2026, 11, 21)) to soccerHangs)
+        val repo = repository("2026-11-21T21:00:00Z", logos = footballLists())
+        collect(repo)
+        val card = bareFootball("Illinois vs Iowa", "2026-11-21T19:30:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertTrue(ScoreFeed(EspnLeagueMap.COLLEGE_FOOTBALL, LocalDate.of(2026, 11, 21)) in provider.calls)
+        assertEquals("401858527", repo.scores.value[card.streamKey]?.eventId)
+        assertEquals("NCAAF", repo.scores.value.getValue(card.streamKey).leagueName)
+        soccerHangs.complete(Unit)
+    }
+
+    @Test
+    fun `a bare Football card of two clubs, or of one school, never polls college football as its own feed`() = runTest {
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.COLLEGE_FOOTBALL) cfb21 else emptyList()) }
+        val soccerHangs = CompletableDeferred<Unit>()
+        provider.gateFor = mapOf(ScoreFeed(EspnLeagueMap.SOCCER_ALL, LocalDate.of(2026, 11, 21)) to soccerHangs)
+        val repo = repository("2026-11-21T21:00:00Z", logos = footballLists())
+        collect(repo)
+        val clubs = bareFootball("Arsenal vs Chelsea", "2026-11-21T19:30:00Z")
+        // "Iowa State" is not on the list: one school alone is not enough.
+        val oneSchool = bareFootball("Illinois vs Iowa State", "2026-11-21T19:30:00Z")
+        repo.track(SECTION, listOf(clubs, oneSchool))
+        runCurrent()
+        assertTrue(provider.calls.none { it.league == EspnLeagueMap.COLLEGE_FOOTBALL })
+        assertNull(repo.scores.value[clubs.streamKey])
+        assertNull(repo.scores.value[oneSchool.streamKey])
+        soccerHangs.complete(Unit)
+    }
 }
