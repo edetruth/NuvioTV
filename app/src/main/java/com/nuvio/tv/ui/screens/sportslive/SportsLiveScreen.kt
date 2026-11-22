@@ -1673,6 +1673,11 @@ private fun SportsLiveContent(
         moreLiveFocusPending = true
         onOpenMoreLive()
     }
+    // "N new" (live.25 M): OK adds the games that waited; focus goes to the list's first row, as the line leaves.
+    listActions.onShowNewRows = {
+        moreLiveFocusPending = true
+        onShowNewRows()
+    }
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
     val currentOnPreviewKey by rememberUpdatedState(onPreviewKey)
     Column(
@@ -1773,17 +1778,11 @@ private fun SportsLiveContent(
                 else -> null
             },
             onShowFailures = { failuresOpen = true },
-            // "N new" (Q5): OK shows the rows that waited, at once (no reload); otherwise Refresh as before.
-            newRows = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.newLiveRows else 0,
-            newRowsTeam = uiState.newLiveFollowedTeam.takeIf { uiState.selectedTab == SportsLiveTab.LIVE_NOW },
-            onRefresh = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.newLiveRows > 0) {
-                onShowNewRows
-            } else {
-                {
-                    // A refresh asked for shows its result as it lands, until the user moves into the list again.
-                    onBrowsing(false)
-                    userRefresh()
-                }
+            // "N new" (Q5) is the list's first line (live.25 M), never on Refresh.
+            onRefresh = {
+                // A refresh asked for shows its result as it lands, until the user moves into the list again.
+                onBrowsing(false)
+                userRefresh()
             },
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null },
             updatedAtMs = uiState.staleListAtMs.takeIf { !showingResults }
@@ -2236,7 +2235,7 @@ private fun SportsLiveContent(
                     // What the list shows, once per board, tab and filter (#115).
                     val listModel = remember(
                         shownBoard, channelsTab, channelBrowse, uiState.selectedFilter, uiState.hiddenByMySports, otherRegionLabel, channelLetters,
-                        uiState.moreLive, moreLiveShown, addSportName
+                        uiState.moreLive, moreLiveShown, addSportName, uiState.newLiveRows, uiState.newLiveFollowedTeam
                     ) {
                         val rows = shownBoard?.rows.orEmpty()
                         val sectionCounts = rows.mapNotNull { it.section }.groupingBy { it }.eachCount()
@@ -2255,7 +2254,9 @@ private fun SportsLiveContent(
                             channelLetters = channelLetters,
                             moreLive = if (channelsTab) emptyList() else SportsLiveMoreLive.summary(uiState.moreLive),
                             moreLiveOpen = moreLiveShown,
-                            addSportLabel = addSportName.takeIf { !channelsTab && !moreLiveShown }
+                            addSportLabel = addSportName.takeIf { !channelsTab && !moreLiveShown },
+                            newRows = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && !moreLiveShown) uiState.newLiveRows else 0,
+                            newRowsTeam = uiState.newLiveFollowedTeam
                         )
                     }
                     // The rows' marks (#143): equal from one D-pad move to the next while the list holds focus.

@@ -59,7 +59,11 @@ internal data class SportsLiveListModel(
     /** The More live view is shown: [items] are its games, headed by sport ([ScoreboardRow.section]). */
     val moreLiveOpen: Boolean = false,
     /** The add-sport card's sport name ("Cricket"), shown above the first row; null for no card. */
-    val addSportLabel: String? = null
+    val addSportLabel: String? = null,
+    /** Live now's games waiting while it is browsed (TV QA Q5, live.25 M): the "N new" line at the top; 0: none. */
+    val newRows: Int = 0,
+    /** A followed team's short name whose game is among [newRows]: the line names it first. */
+    val newRowsTeam: String? = null
 )
 
 /**
@@ -109,6 +113,10 @@ internal class SportsLiveListActions {
     var onAddSport: () -> Unit = {}
     var onDeclineSport: () -> Unit = {}
     val addSportRequester = FocusRequester()
+
+    /** OK on the "N new" line (live.25 M): the waiting games join the list. Its requester: Up from the first row lands there. */
+    var onShowNewRows: () -> Unit = {}
+    val newRowsRequester = FocusRequester()
 }
 
 /**
@@ -155,6 +163,25 @@ internal fun SportsLiveBoardList(
             // Read here, not through [model] in each row's key handler: a score poll builds a new model, and the handler
             // (part of the row's modifier) must stay equal so an unchanged row skips (#143).
             val letters = model.channelLetters
+            // "N new" (live.25 M): the list's first line, where the waiting games will appear; never first focus. Up from
+            // the first row (or the add-sport card) reaches it, OK adds the games.
+            val newRows = model.newRows
+            if (newRows > 0) {
+                item(key = NEW_ROWS_KEY, contentType = ENTRY_CONTENT) {
+                    SportsLiveNewRowsLine(
+                        count = newRows,
+                        followedTeam = model.newRowsTeam,
+                        onClick = { actions.onShowNewRows() },
+                        modifier = Modifier
+                            .focusRequester(actions.newRowsRequester)
+                            .focusProperties {
+                                up = upFocusRequester
+                                right = stageFocusRequester
+                            }
+                    )
+                }
+            }
+            val aboveRows = if (newRows > 0) actions.newRowsRequester else upFocusRequester
             // The add-sport card (after a More live game): above the first row, never first focus.
             val addSportLabel = model.addSportLabel
             if (addSportLabel != null) {
@@ -164,7 +191,7 @@ internal fun SportsLiveBoardList(
                         onAdd = { actions.onAddSport() },
                         onNotNow = { actions.onDeclineSport() },
                         addRequester = actions.addSportRequester,
-                        up = upFocusRequester,
+                        up = aboveRows,
                         right = stageFocusRequester
                     )
                 }
@@ -206,7 +233,7 @@ internal fun SportsLiveBoardList(
                             .focusRequester(actions.requesterOf(item))
                             .focusProperties {
                                 right = stageFocusRequester
-                                if (index == 0) up = if (addSportLabel != null) actions.addSportRequester else upFocusRequester
+                                if (index == 0) up = if (addSportLabel != null) actions.addSportRequester else aboveRows
                             }
                             .onPreviewKeyEvent { event ->
                                 // Channels phase 2: ◂ ▸ on a browse row jump to the previous or next letter.
@@ -287,6 +314,9 @@ private const val CHANNEL_ALL_KEY = "\u0000channels:all"
 
 /** The add-sport card's list key. */
 private const val ADD_SPORT_KEY = "live:add_sport"
+
+/** Live now's "N new" line's list key (live.25 M). */
+private const val NEW_ROWS_KEY = "live:new_rows"
 
 /** Live now's More live row's list key. */
 private const val MORE_LIVE_KEY = "live:more_live"

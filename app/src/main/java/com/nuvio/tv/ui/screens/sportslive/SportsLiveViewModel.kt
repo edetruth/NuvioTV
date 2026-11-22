@@ -1576,9 +1576,10 @@ class SportsLiveViewModel internal constructor(
             }
         }
         val newRows = newList.size
-        // Sorting model (live.24): "2 new · Lakers game" when a followed team's game is among them.
+        // Sorting model (live.24), live.25 M: "Mavericks game started · 13 new" when a followed team's game is among them.
         val newFollowedTeam = newList.firstOrNull { it.followed }?.let { game ->
-            bucketed.followed.orEmpty().firstOrNull { team -> SportsLiveTeams.followsAnySource(team, game) }?.name
+            bucketed.followed.orEmpty().firstOrNull { team -> SportsLiveTeams.followsAnySource(team, game) }
+                ?.let { team -> sportsLiveTeamShortName(team, TeamDirectory.shared) }
         }
         return SportsLiveUiState(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
