@@ -7,12 +7,16 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.ui.screens.sportslive.liveNowItemTag
+import java.time.ZoneId
+import java.util.Locale
 
 /** The synthetic Home row that shows live Sports & Live items, marked by sentinel ids. */
 object SportsLiveHomeRow {
@@ -45,7 +49,9 @@ object SportsLiveHomeRow {
         scoreLabels: Map<String, String> = emptyMap(),
         words: Words? = null,
         /** Each card's tag read with its score ([tags]); without one the hero's eyebrow is read from the card alone. */
-        tags: Map<String, String> = emptyMap()
+        tags: Map<String, String> = emptyMap(),
+        /** "Starts 7:00 PM" for a game the score feed says has not started ([starts]): the hero's eyebrow, never "Live now". */
+        starts: Map<String, String> = emptyMap()
     ): CatalogRow = CatalogRow(
         addonId = ADDON_ID,
         addonName = "Sports & Live",
@@ -73,7 +79,8 @@ object SportsLiveHomeRow {
                         // Live Now's own tag for the row (RC TV finding): its league ("EPL"), else the sport word; never a
                         // catalog's or addon's name, never a catch-all ("Other").
                         (tags[item.streamKey] ?: liveNowItemTag(item, null, words.sportWord)).ifEmpty { null },
-                        words.liveNow
+                        // live.25 #226: a pre-game stream reads its start, as its card does; never "Live now".
+                        starts[item.streamKey] ?: words.liveNow
                     )),
                     description = SportsLiveHomeMeta.extraLine(item.followed, item.sourceCount, words.yourTeam, words.streams),
                     // A game is drawn (logos, clock, score): never the addon's art with LIVE or a score baked in.
@@ -123,6 +130,33 @@ object SportsLiveHomeRow {
      */
     fun tags(items: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, sportWord: (SportsLiveSportKind) -> String): Map<String, String> =
         items.associate { item -> item.streamKey to liveNowItemTag(item, scores[item.streamKey], sportWord) }
+
+    /**
+     * The hero's eyebrow for the Live now cards whose matched game has not started (live.25 #226), by item streamKey:
+     * [startsFormat] ("Starts %1$s") round the start as the card's footer words it ([rememberLiveNowCardArt]): the time
+     * today, [tomorrowFormat] ("Tomorrow %1$s"), else a weekday or date. A game with no strict match, or one under way,
+     * has none: its hero keeps "Live now".
+     */
+    fun starts(
+        items: List<SportsLiveItem>,
+        scores: Map<String, ScoreSnapshot>,
+        startsFormat: String,
+        tomorrowFormat: String,
+        nowMs: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+        locale: Locale = Locale.getDefault()
+    ): Map<String, String> = items.mapNotNull { item ->
+        val snapshot = scores[item.streamKey]
+        if (ScoreChips.matchedEvent(item, snapshot)?.state != ScoreState.PRE) return@mapNotNull null
+        val art = GameArt.of(item, snapshot) ?: return@mapNotNull null
+        val time = when (val pill = GameArt.kickoff(art, nowMs, zone, locale)) {
+            is SportsLivePillTime.Today -> pill.time
+            is SportsLivePillTime.Tomorrow -> String.format(tomorrowFormat, pill.time)
+            is SportsLivePillTime.Other -> pill.text
+            null -> return@mapNotNull null
+        }
+        item.streamKey to String.format(startsFormat, time)
+    }.toMap()
 
     fun isLiveNowRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL
 

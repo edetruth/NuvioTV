@@ -52,10 +52,15 @@ internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
  * identity), so a clock tick never rebuilds Home or moves its focus and scroll; the next full rebuild
  * reads [HomeViewModel.liveNowScoreLabels] too.
  */
-internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>, tags: Map<String, String> = liveNowTags) {
-    if (labels == liveNowScoreLabels && tags == liveNowTags) return
+internal fun HomeViewModel.setLiveNowScoreLabels(
+    labels: Map<String, String>,
+    tags: Map<String, String> = liveNowTags,
+    starts: Map<String, String> = liveNowStarts
+) {
+    if (labels == liveNowScoreLabels && tags == liveNowTags && starts == liveNowStarts) return
     liveNowScoreLabels = labels
     liveNowTags = tags
+    liveNowStarts = starts
     replaceLiveNowRow()
 }
 
@@ -69,7 +74,7 @@ private fun HomeViewModel.replaceLiveNowRow() {
             rows.removeAt(index)
         } else {
             val old = (state.homeRows[index] as HomeRow.Catalog).row
-            rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, liveNowScoreLabels, sportsLiveHomeWords(), liveNowTags))
+            rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, liveNowScoreLabels, sportsLiveHomeWords(), liveNowTags, liveNowStarts))
         }
         state.copy(homeRows = rows)
     }

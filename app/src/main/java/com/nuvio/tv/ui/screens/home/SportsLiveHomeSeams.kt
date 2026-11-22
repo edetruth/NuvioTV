@@ -246,10 +246,16 @@ private fun SportsLiveHomeScores(
     // The hero's eyebrow tag as the focused card reads it (live.24, one game identity).
     val sportWord = com.nuvio.tv.ui.screens.sportslive.rememberSportWord()
     val tags = remember(items, current, sportWord) { SportsLiveHomeRow.tags(items, current, sportWord) }
-    LaunchedEffect(labels, tags) { viewModel.setLiveNowScoreLabels(labels, tags) }
+    // live.25 #226: a game not started yet reads "Starts 7:00 PM" in the hero's eyebrow, as its card does.
+    val clockMs by rememberSportsLiveClockMs()
+    val startsFormat = stringResource(R.string.sports_live_waiting_starts)
+    val tomorrowFormat = stringResource(R.string.sports_live_tomorrow)
+    val starts = remember(items, current, clockMs, startsFormat, tomorrowFormat) {
+        SportsLiveHomeRow.starts(items, current, startsFormat, tomorrowFormat, clockMs)
+    }
+    LaunchedEffect(labels, tags, starts) { viewModel.setLiveNowScoreLabels(labels, tags, starts) }
     // Games ESPN shows final leave the row (#60), at once (l24 polish P1: in the postgame grace too, so a final never
     // reads "Live now"); an estimate never drops one.
-    val clockMs by rememberSportsLiveClockMs()
     val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.finalKeys(items, current, clockMs) }
     LaunchedEffect(ended) { viewModel.setLiveNowEnded(ended) }
 }

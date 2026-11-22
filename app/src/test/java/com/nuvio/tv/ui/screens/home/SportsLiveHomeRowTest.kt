@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.home
 
+import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
@@ -16,6 +17,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import com.nuvio.tv.ui.components.catalogRowShowsSeeAllByDefault
 import org.junit.Test
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.Locale
 
 class SportsLiveHomeRowTest {
 
@@ -132,6 +136,31 @@ class SportsLiveHomeRowTest {
         val strings = ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
         val labels = SportsLiveHomeRow.scoreLabels(listOf(game), mapOf(game.streamKey to final), ScoresMode.SHOW, strings, "● %1\$s")
         assertEquals(emptyMap<String, String>(), labels)
+    }
+
+    @Test
+    fun `a game the feed says has not started gives the hero its start, never Live now`() {
+        val fixture = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val pre = fixture.copy(state = ScoreState.PRE, isFinal = false, clockText = null)
+        val start = Instant.parse("2026-11-15T18:00:00Z").toEpochMilli()
+        val game = item("g").let {
+            it.copy(meta = it.meta.copy(name = "Pacers at 76ers"), teams = SportsLiveTeams.parse("Pacers at 76ers"), startMs = start, startHasTimeOfDay = true)
+        }
+        val nowMs = Instant.parse("2026-11-15T16:00:00Z").toEpochMilli()
+        fun starts(event: com.nuvio.tv.core.sportslive.scores.ScoreSnapshot) =
+            SportsLiveHomeRow.starts(listOf(game), mapOf(game.streamKey to event), "Starts %1\$s", "Tomorrow %1\$s", nowMs, ZoneOffset.UTC, Locale.US)
+        // The card's own words for its start (time only today).
+        val time = (SportsLivePillTime.of(pre.startMs ?: start, true, nowMs, ZoneOffset.UTC, Locale.US) as SportsLivePillTime.Today).time
+        val preStarts = starts(pre)
+        assertEquals(mapOf(game.streamKey to "Starts $time"), preStarts)
+        // Under way, or not matched: none, so the hero keeps "Live now".
+        assertEquals(emptyMap<String, String>(), starts(pre.copy(state = ScoreState.IN)))
+        assertEquals(emptyMap<String, String>(), SportsLiveHomeRow.starts(listOf(game), emptyMap(), "Starts %1\$s", "Tomorrow %1\$s", nowMs))
+
+        val words = SportsLiveHomeRow.Words(liveNow = "Live now", yourTeam = "★ Your team", streams = { "$it streams" })
+        val eyebrow = SportsLiveHomeRow.build(listOf(game), "Live now", emptyMap(), words, emptyMap(), preStarts).items.single().genres.single()
+        assertTrue(eyebrow, eyebrow.endsWith("Starts $time"))
+        assertFalse(eyebrow, eyebrow.contains("Live now"))
     }
 
     companion object {
