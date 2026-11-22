@@ -1158,15 +1158,14 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     internal fun openPanel() {
-        // live.25 (coordinator): opening the panel or the guide takes the fresh shared order, for the list and for the
-        // next flips (frozen again from the first of them); CH± between two opens keep their order.
-        controller.thaw(contentId)
         var session = controller.session(contentId) ?: return
         scoreTracker.onStart()
         panelKeyPressed = false
         focusedRowKey = null
         // #164: the order is taken afresh as the panel opens, then kept while it is open.
         frozenOrder = null
+        // CH± keep the zap order frozen at the session's first zap (user, live.24: ▲ then ▼ always returns to the game
+        // you were on); opening the guide no longer re-takes it, picking a game from it does ([PlayerZapController.pick]).
         lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
