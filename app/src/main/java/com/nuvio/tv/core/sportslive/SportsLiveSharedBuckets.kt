@@ -186,9 +186,15 @@ class SportsLiveSharedBuckets(
     private fun entryFor(load: SportsLiveLoad, claimedKeys: Set<String>, addonOrder: List<String>, stamp: Long, nowMs: Long): Entry {
         entry?.let { old ->
             val age = nowMs - old.builtAtMs
-            if (old.load === load && old.stamp == stamp && old.claimedKeys == claimedKeys && old.addonOrder == addonOrder &&
-                age in 0 until maxAgeMs && !SportsLiveItemBucketer.clockChangedBetween(old.raw, old.builtAtMs, nowMs)
-            ) {
+            // live.25 (#221): an ask whose clock is a moment behind this sorting's uses it too while no game changes tab in
+            // between. Home's row reads its clock before waiting for this lock (seconds, while the section sorts Upcoming):
+            // its ask replaced the sorting, Upcoming's included, and the section's next ask sorted Upcoming again.
+            val clockOk = if (age >= 0) {
+                age < maxAgeMs && !SportsLiveItemBucketer.clockChangedBetween(old.raw, old.builtAtMs, nowMs)
+            } else {
+                -age < maxAgeMs && !SportsLiveItemBucketer.clockChangedBetween(old.raw, nowMs, old.builtAtMs)
+            }
+            if (old.load === load && old.stamp == stamp && old.claimedKeys == claimedKeys && old.addonOrder == addonOrder && clockOk) {
                 return old
             }
         }

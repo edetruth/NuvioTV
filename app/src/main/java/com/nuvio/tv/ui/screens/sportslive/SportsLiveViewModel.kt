@@ -67,6 +67,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
+import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewController
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLookup
@@ -447,6 +448,18 @@ class SportsLiveViewModel internal constructor(
     private var liveFirstDone = false
     private var lastSorted: Bucketed? = null
 
+    /** What the last full sorting was built from, and at what time (live.25, #221). */
+    private class SortInputs(
+        val load: SportsLiveLoad,
+        val claimedKeys: Set<String>,
+        val addonOrder: List<String>,
+        val stamp: Long,
+        val upcoming: UpcomingInputs?,
+        val atMs: Long
+    )
+
+    private var lastSortInputs: SortInputs? = null
+
     /** Runs between the cold open's Live now and the other tabs' sorting; tests hold it to see Live now first. */
     @VisibleForTesting
     internal var afterLiveFirst: suspend () -> Unit = {}
@@ -465,10 +478,23 @@ class SportsLiveViewModel internal constructor(
                 return@combineTransform
             }
             emit(Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder)))
+            lastSortInputs = null
             return@combineTransform
         }
         val items = latest.items.filter { it.catalogKey in claimedKeys }
         val stamp = directoryStamp()
+        // live.25 (#221): a signal with nothing new for the last sorting sorts nothing again: Upcoming was sorted 3 times in
+        // one open on the TV (3-7 s each), one of them for a directory change the sorting before had already read (its
+        // debounced signal landed after it). Same load, catalogs, order, directory, Upcoming ask, and no game changed tab.
+        lastSortInputs?.let { last ->
+            if (last.load === latest && last.stamp == stamp && last.claimedKeys == claimedKeys && last.addonOrder == addonOrder &&
+                last.upcoming == upcoming && now - last.atMs in 0 until SportsLiveSharedBuckets.MAX_AGE_MS &&
+                !SportsLiveItemBucketer.clockChangedBetween(items, last.atMs, now)
+            ) {
+                SportsLiveDebugTiming.log { "sportsOpen stage=bucketSkipped t=${sinceOpenMs()}" }
+                return@combineTransform
+            }
+        }
         // Back on the section while the load it was built from is still the latest (live.20 B1): no bucketing again,
         // unless the team directory moved or a game started since.
         // live.24: a windowed Upcoming is kept by the shared sorting itself (per load, per days asked), never by the list cache.
@@ -536,6 +562,7 @@ class SportsLiveViewModel internal constructor(
             upcomingPending = upcomingBucket?.pendingDates.orEmpty(), upcomingWaiting = upcomingBucket?.waitingBySport ?: 0
         )
         lastSorted = done
+        lastSortInputs = SortInputs(latest, claimedKeys, addonOrder, stamp, upcoming, now)
         emit(done)
     }.flowOn(computeDispatcher)
 

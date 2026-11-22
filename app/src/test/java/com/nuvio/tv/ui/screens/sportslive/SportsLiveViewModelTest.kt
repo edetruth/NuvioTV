@@ -667,7 +667,9 @@ class SportsLiveViewModelTest {
         val items = listOf("a", "b", "c").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
         nextLoad = load(items)
         val directoryChanges = MutableSharedFlow<Unit>()
-        val viewModel = SportsLiveViewModel(repo, directoryChanges = directoryChanges, computeDispatcher = compute)
+        // A change moves the directory's stamp (live.25: a signal the last sorting already read sorts nothing again).
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(repo, directoryChanges = directoryChanges, directoryStamp = { stamp }, computeDispatcher = compute)
         viewModel.nowMs = { NOW }
         var bucketCalls = 0
         // After the change, "b" turns out to be a copy of "a" (live.18: its teams resolved to the same ESPN ids).
@@ -691,6 +693,7 @@ class SportsLiveViewModelTest {
         val before = bucketCalls
 
         foldB = true
+        stamp = 1L
         directoryChanges.emit(Unit)
         advanceTimeBy(1_900); runCurrent()
         // Debounced: nothing yet.

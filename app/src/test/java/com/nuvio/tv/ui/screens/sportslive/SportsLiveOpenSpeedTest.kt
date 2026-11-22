@@ -25,6 +25,7 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -255,6 +256,50 @@ class SportsLiveOpenSpeedTest {
         val all = viewModel.uiState.value
         assertEquals(listOf("d0", "d2", "d5"), all.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
         assertTrue(all.upcomingPendingDates.isEmpty())
+    }
+
+    @Test
+    fun `a directory signal the last sorting already read sorts nothing again, Upcoming included`() = runTest {
+        // live.25 (#221): Upcoming was sorted 3 times in one open on the TV, once for a change already sorted with.
+        latestFlow.value = load(listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR)))
+        val shared = SportsLiveSharedBuckets()
+        val directoryChanges = MutableSharedFlow<Unit>()
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            directoryChanges = directoryChanges,
+            directoryStamp = { stamp },
+            sharedBuckets = shared,
+            computeDispatcher = compute,
+            upcomingWindowDays = 3,
+            zone = ZoneOffset.UTC
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        // Past the open's hold, which builds the state once more by itself.
+        advanceTimeBy(SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
+        assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        val sorted = shared.upcomingSorted
+        val builds = viewModel.stateBuilds
+        assertTrue(sorted > 0)
+
+        // Home's row asked with a clock a moment behind (it waited for the lock), then the signal of the change came.
+        shared.tab(latestFlow.value!!, setOf(CLAIMED.key), listOf(CLAIMED.addon.id), SportsLiveTab.LIVE_NOW, NOW - 5_000L, stamp = 0L)
+        directoryChanges.emit(Unit)
+        advanceTimeBy(3_000)
+        runCurrent()
+        assertEquals(sorted, shared.upcomingSorted)
+        assertEquals(builds, viewModel.stateBuilds)
+
+        // A change it has not read sorts again.
+        stamp = 1L
+        directoryChanges.emit(Unit)
+        advanceTimeBy(3_000)
+        runCurrent()
+        assertTrue(shared.upcomingSorted > sorted)
+        assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
     }
 
     @Test
