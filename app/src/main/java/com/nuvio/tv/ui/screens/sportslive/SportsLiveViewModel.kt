@@ -38,8 +38,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
-import com.nuvio.tv.core.sportslive.scores.TeamDirectory
-import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveInferredSport
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveListCache
@@ -51,7 +50,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveUpcomingWindow
 import com.nuvio.tv.data.local.SportsLiveListSnapshotStore
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveChannelBrowse
@@ -69,6 +67,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
+import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewController
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLookup
@@ -108,7 +107,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-import java.util.IdentityHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -140,8 +138,11 @@ class SportsLiveViewModel internal constructor(
     private val linkCheckOf: (SportsLiveItem) -> LinkCheckRequest? = { null },
     /** Learned logos' revision (#66): the drawn cards are built again when it moves. */
     logoRevision: Flow<Int> = flowOf(0),
-    /** A two-team card with no league, as its league's card when its teams name exactly one (#132 P4). */
-    private val inferSport: (SportsLiveItem) -> SportsLiveItem = { it },
+    /**
+     * A two-team card with no league, as its league's card when its teams name exactly one (#132 P4), with whether that
+     * still holds (live.25, #221: kept for an equal card until a team list it read or its teams' identity changes).
+     */
+    private val inferSport: (SportsLiveItem) -> SportsLiveInferredSport = { SportsLiveInferredSport(it) { true } },
     /** Offers the tab's games of unknown sport for a background team lookup (#168); called only while on screen. */
     private val identify: (List<SportsLiveItem>) -> Unit = {},
     /**
@@ -266,7 +267,7 @@ class SportsLiveViewModel internal constructor(
         // debounce after its last, which a steady trickle of feeds could hold back for seconds).
         logoRevision = combine(TeamLogoBook.shared.revision, TeamIdentityBook.shared.revision) { logos, identities -> logos * 31 + identities }
             .firstThenCoalesce(LOGO_SETTLE_MS),
-        inferSport = { item -> SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, TeamDirectory.shared)) },
+        inferSport = { item -> SportsLiveInferredSport.infer(item) },
         identify = identifier::offer,
         directoryChanges = SportsLiveSharedBuckets.stampChanges().map { },
         mySports = prefs.mySports,
@@ -447,6 +448,18 @@ class SportsLiveViewModel internal constructor(
     private var liveFirstDone = false
     private var lastSorted: Bucketed? = null
 
+    /** What the last full sorting was built from, and at what time (live.25, #221). */
+    private class SortInputs(
+        val load: SportsLiveLoad,
+        val claimedKeys: Set<String>,
+        val addonOrder: List<String>,
+        val stamp: Long,
+        val upcoming: UpcomingInputs?,
+        val atMs: Long
+    )
+
+    private var lastSortInputs: SortInputs? = null
+
     /** Runs between the cold open's Live now and the other tabs' sorting; tests hold it to see Live now first. */
     @VisibleForTesting
     internal var afterLiveFirst: suspend () -> Unit = {}
@@ -465,10 +478,23 @@ class SportsLiveViewModel internal constructor(
                 return@combineTransform
             }
             emit(Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder)))
+            lastSortInputs = null
             return@combineTransform
         }
         val items = latest.items.filter { it.catalogKey in claimedKeys }
         val stamp = directoryStamp()
+        // live.25 (#221): a signal with nothing new for the last sorting sorts nothing again: Upcoming was sorted 3 times in
+        // one open on the TV (3-7 s each), one of them for a directory change the sorting before had already read (its
+        // debounced signal landed after it). Same load, catalogs, order, directory, Upcoming ask, and no game changed tab.
+        lastSortInputs?.let { last ->
+            if (last.load === latest && last.stamp == stamp && last.claimedKeys == claimedKeys && last.addonOrder == addonOrder &&
+                last.upcoming == upcoming && now - last.atMs in 0 until SportsLiveSharedBuckets.MAX_AGE_MS &&
+                !SportsLiveItemBucketer.clockChangedBetween(items, last.atMs, now)
+            ) {
+                SportsLiveDebugTiming.log { "sportsOpen stage=bucketSkipped t=${sinceOpenMs()}" }
+                return@combineTransform
+            }
+        }
         // Back on the section while the load it was built from is still the latest (live.20 B1): no bucketing again,
         // unless the team directory moved or a game started since.
         // live.24: a windowed Upcoming is kept by the shared sorting itself (per load, per days asked), never by the list cache.
@@ -536,6 +562,7 @@ class SportsLiveViewModel internal constructor(
             upcomingPending = upcomingBucket?.pendingDates.orEmpty(), upcomingWaiting = upcomingBucket?.waitingBySport ?: 0
         )
         lastSorted = done
+        lastSortInputs = SortInputs(latest, claimedKeys, addonOrder, stamp, upcoming, now)
         emit(done)
     }.flowOn(computeDispatcher)
 
@@ -585,21 +612,22 @@ class SportsLiveViewModel internal constructor(
     // Live now's, Upcoming's and Replays' unrouted two-team cards take the league their teams name (#132 P4),
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
     // Titles hidden from Live Now (#134) are left off its list, and off Upcoming's (live.20: "Hide this" there).
-    // RC regression (#143): re-inferring every card (3-4 s on the onn) at most once per pinSettleMs for learned logos.
-    // live.24: each card's inferred copy, kept while the learned logos, identities and team directory are as they were, so
-    // a re-pin (a refreshed catalog, a follow, a hidden title, the open's second step) infers only the cards it has not
-    // seen. By object: rows a re-bucketing did not change keep theirs ([SportsLiveItemBucketer.bucketClockedIncremental]).
-    private var pinMemo = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
-    private var pinMemoKey: Pair<Int, Long>? = null
+    // RC regression (#143): a learned logo or identity re-pins at most once per pinSettleMs.
+    // live.24: each card's inferred copy is kept, so a re-pin (a refreshed catalog, a follow, a hidden title, the open's
+    // second step) infers only the cards it has not seen.
+    // live.25 (#221): kept per card while what its inference read holds ([SportsLiveInferredSport.holds]), no longer
+    // dropped for every card when a logo, a score match, an ESPN start or any team list moved (all ~750 cards were
+    // inferred again 3-4 times per open on the TV, 2-18 s). By value: a re-bucketing rebuilds rows as new, equal objects.
+    private var pinMemo = HashMap<SportsLiveItem, SportsLiveInferredSport>()
 
-    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, revision, hidden ->
+    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, _, hidden ->
         hiddenNow = hidden
         val startedAt = System.nanoTime()
-        val memoKey = revision to directoryStamp()
-        val before = if (memoKey == pinMemoKey) pinMemo else IdentityHashMap()
-        val memo = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+        val before = pinMemo
+        val memo = HashMap<SportsLiveItem, SportsLiveInferredSport>()
         var inferredCount = 0
-        fun inferred(item: SportsLiveItem): SportsLiveItem = memo.getOrPut(item) { before[item] ?: inferSport(item).also { inferredCount++ } }
+        fun inferred(item: SportsLiveItem): SportsLiveItem =
+            memo.getOrPut(item) { before[item]?.takeIf { it.holds() } ?: inferSport(item).also { inferredCount++ } }.item
         bucketed.copy(
             followed = followed,
             tabs = bucketed.tabs.mapValues { (tab, all) ->
@@ -616,7 +644,6 @@ class SportsLiveViewModel internal constructor(
             }
         ).also {
             pinMemo = memo
-            pinMemoKey = memoKey
             SportsLiveDebugTiming.log {
                 "sportsOpen stage=pinned ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} " +
                     "inferred=$inferredCount reused=${memo.size - inferredCount}"

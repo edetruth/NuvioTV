@@ -59,6 +59,11 @@ class TeamDirectory(
     /** Moves whenever a league is added or replaced: lists merged by team ids are built again (live.18). */
     val revision: StateFlow<Long> = revisionFlow.asStateFlow()
 
+    // live.25 (#221): the generation at which each league was last added, replaced or dropped, and the leagues one
+    // [reading] block has read so far on this thread ([ALL_LEAGUES] for a read across every league).
+    private val leagueGenerations = HashMap<String, Long>()
+    private val reads = ThreadLocal<HashMap<String, Long>?>()
+
     /** Called after a league is added or replaced (the [TeamLogoBook] bumps its revision: cards redraw). */
     @Volatile
     internal var onChange: (() -> Unit)? = null
@@ -76,11 +81,13 @@ class TeamDirectory(
         synchronized(this) {
             generation++
             leagues[league.path] = entry
+            leagueGenerations[league.path] = generation
             val iterator = leagues.keys.iterator()
             while (leagues.size > maxLeagues && iterator.hasNext()) {
                 val path = iterator.next()
                 if (path in keptPaths || path == league.path) continue
                 iterator.remove()
+                leagueGenerations[path] = generation
                 leagueOf(path)?.let(dropped::add)
             }
         }
@@ -91,14 +98,59 @@ class TeamDirectory(
 
     /** When [league]'s list was fetched; null when it is not known. */
     @Synchronized
-    fun fetchedAt(league: EspnLeague): Long? = leagues[league.path]?.fetchedAt
+    fun fetchedAt(league: EspnLeague): Long? {
+        noteRead(league.path)
+        return leagues[league.path]?.fetchedAt
+    }
 
     @Synchronized
-    fun teams(league: EspnLeague): List<DirectoryTeam> = leagues[league.path]?.teams.orEmpty()
+    fun teams(league: EspnLeague): List<DirectoryTeam> {
+        noteRead(league.path)
+        return leagues[league.path]?.teams.orEmpty()
+    }
+
+    /**
+     * [block]'s result with the directory facts it read (live.25, #221): each league it looked at, or asked about while
+     * it was not loaded, at its generation, or every league when it read across them all. [unchangedSince] tells later
+     * whether any of them was added, replaced or dropped since: until then [block] would read the same.
+     */
+    fun <T> reading(block: () -> T): Pair<T, Map<String, Long>> {
+        val outer = reads.get()
+        val mine = HashMap<String, Long>()
+        reads.set(mine)
+        try {
+            return block() to mine
+        } finally {
+            reads.set(outer)
+            outer?.let { all -> for ((key, at) in mine) all.putIfAbsent(key, at) }
+        }
+    }
+
+    /** True when no league [read] (from [reading]) was added, replaced or dropped since. */
+    @Synchronized
+    fun unchangedSince(read: Map<String, Long>): Boolean = read.all { (key, at) -> generationOf(key) == at }
+
+    // Holding the lock, so a league's generation and the list read under it go together: a list replaced between them is
+    // recorded at its older generation, which only makes the reader read again.
+    private fun noteRead(key: String) {
+        reads.get()?.putIfAbsent(key, generationOf(key))
+    }
+
+    private fun generationOf(key: String): Long = if (key == ALL_LEAGUES) generation else leagueGenerations[key] ?: 0L
+
+    /** [generation] for a memo that reads across every league: a [reading] block depends on them all (no lock: hot path). */
+    private fun generationRead(): Long {
+        val at = generation
+        reads.get()?.putIfAbsent(ALL_LEAGUES, at)
+        return at
+    }
 
     /** The one team of [league] whose names include [cardSide]; null when none, several, or the league is unknown. */
     fun resolve(league: EspnLeague, cardSide: String): DirectoryTeam? {
-        val entry = synchronized(this) { leagues[league.path] } ?: return null
+        val entry = synchronized(this) {
+            noteRead(league.path)
+            leagues[league.path]
+        } ?: return null
         fun found(keys: Set<String>) = entry.teams.indices.filter { index -> entry.keys[index].any { it in keys } }
         // The names layer drops a trailing bracketed group ("Celtics [HD]"), which would read "Miami (OH)"
         // as "Miami": with the brackets opened first, a side naming a team that way finds that team only.
@@ -119,13 +171,13 @@ class TeamDirectory(
      * The loaded leagues whose list holds both [first] and [second] as two different teams (#167): a card that
      * names no sport is told by its teams. Kept per pair and directory generation (no regex work per call).
      */
-    fun leaguesHolding(first: String, second: String): List<EspnLeague> = holding(Triple(first, second, generation))
+    fun leaguesHolding(first: String, second: String): List<EspnLeague> = holding(Triple(first, second, generationRead()))
 
     /**
      * [side]'s abbreviation ("SUU", "STET") when it resolves in one of [item]'s listed leagues (#167): a panel
      * line names an unmatched game's side by it. Kept per side, card leagues and directory generation.
      */
-    fun abbreviationOf(item: SportsLiveItem, side: String): String? = abbreviations(Triple(side, leaguesFor(item), generation))
+    fun abbreviationOf(item: SportsLiveItem, side: String): String? = abbreviations(Triple(side, leaguesFor(item), generationRead()))
 
     private val abbreviations = Memo<Triple<String, List<EspnLeague>, Long>, String?>(HOLDING_MEMO) { (side, leagues, _) ->
         leagues.firstNotNullOfOrNull { league -> resolve(league, side)?.abbreviation?.trim()?.takeIf(String::isNotEmpty) }
@@ -135,7 +187,7 @@ class TeamDirectory(
      * [side]'s abbreviation in any loaded league (BUG-C follow-up: a card whose own league is not known): only when
      * every league that resolves it agrees on one; null otherwise. Kept per side and directory generation.
      */
-    fun abbreviationAnywhere(side: String): String? = abbreviationsAnywhere(side to generation)
+    fun abbreviationAnywhere(side: String): String? = abbreviationsAnywhere(side to generationRead())
 
     private val abbreviationsAnywhere = Memo<Pair<String, Long>, String?>(HOLDING_MEMO) { (side, _) ->
         val loaded = synchronized(this) { leagues.keys.toList() }.mapNotNull(::leagueOf)
@@ -147,7 +199,7 @@ class TeamDirectory(
     }
 
     /** True when [text] is a listed team's location ("Stetson", "Southern Utah") in a loaded league: a place, not a nickname. */
-    fun isLocation(text: String): Boolean = text.trim().lowercase() in locations(generation)
+    fun isLocation(text: String): Boolean = text.trim().lowercase() in locations(generationRead())
 
     private val locations = Memo<Long, Set<String>>(2) { _ ->
         synchronized(this) { leagues.values.flatMap { it.teams } }
@@ -167,7 +219,7 @@ class TeamDirectory(
      * True when [name] is a team of one of [leagues] (#159: a game My sports cannot place by its league is
      * placed by its teams). Kept per name, leagues and directory generation (no regex work per call).
      */
-    fun holdsAny(name: String, leagues: List<EspnLeague>): Boolean = holdsAnyMemo(Triple(name, leagues, generation))
+    fun holdsAny(name: String, leagues: List<EspnLeague>): Boolean = holdsAnyMemo(Triple(name, leagues, generationRead()))
 
     private val holdsAnyMemo = Memo<Triple<String, List<EspnLeague>, Long>, Boolean>(HOLDING_MEMO) { (name, among, _) ->
         among.any { resolve(it, name) != null }
@@ -179,7 +231,7 @@ class TeamDirectory(
      * team or more than one answers. Copies of one game naming their teams differently merge by these ids (live.18).
      * Kept per league, side and directory generation.
      */
-    fun teamId(league: EspnLeague, side: String): String? = teamIdMemo(Triple(league, side, generation))
+    fun teamId(league: EspnLeague, side: String): String? = teamIdMemo(Triple(league, side, generationRead()))
 
     private val teamIdMemo = Memo<Triple<EspnLeague, String, Long>, String?>(HOLDING_MEMO) { (league, side, _) ->
         if (fetchedAt(league) == null) null else cityVariants(side).mapNotNull { resolve(league, it)?.id }.distinct().singleOrNull()
@@ -242,6 +294,9 @@ class TeamDirectory(
     companion object {
         /** Leagues kept in memory and on disk. */
         const val MAX_LEAGUES = 48
+
+        // A [reading] block's key for a read across every league (no league path has a space).
+        private const val ALL_LEAGUES = "* all"
 
         private const val HOLDING_MEMO = 2_048
 

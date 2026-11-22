@@ -72,6 +72,20 @@ class SportsLiveUpcomingWindowTest {
     }
 
     @Test
+    fun `an ask with a clock a moment behind keeps the sorting, Upcoming's included`() {
+        // live.25 (#221): Home's row reads its clock before waiting for the section's sorting; its ask replaced it, and the
+        // section then sorted Upcoming again.
+        val shared = SportsLiveSharedBuckets()
+        val load = load(games())
+        val window = SportsLiveUpcomingWindow(zone)
+        val first = shared.upcoming(load, keys, order, now, window, stamp = 0L)
+        val sorted = shared.upcomingSorted
+        shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, now - 5_000L, stamp = 0L)
+        assertSame(first, shared.upcoming(load, keys, order, now, window, stamp = 0L))
+        assertEquals(sorted, shared.upcomingSorted)
+    }
+
+    @Test
     fun `a followed team's game is sorted whatever its day`() {
         val shared = SportsLiveSharedBuckets()
         // Game 7 (day 6) is Grizzlies vs Heat.
