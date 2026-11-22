@@ -2385,4 +2385,32 @@ class LiveScoresRepositoryTest {
         assertTrue(LiveScoresRepository.hasScoreFeed(pacersCard))
         assertTrue(LiveScoresRepository.hasScoreFeed(item("Sinner vs Alcaraz", "Tennis", "2026-11-15T20:00:00Z")))
     }
+
+    @Test
+    fun `over the budget an undated card keeps its score past midnight Eastern while its game is still in play`() = runTest {
+        // live.25 #226: after midnight Eastern the card's days became today and yesterday; its game, still in play, is on
+        // yesterday's feed, and today's (not asked yet) no longer fitted a full budget beside it: the score went.
+        val live = game(ScoreState.IN, 50, 48, "Q4 2:00").copy(startMs = ms("2026-11-16T02:30:00Z"))
+        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(live)) else ScoreboardResult(emptyList()) }
+        // 23:00 Eastern on the 15th.
+        val repo = repository("2026-11-16T04:00:00Z")
+        collect(repo)
+        val undated = item("Indiana Pacers at Philadelphia 76ers", "NBA", null)
+        repo.track(SECTION, listOf(undated))
+        runCurrent()
+        assertEquals(50, repo.scores.value[undated.streamKey]?.homeScore)
+        // A busy board: other games take every slot but the one of the card's game (live.24 RC review H1 keeps it).
+        val fillers = (1 until LiveScoresRepository.MAX_FEEDS).map { day ->
+            item("Team$day A vs Team$day B", "NBA", "${LocalDate.of(2026, 11, 17).plusDays(day.toLong())}T18:00:00Z")
+        }
+        repo.track(SECTION, fillers + undated)
+        runCurrent()
+        advanceTimeBy(30_001L); runCurrent()
+        assertEquals(50, repo.scores.value[undated.streamKey]?.homeScore)
+        // 00:10 Eastern on the 16th: the game is still in play, on the 15th's feed; the 16th's does not fit beside it.
+        advanceTimeBy(70 * 60_000L); runCurrent()
+        assertEquals(50, repo.scores.value[undated.streamKey]?.homeScore)
+        assertTrue(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16)) !in provider.calls)
+        assertTrue(undated.streamKey !in repo.unmatched.value)
+    }
 }

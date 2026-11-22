@@ -950,8 +950,21 @@ class LiveScoresRepository internal constructor(
             if (entry.piggyback) continue
             val own = feedsOf(remembered[entry.card.key]?.let(::listOf) ?: entry.leagues, datesFor(entry.card))
             val shown = raw[entry.card.key]
-            val kept = if (shown == null) own else own.filter { feed ->
-                feeds[feed]?.let { !it.fetched || it.events.any { event -> event.eventId == shown.eventId } } ?: true
+            // A card with no start whose game is in play keeps only the feeds that hold it (live.25 #226): after midnight
+            // Eastern its game sits on yesterday's feed while today's, not asked yet, joins its days; on a full budget the
+            // two no longer fitted and the score went though the game was still on. An in-play game is tonight's game, never
+            // last night's final of a back-to-back pair (that one is POST): the R1 rule below still holds for any other.
+            val playing = if (entry.card.startMs == null && shown?.state == ScoreState.IN) {
+                own.filter { feed -> feeds[feed]?.events?.any { it.eventId == shown.eventId } == true }
+            } else {
+                emptyList()
+            }
+            val kept = when {
+                shown == null -> own
+                playing.isNotEmpty() -> playing
+                else -> own.filter { feed ->
+                    feeds[feed]?.let { !it.fetched || it.events.any { event -> event.eventId == shown.eventId } } ?: true
+                }
             }
             if (fits(kept)) needed += kept
         }
