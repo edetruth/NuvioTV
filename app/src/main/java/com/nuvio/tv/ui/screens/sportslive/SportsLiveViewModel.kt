@@ -241,7 +241,7 @@ class SportsLiveViewModel internal constructor(
         onResolveFailed = resolver::invalidate,
         endedInputs = combine(liveScores.scores, liveScores.mode, liveScores.unmatched) { scores, mode, unmatched ->
             EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched))
-        }.firstThenCoalesce(STATE_SCORES_SETTLE_MS),
+        }.firstThenCoalesce(STATE_SCORES_SETTLE_MS, SCORES_CATCH_UP_MS),
         endedGames = SportsLiveEndedGames.shared,
         clock = flow {
             while (true) {
@@ -802,7 +802,8 @@ class SportsLiveViewModel internal constructor(
     val board: StateFlow<SportsLiveBoard?> =
         combine(
             uiState,
-            boardScores.firstThenCoalesce(scoresSettleMs),
+            // live.25 #226: back from the player, the current scores right after the stale first value, never a window later.
+            boardScores.firstThenCoalesce(scoresSettleMs, SCORES_CATCH_UP_MS),
             repo.followedTeams,
             logoRevision,
             combine(
@@ -1658,6 +1659,11 @@ class SportsLiveViewModel internal constructor(
          */
         const val STATE_SCORES_SETTLE_MS = 3_000L
         const val BOARD_SCORES_SETTLE_MS = 1_000L
+        /**
+         * The scores that follow the first ones within this time pass at once (live.25 #226, [firstThenCoalesce]): back
+         * from the player, the section's cards are tracked again and their scores, finals included, land within it.
+         */
+        const val SCORES_CATCH_UP_MS = 1_500L
         const val REBUCKET_GAP_MS = 20_000L
         const val PIN_SETTLE_MS = 8_000L
 
