@@ -29,6 +29,7 @@ import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
+import com.nuvio.tv.core.sportslive.SportsLiveInferredSport
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -959,7 +960,7 @@ class SportsLiveViewModelTest {
         )
         val viewModel = SportsLiveViewModel(
             repo,
-            inferSport = { it.copy(sport = "Inferred") },
+            inferSport = { SportsLiveInferredSport(it.copy(sport = "Inferred")) { true } },
             computeDispatcher = compute
         )
         viewModel.nowMs = { NOW }
@@ -981,7 +982,7 @@ class SportsLiveViewModelTest {
         nextLoad = load(listOf(live, next))
         val viewModel = SportsLiveViewModel(
             repo,
-            inferSport = { inferred++; it.copy(sport = "Inferred") },
+            inferSport = { inferred++; SportsLiveInferredSport(it.copy(sport = "Inferred")) { true } },
             sharedBuckets = SportsLiveSharedBuckets(),
             computeDispatcher = compute
         )
@@ -1000,6 +1001,56 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertEquals(3, inferred)
         assertEquals(listOf("Inferred", "Inferred"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.sport })
+    }
+
+    @Test
+    fun `a learned logo or a team list a card did not read keeps its inferred sport, a list it read infers it again`() = runTest {
+        // live.25 (#221): each card's inference holds while what it read is unchanged ("u" read one list, "a" none).
+        var inferred = 0
+        var uList = 0
+        val live = item("a", isLive = true, sport = "Basketball", name = "Bulls vs Heat")
+        val next = item("u", isLive = false, sport = "Basketball", startMs = NOW + HOUR, name = "Bulls vs Nets")
+        nextLoad = load(listOf(live, next))
+        val logos = MutableStateFlow(0)
+        val directoryChanges = MutableSharedFlow<Unit>()
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(
+            repo,
+            logoRevision = logos,
+            inferSport = { item ->
+                inferred++
+                val read = uList
+                SportsLiveInferredSport(item.copy(sport = if (item.id == "u") "Inferred $read" else "Inferred")) { item.id != "u" || uList == read }
+            },
+            directoryChanges = directoryChanges,
+            directoryStamp = { stamp },
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        // Every sorting gives new, equal rows: the kept answers are found by value.
+        viewModel.bucket = { items, now, order -> SportsLiveItemBucketer.bucket(items.map { it.copy() }, now, order) }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertEquals(2, inferred)
+
+        // A learned logo re-pins: nothing is inferred again (all ~750 cards were, on the TV).
+        logos.value = 1
+        advanceUntilIdle()
+        assertEquals(2, inferred)
+
+        // A team list neither card read lands: the load is sorted again, and still nothing is inferred again.
+        stamp = 1L
+        directoryChanges.emit(Unit)
+        advanceUntilIdle()
+        assertEquals(2, inferred)
+
+        // The list "u" read changes: only "u" is inferred again, and shows the new answer.
+        uList = 1
+        logos.value = 2
+        advanceUntilIdle()
+        assertEquals(3, inferred)
+        assertEquals(listOf("Inferred 1"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.sport })
+        assertEquals(listOf("Inferred"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.sport })
     }
 
     @Test

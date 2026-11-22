@@ -40,6 +40,16 @@ object SportsLiveTeamIdentity {
     }
 
     /**
+     * The identity [identified] reads for [item] (live.25, #221): its two teams' answer in [book]; null when there is none
+     * or it reads none (a channel, no two teams). A card's identified copy holds while this stays the same.
+     */
+    fun identityOf(item: SportsLiveItem, book: TeamIdentityBook = TeamIdentityBook.shared): GameIdentity? {
+        if (book.isEmpty || item.isChannel || item.teams == null) return null
+        val (first, second) = sides(item.meta.name) ?: return null
+        return book.identityOf(first, second)
+    }
+
+    /**
      * True when [item] is a soccer game that names no competition (item 3): its sport says soccer and every source
      * routes to soccer/all alone, so no league list or feed can place it; its teams are looked up as an unknown
      * sport's are.
