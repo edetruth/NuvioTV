@@ -7,6 +7,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.dual.dualItem
 import com.nuvio.tv.ui.screens.sportslive.dual.dualStream
+import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -31,6 +33,9 @@ class SportsLiveMiniExpanderTest {
     private var lookups = 0
     private val picked = mutableListOf<Pair<Stream, Boolean>>()
 
+    /** Whether the targets carry the full player's route (false: the Stream screen opens instead). */
+    private var withPlayback = true
+
     @After
     fun tearDown() {
         SportsLiveZapSessions.clear()
@@ -39,7 +44,7 @@ class SportsLiveMiniExpanderTest {
     private class Setup(
         val mini: SportsLiveMiniPlayerController,
         val expander: SportsLiveMiniExpander,
-        val targets: MutableList<SportsLiveZapTarget>
+        val targets: MutableList<SportsLiveMiniExpand>
     )
 
     private fun TestScope.setup(lookup: CompletableDeferred<Stream?>): Setup {
@@ -50,10 +55,10 @@ class SportsLiveMiniExpanderTest {
             resolve = { lookups++; lookup.await() },
             toTarget = { playing, stream, fresh ->
                 picked += stream to fresh
-                SportsLiveZapTarget(playing.item, null, playing.session.returnToHomeOnBack)
+                SportsLiveZapTarget(playing.item, if (withPlayback) playbackOf(stream) else null, playing.session.returnToHomeOnBack)
             }
         )
-        val targets = mutableListOf<SportsLiveZapTarget>()
+        val targets = mutableListOf<SportsLiveMiniExpand>()
         backgroundScope.launch { expander.targets.collect { targets += it } }
         mini.onBackFromPlayer("a", session, miniStream)
         return Setup(mini, expander, targets)
@@ -77,6 +82,7 @@ class SportsLiveMiniExpanderTest {
         runCurrent()
         assertEquals(listOf(freshStream to true), picked)
         assertEquals(1, s.targets.size)
+        assertFalse("a looked-up stream opens on its own, the mini player stopped first", s.targets.single().handOver)
         assertSame(session, SportsLiveZapSessions.current())
         assertNull(s.expander.expanding.value)
     }
@@ -92,6 +98,7 @@ class SportsLiveMiniExpanderTest {
 
         assertEquals(listOf(miniStream to false), picked)
         assertEquals(1, s.targets.size)
+        assertFalse("a link not playing is never handed over", s.targets.single().handOver)
     }
 
     @Test
@@ -147,6 +154,30 @@ class SportsLiveMiniExpanderTest {
         assertEquals(0, lookups)
         assertEquals(listOf(miniStream to false), picked)
         assertEquals(1, s.targets.size)
+        // L (live.25): the link playing goes on in its own player, handed to the full player, never started again.
+        assertTrue(s.targets.single().handOver)
+        assertEquals(miniStream.url, s.targets.single().target.playback?.url)
+    }
+
+    @Test
+    fun `a playing link whose target opens the Stream screen is not handed over`() = runTest {
+        withPlayback = false
+        val lookup = CompletableDeferred<Stream?>()
+        val s = setup(lookup)
+        s.mini.onLinkPlaying(s.playing().sessionId, true)
+
+        s.expander.expand(s.playing())
+        runCurrent()
+
+        assertEquals(0, lookups)
+        assertFalse(s.targets.single().handOver)
+    }
+
+    @Test
+    fun `only a link drawing frames and not reconnecting is handed over`() {
+        assertTrue(sportsLiveMiniHandsOver(rendered = true, reconnecting = false))
+        assertFalse(sportsLiveMiniHandsOver(rendered = false, reconnecting = false))
+        assertFalse(sportsLiveMiniHandsOver(rendered = true, reconnecting = true))
     }
 
     @Test
@@ -177,3 +208,27 @@ class SportsLiveMiniExpanderTest {
         assertTrue(!s.mini.isLinkPlaying(s.playing()))
     }
 }
+
+private fun playbackOf(stream: Stream) = StreamPlaybackInfo(
+    url = stream.url,
+    title = "game",
+    streamName = stream.name.orEmpty(),
+    year = null,
+    isExternal = false,
+    isTorrent = false,
+    infoHash = null,
+    ytId = null,
+    headers = null,
+    contentId = "a",
+    contentType = null,
+    contentName = null,
+    poster = null,
+    backdrop = null,
+    logo = null,
+    videoId = null,
+    season = null,
+    episode = null,
+    episodeTitle = null,
+    bingeGroup = null,
+    profileId = 1
+)
