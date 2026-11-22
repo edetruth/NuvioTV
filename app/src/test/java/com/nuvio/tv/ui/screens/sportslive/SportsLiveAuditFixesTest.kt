@@ -69,6 +69,17 @@ class SportsLiveAuditFixesTest {
         assertEquals(live to SportsLiveTab.LIVE_NOW, sportsLiveZapSource(SportsLiveTab.LIVE_NOW, live[0], live, emptyList()))
     }
 
+    @Test
+    fun `only a Channels session gives the guide its own list, in CH plus and minus order whatever chip was picked (G15)`() {
+        val uk = AlertFixtures.item("UK One", isChannel = true).copy(group = "UK")
+        val us = AlertFixtures.item("US One", isChannel = true).copy(group = "US")
+        val channels = SportsLiveZapSession.of(listOf(us, uk), uk.streamKey, SportsLiveTab.CHANNELS, "UK", false)!!
+        assertEquals(listOf(uk, us), channels.channelGuideItems())
+        assertEquals(listOf(uk, us), channels.copy(panelChip = ZapPanelChip("Soccer")).channelGuideItems())
+        val live = listOf(AlertFixtures.item("A vs B", isLive = true), AlertFixtures.item("C vs D", isLive = true))
+        assertEquals(null, SportsLiveZapSession.of(live, live[0].streamKey, SportsLiveTab.LIVE_NOW, null, false)!!.channelGuideItems())
+    }
+
     // Design audit A3: one fixed home for alert cards, inside the safe area
 
     @Test

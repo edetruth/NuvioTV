@@ -472,6 +472,10 @@ class SportsLiveZapViewModel internal constructor(
         val items = combine(all, panelChip, mySports, logos.revision) { (list, followed), chip, sports, _ ->
             // #218: every report says what My sports holds.
             SportsLiveReportTrail.onMySports(mySportsReportLine(sports))
+            // Audit G15: a session started on Channels lists its channels, in the order CH± walks them, never Live now's games.
+            controller.session(contentId)?.channelGuideItems()?.let { channels ->
+                return@combine PanelList(channels, chip, filterPanelItems(channels, chip), followed, channels, channels = true, mySports = sports)
+            }
             // More live (user 2026-11-21): under My sports the listings that are no game (H) are never in the lineup, and the
             // All sports value shows More live's games, by sport (the games My sports leaves out), not everything.
             val (games, others) = if (sports.isDefault) list to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(list)
@@ -513,7 +517,8 @@ class SportsLiveZapViewModel internal constructor(
                 ?.filter(SportsLiveOtherEvents::isOtherEvent)?.mapTo(HashSet()) { it.streamKey }.orEmpty()
             // The one shared order (live.25, #225): Live now's, the guide's and CH±'s ([SportsLiveLineup], same inputs), kept
             // inside each status group. More live (the All sports value) keeps its own grouping by sport, as on Live now.
-            val ordered = if (panelList.chip == SportsLiveUiState.ALL_SPORTS_FILTER) {
+            // A Channels session's list (G15) keeps the order CH± walks.
+            val ordered = if (panelList.chip == SportsLiveUiState.ALL_SPORTS_FILTER || panelList.channels) {
                 split.live
             } else {
                 SportsLiveLineup.order(split.live, panelList.mySports, scores, scoresMode)
@@ -529,7 +534,8 @@ class SportsLiveZapViewModel internal constructor(
             }
             // Started from Live now's list: its order as shown (the calm order) leads inside each group (live.25, #225).
             val seed = SportsLiveZapSessions.current()?.takeIf { it.tab == SportsLiveTab.LIVE_NOW }?.seed
-            val (rows, frozen) = freezePanelLineup(panelLineup(grouped, favorites, seed), keep)
+            // Favorites lead a Live now list only: a Channels session's list is CH±'s, as it is (G15).
+            val (rows, frozen) = freezePanelLineup(panelLineup(grouped, if (panelList.channels) emptySet() else favorites, seed), keep)
             if (open) {
                 frozenOrder = frozen
                 frozenChip = panelList.chip
@@ -1537,7 +1543,9 @@ private data class PanelList(
     /** My sports is picked (not the default): the first chip reads "My sports" (TV report #14). */
     val mySportsPicked: Boolean = false,
     /** The profile's My sports: the shared order's league priority (live.25, [SportsLiveLineup]). */
-    val mySports: MySports = MySports.DEFAULT
+    val mySports: MySports = MySports.DEFAULT,
+    /** A Channels session's channels (audit G15, [channelGuideItems]), in CH±'s order: no shared order, no favorites lift. */
+    val channels: Boolean = false
 )
 
 /**
