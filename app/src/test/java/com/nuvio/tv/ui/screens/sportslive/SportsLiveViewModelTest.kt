@@ -1442,7 +1442,7 @@ class SportsLiveViewModelTest {
     private val celticsGame = item("celtics", isLive = true, sport = "Basketball", name = "Dallas Mavericks at Boston Celtics", startMs = NOW - 30 * MINUTE)
 
     @Test
-    fun `the excitement badge shows with scores shown only, and only then moves a close game up its tier`() = runTest {
+    fun `the excitement badge shows with scores shown only and never moves a row, so Show and Hide list alike`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
         nextLoad = load(listOf(pacersGame, hornetsGame, lakersGame, celticsGame))
         val inputs = flowOf(
@@ -1469,13 +1469,13 @@ class SportsLiveViewModelTest {
         }
 
         val shown = state(ScoresMode.SHOW)
-        // J2 (live.23): followed first; the close game leads its tier (scores on screen), the rest by start.
-        assertEquals(listOf("celtics", "lakers", "pacers", "hornets"), shown.visibleItems.map { it.id })
+        // Followed first; inside the tier the games ESPN has before the one it has none of, then by start. The close game
+        // gets its badge but keeps its place (live.25, Fable sorting audit: no excitement bump).
+        assertEquals(listOf("celtics", "pacers", "lakers", "hornets"), shown.visibleItems.map { it.id })
         assertEquals(mapOf(lakersGame.streamKey to WhyTag(WhyKind.CLOSE_LATE, 1)), shown.whyTags)
-        // Hide until focused: no badges and no bump; inside the tier the games ESPN has (a hidden score) come before the
-        // one it has none of (sorting model, live.24: it tells only that ESPN has the game), then by start.
+        // Hide until focused: no badges, and the same order as Show (matched tells only that ESPN has the game).
         val hidden = state(ScoresMode.HIDE_UNTIL_FOCUSED)
-        assertEquals(listOf("celtics", "pacers", "lakers", "hornets"), hidden.visibleItems.map { it.id })
+        assertEquals(shown.visibleItems.map { it.id }, hidden.visibleItems.map { it.id })
         assertTrue(hidden.whyTags.isEmpty())
         // Off: no score of ours at all, so start order; the followed game is first under every setting.
         val off = state(ScoresMode.OFF)
