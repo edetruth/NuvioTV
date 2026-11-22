@@ -1566,12 +1566,15 @@ private fun SportsLiveContent(
         }
         repeat(2) { withFrameNanos { } }
         // Back from the player the card gets focus, not the stage's Watch it was played from (N3): asked
-        // again for a few frames until the list holds it.
-        repeat(RETURN_FOCUS_FRAMES) {
-            runCatching { cardFocusRequesters[target]?.requestFocus() }
-            withFrameNanos { }
-            if (listHasFocus) return@LaunchedEffect
-        }
+        // again for a few frames until the target row itself holds it. The list's focus restorer answers the
+        // first request with the row played from, so the list holding focus is not enough (M3, live.26).
+        sportsLiveFocusReturnRow(
+            target = target,
+            attempts = RETURN_FOCUS_FRAMES,
+            focusedKey = { focusedCardKey.takeIf { listHasFocus } },
+            request = { runCatching { cardFocusRequesters[target]?.requestFocus() } },
+            awaitFrame = { withFrameNanos { } }
+        )
     }
 
     LaunchedEffect(boardPending, items) {

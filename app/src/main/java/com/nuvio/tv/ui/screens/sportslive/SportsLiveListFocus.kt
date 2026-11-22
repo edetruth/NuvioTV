@@ -96,3 +96,25 @@ fun sportsLiveNearestRow(previousIds: List<String>, goneId: String, currentIds: 
     }
     return null
 }
+
+/**
+ * M3 (live.26): Back from the player, focus goes to the row [target] (the game playing now). Compose's focus restorer on
+ * the list answers a request from outside the list with the row it remembers (the one played from, before any zap), so
+ * focus counts as returned only once [target] itself holds it ([focusedKey]: the focused row while the list holds
+ * focus, else null). [request] asks again after each frame ([awaitFrame]), at most [attempts] times; once the list holds
+ * focus the next request is a move inside it, which the restorer leaves alone. True when [target] got focus.
+ */
+suspend fun sportsLiveFocusReturnRow(
+    target: String,
+    attempts: Int,
+    focusedKey: () -> String?,
+    request: () -> Unit,
+    awaitFrame: suspend () -> Unit
+): Boolean {
+    repeat(attempts) {
+        request()
+        awaitFrame()
+        if (focusedKey() == target) return true
+    }
+    return false
+}
