@@ -27,6 +27,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.DrawerItem
 import com.nuvio.tv.R
@@ -272,6 +273,11 @@ fun SportsLiveContentFocusGroup(contentFocus: FocusRequester, content: @Composab
 /** The app-wide Sports & Live layers above the NavHost: the mini player, alert cards and the toast card. */
 @Composable
 fun SportsLiveActivityOverlays(navController: NavHostController, currentRoute: String?, contentFocus: FocusRequester) {
+    // What the screen on top plays (audit G30): sports toasts and the report shortcut stay out of a movie.
+    val top by navController.currentBackStackEntryAsState()
+    val topRoute = top?.destination?.route
+    val topContentId = top?.arguments?.getString("contentId")
+    LaunchedEffect(topRoute, topContentId) { SportsLiveOverMovie.onScreen(topRoute, topContentId) }
     // The Sports & Live mini player, above the NavHost; focus reaches it only by a D-pad move.
     SportsLiveMiniPlayerHost(
         onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) },

@@ -48,6 +48,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveToast
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToastQueue
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import kotlinx.coroutines.delay
@@ -157,6 +158,10 @@ fun SportsLiveToastHost(queue: SportsLiveToastQueue = SportsLiveToasts.shared) {
         delay(SportsLiveToastQueue.SHOW_MS)
         queue.dismiss(id)
     }
+    // Audit G34: nothing draws into the picture-in-picture window. G30: a toast raised over a movie never shows;
+    // either way its time runs out as if it had.
+    val inPip by SportsLivePip.inPip.collectAsStateWithLifecycle()
+    val overMovie = remember(toast?.id) { SportsLiveOverMovie.now }
     // The last toast stays composed while it slides out.
     val shown = remember { ToastHolder() }
     toast?.let { shown.last = it }
@@ -170,7 +175,7 @@ fun SportsLiveToastHost(queue: SportsLiveToastQueue = SportsLiveToasts.shared) {
             gap = SportsLiveTokens.Size.RowGap
         )
         AnimatedVisibility(
-            visible = toast != null,
+            visible = toast != null && !inPip && !overMovie,
             enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { width -> -width } +
                 fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
             exit = slideOutHorizontally(tween(SportsLiveTokens.Toast.ENTER_MS)) { width -> -width } +

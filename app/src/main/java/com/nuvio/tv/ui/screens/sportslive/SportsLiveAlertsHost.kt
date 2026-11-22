@@ -105,6 +105,7 @@ import com.nuvio.tv.ui.navigation.navigateToSportsLiveZapTarget
 import com.nuvio.tv.ui.navigation.sportsLiveTargetRoute
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -299,7 +300,9 @@ fun SportsLiveAlertsHost(
 
     /** The screen's own overlays are up (the guide, controls, a menu, a dialog): a card waits under them. */
     fun screenBusy(): Boolean =
-        currentSurface?.busy() == true || !windowInfo.isWindowFocused || SportsLiveHoldOk.sheet.value != null
+        currentSurface?.busy() == true || !windowInfo.isWindowFocused || SportsLiveHoldOk.sheet.value != null ||
+            // Audit G34: never in the picture-in-picture window; a card waits there as under an overlay.
+            SportsLivePip.inPip.value
 
     /** Watch both is offered on the countdown card: over a sports stream in the full player only (#136), never for a replay. */
     fun canBoth(): Boolean =
@@ -464,7 +467,9 @@ fun SportsLiveAlertsHost(
     // Back closes a card that shows "OK", or cancels the countdown (never the screen under it), by the back callback
     // as by the key.
     TakeBack(visible && (actionable || countdown != null)) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
-    if (!visible) return
+    // Audit G34: nothing draws into the picture-in-picture window, a countdown card up when it opened included.
+    val inPip by SportsLivePip.inPip.collectAsState()
+    if (!visible || inPip) return
     // Each card is its own overlay.
     key(current.id) {
     Box(modifier = Modifier.fillMaxSize()) {
