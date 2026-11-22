@@ -55,12 +55,15 @@ class SportsLiveMenuTrimTest {
     }
 
     @Test
-    fun `the player's row menu puts Watch both first and stays at 7`() {
+    fun `the player's row menu puts Report first, then Watch both, and stays at 7`() {
+        // live.25 #226: the in-player table lists Report a problem first, as the player menu and dual screen do.
         val panel = SportsLiveMenuOffer(
-            report = true, postgame = true, watchWith = true, watchWithFirst = true, chooseStream = true,
+            report = true, reportFirst = true, postgame = true, watchWith = true, watchWithFirst = true, chooseStream = true,
             gameStats = true, follows = 2, scoresAhead = true
         )
-        assertEquals(listOf(POSTGAME, WATCH_WITH, CHOOSE_STREAM, GAME_STATS, TEAMS, SCORES_AHEAD, REPORT), sportsLiveMenuSlots(panel))
+        assertEquals(listOf(REPORT, POSTGAME, WATCH_WITH, CHOOSE_STREAM, GAME_STATS, TEAMS, SCORES_AHEAD), sportsLiveMenuSlots(panel))
+        // A channel row: Report, then Add to favorites.
+        assertEquals(listOf(REPORT, FAVORITE, CHOOSE_STREAM), sportsLiveMenuSlots(SportsLiveMenuOffer(report = true, reportFirst = true, favorite = true, chooseStream = true)))
         // The player menu (#218): Report first.
         val player = SportsLiveMenuOffer(report = true, reportFirst = true, chooseStream = true, scoresAhead = true)
         assertEquals(listOf(REPORT, CHOOSE_STREAM, SCORES_AHEAD), sportsLiveMenuSlots(player))

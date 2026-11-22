@@ -430,7 +430,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
             } else {
                 null
             },
-            // TV QA: the one way to report on a remote with no Play/Pause or Info to hold.
+            // TV QA: the one way to report on a remote with no Play/Pause or Info to hold. First, as in the player menu and
+            // dual screen (#218, live.25 #226): one order for every Hold OK menu over the player.
             onReport = if (SportsLiveMoreEntry.REPORT in shown.entries) {
                 {
                     menu = null
@@ -439,6 +440,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
             } else {
                 null
             },
+            reportFirst = true,
             // Channels phase 1: Hold OK on a channel row, Add to / Remove from favorites first.
             favorite = shown.favorite == true,
             onToggleFavorite = shown.favorite?.let { wasFavorite ->
