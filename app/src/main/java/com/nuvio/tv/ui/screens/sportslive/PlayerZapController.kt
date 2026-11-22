@@ -193,11 +193,14 @@ class PlayerZapController(
     /** [direction]: an Up/Down zap's (true = next), which skips games with no stream; null for a panel pick. */
     private fun zapTo(target: SportsLiveZapSession, direction: Boolean? = null): Boolean {
         if (playing == null) return false
+        // live.25 I: this zap owns the lookup before the older one is cancelled. On the TV (Main.immediate) a cancelled
+        // lookup's catch runs inside cancel(): still holding the count, it reverted the session to the game playing, so the
+        // game this zap then played opened without its session (no CH±, guide or sports Hold OK menu).
+        val lookup = ++lookups
         SportsLiveZapSessions.update(target)
         this.target = target
         job?.cancel()
         _resolving.value = target
-        val lookup = ++lookups
         job = scope.launch {
             try {
                 // Settle first: a newer flip cancels this job here, so skipped channels never resolve.

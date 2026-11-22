@@ -218,7 +218,12 @@ internal object SportsLiveZapSessions {
 
     /** A player opening for [contentId] ends a session that is not on that content. */
     fun keepOnlyFor(contentId: String?) {
-        if (activeFor(contentId) == null) clear()
+        if (activeFor(contentId) != null) return
+        // live.25 I: a player a zap opened must find its session; never lose CH±, the guide and the sports menu silently.
+        if (zapArrivalPending) {
+            com.nuvio.tv.core.sportslive.SportsLiveSpeedClock.stage("noSession", "zapArrival=true session=${if (session == null) "none" else "otherGame"}")
+        }
+        clear()
     }
 
     fun update(session: SportsLiveZapSession) {

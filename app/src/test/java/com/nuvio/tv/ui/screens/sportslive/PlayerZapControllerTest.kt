@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -614,6 +615,88 @@ class PlayerZapControllerTest {
         playerScope.cancel()
         runCurrent()
         assertEquals(ZapPanelChip(sportKey("Soccer")), SportsLiveZapSessions.activeFor("a")?.panelChip)
+    }
+
+    /**
+     * live.25 I: the player's scope on the TV (viewModelScope, Main.immediate) resumes a cancelled lookup inside cancel(),
+     * so its catch runs before the newer zap returns. The unconfined test dispatcher does the same; backgroundScope's
+     * standard dispatcher queues it, which hid the race from the tests above.
+     */
+    private fun TestScope.immediateScope(): CoroutineScope =
+        CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+
+    @Test
+    fun `two quick flips land in a player that keeps the session`() = runTest {
+        startOn("a")
+        val controller = controller(immediateScope(), settleMs = 600L)
+
+        controller.zap("a", forward = true)
+        advanceTimeBy(300)
+        controller.zap("a", forward = true)
+        // The cancelled first flip must not put the session back on the game playing.
+        assertEquals("c", SportsLiveZapSessions.current()?.current?.id)
+        advanceTimeBy(601)
+        pending.getValue("c").complete(STREAM)
+        runCurrent()
+
+        assertEquals(listOf("c" to STREAM), navigated)
+        // The player opened for c keeps its session, so CH, the guide and the sports menu work there.
+        SportsLiveZapSessions.keepOnlyFor("c")
+        assertEquals("c", SportsLiveZapSessions.activeFor("c")?.current?.id)
+        assertTrue(controller(immediateScope()).zap("c", forward = true))
+    }
+
+    @Test
+    fun `a flip during the previous flip's lookup lands in a player that keeps the session`() = runTest {
+        startOn("a")
+        val controller = controller(immediateScope(), settleMs = 600L)
+
+        controller.zap("a", forward = true)
+        advanceTimeBy(601)
+        assertEquals(listOf("b"), resolveCalls)
+        // The field log's second press, while the first flip's lookup runs.
+        controller.zap("a", forward = true)
+        assertEquals("c", SportsLiveZapSessions.current()?.current?.id)
+        runCurrent()
+        assertEquals(listOf("b"), cancelled)
+        advanceTimeBy(601)
+        pending.getValue("c").complete(STREAM)
+        runCurrent()
+
+        assertEquals(listOf("c" to STREAM), navigated)
+        SportsLiveZapSessions.keepOnlyFor("c")
+        assertEquals("c", SportsLiveZapSessions.activeFor("c")?.current?.id)
+    }
+
+    @Test
+    fun `a double flip right after a zapped player started keeps the session for the next player`() = runTest {
+        startOn("a")
+        val oldPlayer = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler) + Job())
+        controller(oldPlayer, settleMs = 600L).zap("a", forward = true)
+        advanceTimeBy(601)
+        pending.getValue("b").complete(STREAM)
+        runCurrent()
+        assertEquals(listOf("b" to STREAM), navigated)
+        // The player for b opens, as SportsLiveZapViewModel does it.
+        SportsLiveZapSessions.markZapArrival()
+        SportsLiveZapSessions.keepOnlyFor("b")
+        assertTrue(SportsLiveZapSessions.consumeZapArrival())
+        val newPlayer = controller(immediateScope(), settleMs = 600L)
+
+        // A flip at once as b starts, a second one while its lookup runs; the old player leaves meanwhile.
+        assertTrue(newPlayer.zap("b", forward = true))
+        advanceTimeBy(601)
+        assertTrue(newPlayer.zap("b", forward = true))
+        oldPlayer.cancel()
+        runCurrent()
+        assertEquals("d", SportsLiveZapSessions.current()?.current?.id)
+        advanceTimeBy(601)
+        pending.getValue("d").complete(STREAM)
+        runCurrent()
+
+        assertEquals(listOf("b" to STREAM, "d" to STREAM), navigated)
+        SportsLiveZapSessions.keepOnlyFor("d")
+        assertEquals("d", SportsLiveZapSessions.activeFor("d")?.current?.id)
     }
 
     private companion object {
