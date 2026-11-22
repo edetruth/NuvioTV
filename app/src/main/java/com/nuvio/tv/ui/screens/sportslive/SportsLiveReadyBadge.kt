@@ -57,13 +57,13 @@ fun SportsLiveReadyPill(modifier: Modifier = Modifier, stage: Boolean = false) {
 }
 
 /**
- * "No stream yet": no working stream was found (1b). Muted, calm: never the alarming ⚠. [short]: "No stream", for a Live
- * Now row's 88 dp status column, where the longer words were cut under the clock (l24 polish P4).
+ * "No stream": no working stream was found (1b). Muted, calm: never the alarming ⚠. One wording on every surface (live.25
+ * #226): the Live Now row's 88 dp status column cut the longer "No stream yet" under the clock (l24 polish P4).
  */
 @Composable
-fun SportsLiveNoStreamYet(modifier: Modifier = Modifier, short: Boolean = false) {
+fun SportsLiveNoStreamYet(modifier: Modifier = Modifier) {
     Text(
-        text = stringResource(if (short) R.string.sports_live_no_stream_row_mark else R.string.sports_live_no_stream_yet_mark),
+        text = stringResource(R.string.sports_live_no_stream_row_mark),
         style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
         color = Colors.TextMuted,
         maxLines = 1,
@@ -99,7 +99,7 @@ fun rememberSportsLiveChecking(item: SportsLiveItem, readiness: SportsLiveGameRe
 }
 
 /**
- * [mark] drawn: "▶ Ready" for READY; "No stream yet" for NO_STREAM only where [showNoStream] (the in-player panel,
+ * [mark] drawn: "▶ Ready" for READY; "No stream" for NO_STREAM only where [showNoStream] (the in-player panel,
  * the kickoff prompt); nothing otherwise.
  */
 @Composable

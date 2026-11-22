@@ -781,7 +781,6 @@
         <item quantity="other">%1$d new games</item>
     </plurals>
     <string name="sports_live_agenda_later">Later ›</string>
-    <string name="sports_live_no_stream_yet_mark">No stream yet</string>
     <string name="sports_live_no_stream_row_mark">No stream</string>
     <string name="sports_live_checking_mark">…</string>
     <string name="sports_live_checking_description">Checking for a stream</string>
