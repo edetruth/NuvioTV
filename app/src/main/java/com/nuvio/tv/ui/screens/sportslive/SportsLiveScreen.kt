@@ -1263,7 +1263,7 @@ private fun SportsLiveContent(
         if (item.listKey != followedCardKey) followedCardKey = null
         focusedCardKey = item.listKey
         onSelectItem(item.id)
-        com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail.onFocused(com.nuvio.tv.core.sportslive.SportsLiveDisplayText.name(item.meta.name))
+        com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail.onFocused(com.nuvio.tv.core.sportslive.SportsLiveDisplayText.name(item.meta.name), item)
     }
     // A later-today strip card (#155) opens the same menu as its Upcoming row.
     val stripRowOf: (String) -> ScoreboardRow? = { key ->

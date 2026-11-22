@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveLinkFailure
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
+import com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
@@ -97,6 +98,8 @@ class SportsLiveReporter @Inject constructor(
     internal fun startCrashCaches() {
         scope.launch { runCatching { addonRepository.getInstalledAddons().collect { addonSecrets = addonSecretsOf(it) } } }
         scope.launch { runCatching { prefs.scoreSettings.collect { scoresNow = scoresLine(it) } } }
+        // My sports reaches the report from here too: the in-player panel is not the only place that knows it (report #23).
+        scope.launch { runCatching { prefs.mySports.collect { SportsLiveReportTrail.onMySports(mySportsReportLine(it)) } } }
     }
 
     /** The secrets known now, without waiting: for a crash. */
@@ -254,7 +257,10 @@ class SportsLiveReporter @Inject constructor(
     }
 
     private fun input(number: Int, now: Long, zone: ZoneId, trigger: String, scores: String): SportsLiveReportInput {
-        val item = SportsLiveZapSessions.current()?.current ?: SportsLiveGameWatch.shared.lastWatchedItem()
+        val item = SportsLiveReportTrail.gameOf(
+            SportsLiveZapSessions.current()?.current, SportsLiveReportTrail.focusedItem,
+            SportsLiveGameWatch.shared.lastWatchedItem(), SportsLiveReportTrail.screen
+        )
         val readiness = SportsLiveGameReadiness.shared
         val marks = readiness.marks.value
         val game = item?.let {
@@ -263,10 +269,11 @@ class SportsLiveReporter @Inject constructor(
                 title = SportsLiveDisplayText.name(it.meta.name),
                 teams = it.teams?.let { pair -> "${pair.home} vs ${pair.away}" },
                 sport = it.sport,
-                league = snapshot?.leagueName ?: it.meta.genres.firstOrNull(),
+                league = snapshot?.leagueName ?: SportsLiveMatchedEvents.shared.leagueOf(it.streamKey)?.path ?: it.meta.genres.firstOrNull(),
                 live = it.isLive,
                 sources = it.sourceCount,
                 espn = snapshot?.let { s -> "${s.eventId} ${s.state.name.lowercase()}" }
+                    ?: SportsLiveMatchedEvents.shared.leagueOf(it.streamKey)?.let { league -> "matched ${league.path}" }
             )
         }
         val (failed, played) = item?.let { SportsLiveLinkMarks.shared.counts(it.id) } ?: (emptyMap<SportsLiveLinkFailure, Int>() to 0)
