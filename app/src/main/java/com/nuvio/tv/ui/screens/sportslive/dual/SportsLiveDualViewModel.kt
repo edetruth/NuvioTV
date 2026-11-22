@@ -150,10 +150,12 @@ internal fun dualPickerGames(
     games: Flow<List<SportsLiveItem>>,
     mySports: Flow<MySports>,
     scores: Flow<Map<String, ScoreSnapshot>>,
-    mode: Flow<ScoresMode?>
+    mode: Flow<ScoresMode?>,
+    limit: Int = Int.MAX_VALUE
 ): Flow<List<SportsLiveItem>> =
     combine(games, mySports, scores, mode) { list, sports, snapshots, scoresMode ->
-        SportsLiveLineup.order(list, sports, snapshots, scoresMode)
+        // Cut after the shared sort, never before: a game a score feed has ranks inside the cut (live.25 review S2).
+        SportsLiveLineup.order(list, sports, snapshots, scoresMode).take(limit)
     }
 
 /**
@@ -314,7 +316,7 @@ class SportsLiveDualViewModel internal constructor(
         savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) },
         reminders = preferences.reminders,
         // live.25 (#225): the one shared order, with the inputs Live now and the player's panel use ([SportsLiveLineup]).
-        liveGames = dualPickerGames(repo.liveNow(limit = PICKER_LIMIT, forHomeRow = false), preferences.mySports, liveScores.scores, liveScores.mode),
+        liveGames = dualPickerGames(repo.liveNow(limit = Int.MAX_VALUE, forHomeRow = false), preferences.mySports, liveScores.scores, liveScores.mode, PICKER_LIMIT),
         claimKeysHint = { preferences.claimDualKeysHint(::shouldShowDualKeysHint) }
     )
 

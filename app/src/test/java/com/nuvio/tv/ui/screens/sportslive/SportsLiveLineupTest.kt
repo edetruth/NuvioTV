@@ -102,6 +102,13 @@ class SportsLiveLineupTest {
     }
 
     @Test
+    fun `the dual picker cuts its pool after the shared sort, so a game with a score feed is kept`() {
+        val full = runBlocking { dualPickerGames(flowOf(games), flowOf(MySports.DEFAULT), flowOf(calm), flowOf(ScoresMode.SHOW)).first() }
+        val cut = runBlocking { dualPickerGames(flowOf(games), flowOf(MySports.DEFAULT), flowOf(calm), flowOf(ScoresMode.SHOW), limit = 3).first() }
+        assertEquals(full.take(3).map { it.id }, cut.map { it.id })
+    }
+
+    @Test
     fun `Live Now, the panel, the table guide, CH and the dual picker list the same games in the same order`() {
         // Followed first; then league priority (Champions League, Premier League, NBA); inside the NBA the games ESPN has
         // before the one it has none of, each by start; the unplaced college game last.

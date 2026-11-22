@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
@@ -140,6 +141,12 @@ internal fun SportsLiveBoardList(
     railLetters: Triple<String?, String, String?>?,
     modifier: Modifier = Modifier
 ) {
+    // The "N new" line is inserted above the first row: with the list at its top, show it (live.25 review S3), as the
+    // list would otherwise keep row 0 in place and leave the line above the viewport.
+    val hasNewRows = model.newRows > 0
+    LaunchedEffect(hasNewRows) {
+        if (hasNewRows && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
+    }
     // Channels phase 2: the browse list keeps room at its right edge for its letter.
     Box(modifier = modifier) {
         LazyColumn(
