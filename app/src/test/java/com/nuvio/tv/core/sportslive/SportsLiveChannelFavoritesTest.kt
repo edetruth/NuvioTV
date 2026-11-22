@@ -115,4 +115,30 @@ class SportsLiveChannelFavoritesTest {
         assertFalse(f.isPickSection("US"))
         assertFalse(f.isPickSection(null))
     }
+
+    // live.25 J: a pick synced from another TV carries its name key alone (no addon, no id).
+    private fun synced(name: String) = SportsLiveChannelRef("", "", f.nameKey(name))
+
+    @Test
+    fun `a synced pick is found by name in any addon, a merged channel's copies too`() {
+        val ref = synced("US: Sports One")
+        assertEquals(listOf("9"), f.resolve(listOf(ref), listOf(channel("8", "UK: Sports One", addon = "b"), channel("9", "US: Sports One HD", addon = "b"))).map { it.id })
+        val merged = channel("1", "Sports One Plus", addon = "c").copy(alternates = listOf(channel("2", "US: Sports One", addon = "d")))
+        assertEquals(listOf("1"), f.resolve(listOf(ref), listOf(merged)).map { it.id })
+        assertTrue(f.resolve(listOf(ref), listOf(channel("3", "US: Other One", addon = "b"))).isEmpty())
+    }
+
+    @Test
+    fun `removing a favorite that came synced removes it by name`() {
+        val picks = SportsLiveChannelPicks(favorites = listOf(synced("US: Sports One")))
+        assertTrue(f.toggle(picks, channel("5", "US: Sports One FHD", addon = "b"), favorite = true).favorites.isEmpty())
+    }
+
+    @Test
+    fun `a play keeps its time and replaces a synced pick of the same name`() {
+        val picks = SportsLiveChannelPicks(recent = listOf(synced("US: Sports One"), synced("US: Other One")))
+        val played = f.played(picks, channel("5", "US: Sports One", addon = "b"), nowMs = 1_000L)
+        assertEquals(listOf("5", ""), played.recent.map { it.id })
+        assertEquals(1_000L, played.recent.first().playedAt)
+    }
 }

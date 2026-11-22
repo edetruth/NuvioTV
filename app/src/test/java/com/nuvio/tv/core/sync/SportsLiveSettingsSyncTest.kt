@@ -4,6 +4,8 @@ import androidx.datastore.preferences.core.edit
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRef
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
@@ -15,7 +17,12 @@ import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
+import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.PosterShape
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.model.UserProfile
 import io.github.jan.supabase.postgrest.Postgrest
@@ -41,6 +48,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -247,6 +255,157 @@ class SportsLiveSettingsSyncTest {
         assertFalse("Celtics at Lakers" in a.export().toString())
     }
 
+    // live.25 J: Channels' favorites and recent plays.
+
+    private fun channel(id: String, name: String, addon: String) = SportsLiveItem(
+        meta = MetaPreview(
+            id = id, type = ContentType.UNKNOWN, rawType = "tv", name = name, poster = null,
+            posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
+            releaseInfo = null, imdbRating = null, genres = emptyList()
+        ),
+        addonId = addon, addonName = addon, addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Channels",
+        kind = SportsLiveKind.CHANNELS, isLive = true, isChannel = true, startMs = null, sport = null
+    )
+
+    private val one = SportsLiveChannelFavorites.nameKey("US: Sports One")
+    private val two = SportsLiveChannelFavorites.nameKey("US: Sports Two")
+    private val three = SportsLiveChannelFavorites.nameKey("US: Sports Three")
+
+    private suspend fun Tv.favorite(item: SportsLiveItem) = prefs.updateChannelPicks { SportsLiveChannelFavorites.toggle(it, item, favorite = false) }
+    private suspend fun Tv.unfavorite(item: SportsLiveItem) = prefs.updateChannelPicks { SportsLiveChannelFavorites.toggle(it, item, favorite = true) }
+    private suspend fun Tv.play(item: SportsLiveItem) = prefs.updateChannelPicks { SportsLiveChannelFavorites.played(it, item, clock) }
+    private suspend fun Tv.favorites(): List<SportsLiveChannelRef> = prefs.channelPicks.first().favorites
+    private suspend fun Tv.recent(): List<SportsLiveChannelRef> = prefs.channelPicks.first().recent
+
+    @Test
+    fun `channel picks go up by name key alone, never an addon id, channel id or link`() = runTest {
+        val a = Tv(start)
+        a.favorite(channel("https://example.invalid/live/42.m3u8", "US: Sports One HD", addon = "secret-addon-id"))
+        a.play(channel("item-77", "US: Sports Two", addon = "secret-addon-id"))
+        // A pick whose name key would carry a link never goes up.
+        a.prefs.updateChannelPicks { it.copy(favorites = it.favorites + SportsLiveChannelRef("secret-addon-id", "item-78", "https://example.invalid/x")) }
+
+        val uploaded = a.export().toString()
+        listOf("://", "secret-addon-id", "example.invalid", "42.m3u8", "item-77", "item-78").forEach { banned ->
+            assertFalse("uploaded $banned", banned in uploaded)
+        }
+        assertTrue(one in uploaded)
+        assertTrue(two in uploaded)
+    }
+
+    @Test
+    fun `channel favorites merge as a union, a removal is kept and each TV keeps its own addon`() = runTest {
+        val a = Tv(start)
+        val b = Tv(start)
+        val oneOnA = channel("ch-1", "US: Sports One", addon = "addon.one")
+        a.favorite(oneOnA)
+        b.clock = start + 5
+        b.favorite(channel("ch-2", "US: Sports Two HD", addon = "addon.two"))
+
+        a.pull(b)
+        b.pull(a)
+        assertEquals(listOf(one, two), a.favorites().map { it.name })
+        assertEquals(setOf(one, two), b.favorites().map { it.name }.toSet())
+        // A's own pick keeps its addon and id; the one from B has none here.
+        assertEquals(SportsLiveChannelFavorites.refOf(oneOnA), a.favorites().first())
+        assertEquals("", a.favorites().last().addonId)
+
+        // Removed on B (where it came synced): gone on A too, and an old copy that still has it does not bring it back.
+        val oldCopy = Tv(start).also { it.pull(a) }
+        b.clock = start + 50
+        b.unfavorite(channel("ch-9", "US: Sports One", addon = "addon.two"))
+        a.clock = start + 60
+        a.pull(b)
+        assertEquals(listOf(two), a.favorites().map { it.name })
+        a.pull(oldCopy)
+        assertEquals(listOf(two), a.favorites().map { it.name })
+
+        // Added again later: wins over the removal. A's save leaves the synced pick's time as it was.
+        a.clock = start + 70
+        a.favorite(oneOnA)
+        b.pull(a)
+        assertEquals(setOf(one, two), b.favorites().map { it.name }.toSet())
+        val synced = a.export().getValue("lists").jsonObject.getValue("sports_live_channel_favorites").jsonObject
+        assertEquals(start + 5, synced.getValue(two).jsonObject.getValue("at").jsonPrimitive.long)
+    }
+
+    @Test
+    fun `recent channels merge by last play, once per channel, at most as many as a TV keeps`() = runTest {
+        val a = Tv(start + 1)
+        val b = Tv(start + 2)
+        a.play(channel("ch-1", "US: Sports One", addon = "addon.one"))
+        b.play(channel("ch-2", "US: Sports Two", addon = "addon.two"))
+        a.clock = start + 3
+        a.play(channel("ch-3", "US: Sports Three", addon = "addon.one"))
+        b.clock = start + 4
+        b.play(channel("ch-9", "US: Sports One", addon = "addon.two"))
+
+        a.pull(b)
+        assertEquals(listOf(one, three, two), a.recent().map { it.name })
+        // B's later play wins, and A keeps its own copy of the channel.
+        assertEquals(start + 4, a.recent().first().playedAt)
+        assertEquals("ch-1", a.recent().first().id)
+
+        val names = (1..12).map { SportsLiveChannelFavorites.nameKey("US: Channel $it") }
+        (1..12).forEach { i ->
+            b.clock = start + 10 + i
+            b.play(channel("c$i", "US: Channel $i", addon = "addon.two"))
+        }
+        a.pull(b)
+        assertEquals(SportsLiveChannelFavorites.RECENT_KEPT, a.recent().size)
+        assertEquals(names.reversed().take(SportsLiveChannelFavorites.RECENT_KEPT), a.recent().map { it.name })
+
+        // Both TVs end up the same.
+        b.pull(a)
+        a.pull(b)
+        assertEquals(SportsLiveSettingsSync.canonical(a.export()), SportsLiveSettingsSync.canonical(b.export()))
+    }
+
+    @Test
+    fun `a new TV gets the channel picks and finds them in its own addons`() = runTest {
+        val a = Tv(start)
+        val oneOnA = channel("ch-1", "US: Sports One", addon = "addon.one")
+        a.favorite(oneOnA)
+        a.clock = start + 5
+        a.play(oneOnA)
+
+        val fresh = Tv(start + 10)
+        fresh.pull(a)
+        val there = channel("other-id", "US | Sports One FHD", addon = "addon.two")
+        assertEquals(listOf(there), SportsLiveChannelFavorites.resolve(fresh.favorites(), listOf(there)))
+        assertEquals(listOf(there), SportsLiveChannelFavorites.resolve(fresh.recent(), listOf(there)))
+
+        // Back on A: unchanged, its own addon and id kept.
+        val before = a.prefs.channelPicks.first()
+        a.pull(fresh)
+        assertEquals(before.favorites, a.favorites())
+        assertEquals(before.recent, a.recent())
+    }
+
+    @Test
+    fun `channel picks sync per profile`() = runTest(dispatcher) {
+        val harness = harness()
+        val prefs = harness.sports
+        prefs.updateChannelPicks { it.copy(favorites = listOf(SportsLiveChannelRef("addon.one", "ch-1", one))) }
+        harness.service.pushCurrentProfileToRemote().getOrThrow()
+        harness.activeProfileId.value = 2
+        prefs.updateChannelPicks { it.copy(favorites = listOf(SportsLiveChannelRef("addon.one", "ch-2", two))) }
+        harness.service.pushCurrentProfileToRemote().getOrThrow()
+
+        val first = harness.remote.getValue(1).toString()
+        val second = harness.remote.getValue(2).toString()
+        assertTrue(one in first)
+        assertFalse(two in first)
+        assertTrue(two in second)
+        assertFalse(one in second)
+
+        // Profile 1 on a cleared TV gets its own picks only.
+        harness.activeProfileId.value = 1
+        harness.factory.get(1, SportsLivePreferencesDataStore.FEATURE).edit { it.clear() }
+        assertTrue(harness.service.pullCurrentProfileFromRemote().getOrThrow())
+        assertEquals(listOf(one), prefs.channelPicks.first().favorites.map { it.name })
+    }
+
     @Test
     fun `a malformed upload changes nothing`() = runTest {
         val a = Tv(start)
@@ -291,7 +450,8 @@ class SportsLiveSettingsSyncTest {
         val service: ProfileSettingsSyncService,
         val sports: SportsLivePreferencesDataStore,
         val factory: ProfileDataStoreFactory,
-        val remote: MutableMap<Int, JsonObject>
+        val remote: MutableMap<Int, JsonObject>,
+        val activeProfileId: MutableStateFlow<Int>
     )
 
     private fun harness(): Harness {
@@ -338,6 +498,6 @@ class SportsLiveSettingsSyncTest {
             mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
         )
         services += service
-        return Harness(service, SportsLivePreferencesDataStore(factory, profileManager), factory, remote)
+        return Harness(service, SportsLivePreferencesDataStore(factory, profileManager), factory, remote, activeProfileId)
     }
 }
