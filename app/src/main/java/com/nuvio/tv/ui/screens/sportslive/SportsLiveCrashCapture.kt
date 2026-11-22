@@ -42,6 +42,8 @@ object SportsLiveCrashCapture {
         try {
             val reporter = EntryPointAccessors.fromApplication(app, SportsLiveReporterEntryPoint::class.java).sportsLiveReporter()
             reporter.startCrashCaches()
+            // Report a problem's screenshot (live.25) follows the activity on screen.
+            SportsLiveScreenCapture.install(app)
             Thread.setDefaultUncaughtExceptionHandler(
                 SportsLiveCrashHandler(
                     previous = Thread.getDefaultUncaughtExceptionHandler(),
