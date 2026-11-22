@@ -628,6 +628,62 @@ class SportsLiveViewModelTest {
         assertEquals(0, back.newLiveRows)
     } }
 
+    private fun TestScope.returnTrip(
+        evening: List<String>,
+        morning: List<String>,
+        focus: String,
+        viaPlayer: Boolean,
+        awayMs: Long = 11 * HOUR
+    ): SportsLiveUiState {
+        nextLoad = load(evening.map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) })
+        var clock = NOW
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { clock },
+            endedInputs = flowOf(EndedInputs()),
+            endedGames = SportsLiveEndedGames(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { clock }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+        viewModel.selectItem(focus)
+        runCurrent()
+        if (viaPlayer) viewModel.startZapSession(item(focus, isLive = true, sport = "Soccer", name = focus.uppercase()))
+        viewModel.onScreenVisible(false)
+        runCurrent()
+        clock += awayMs
+        nextLoad = load(morning.map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }).copy(loadedAtMs = clock)
+        viewModel.show()
+        viewModel.setBrowsing(true)
+        runCurrent()
+        return viewModel.uiState.value
+    }
+
+    @Test
+    fun `back from the player after 10 minutes keeps focus on the watched game and the board is fresh (M3)`() = runTest { hidingShownAtEnd {
+        val back = returnTrip(listOf("a", "b", "c"), listOf("d", "c", "b", "a"), focus = "b", viaPlayer = true, awayMs = 12 * 60_000L)
+        assertEquals("b", back.selectedItemId)
+        assertEquals("fresh board: as built, the new game in", setOf("a", "b", "c", "d"), back.visibleItems.map { it.id }.toSet())
+    } }
+
+    @Test
+    fun `back from the player with the watched game gone focuses its nearest row, not the first (M3)`() = runTest { hidingShownAtEnd {
+        val back = returnTrip(listOf("a", "b", "c", "d"), listOf("a", "b", "d", "e"), focus = "c", viaPlayer = true)
+        assertEquals("b", back.selectedItemId)
+        assertEquals(setOf("a", "b", "d", "e"), back.visibleItems.map { it.id }.toSet())
+    } }
+
+    @Test
+    fun `an idle long absence with no player focuses the first row (M3)`() = runTest { hidingShownAtEnd {
+        val back = returnTrip(listOf("a", "b", "c", "d"), listOf("a", "b", "d", "e"), focus = "c", viaPlayer = false)
+        assertEquals(back.visibleItems.first().id, back.selectedItemId)
+        assertEquals("a", back.visibleItems.first().id)
+    } }
+
     @Test
     fun `back after a short absence the browsed rows stay and the fresh ones wait (O)`() = runTest { hidingShownAtEnd {
         val tonight = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }

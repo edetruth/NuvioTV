@@ -81,3 +81,18 @@ fun sportsLiveKeyAfterRemoval(previousKeys: List<String>, currentKeys: List<Stri
         ?: previousKeys.subList(0, index).lastOrNull { it in listed }
         ?: currentKeys.first()
 }
+
+/**
+ * M3: the row nearest where [goneId] was in [previousIds], among [currentIds]: the closest by distance, the one before
+ * it first on a tie. Null when [goneId] was not in [previousIds] or none of its rows is listed.
+ */
+fun sportsLiveNearestRow(previousIds: List<String>, goneId: String, currentIds: List<String>): String? {
+    val index = previousIds.indexOf(goneId)
+    if (index < 0) return null
+    val listed = currentIds.toHashSet()
+    for (distance in 1..previousIds.size) {
+        previousIds.getOrNull(index - distance)?.takeIf { it in listed }?.let { return it }
+        previousIds.getOrNull(index + distance)?.takeIf { it in listed }?.let { return it }
+    }
+    return null
+}

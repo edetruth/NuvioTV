@@ -406,6 +406,23 @@ class SportsLiveViewModel internal constructor(
     private var lastListAtMs: Long? = null
     private var freshHoldJob: Job? = null
 
+    // M3 (live.25 RC2): a Player round trip is no idle absence. The game played (and when its player opened) is noted at
+    // launch; if the section is then left within PLAYER_LEAVE_MS, a long absence keeps focus on that game, or on its
+    // nearest row when the fresh board dropped it ([returnAnchor]), instead of falling to the first row.
+    private var playerLaunch: Pair<String, Long>? = null
+    private var leftForPlayerId: String? = null
+    private var returnAnchor: ReturnAnchor? = null
+
+    private class ReturnAnchor(val id: String, val rowIds: List<String>)
+
+    /** The selected row: the one chosen if listed; else, back from the Player, the nearest to it (M3); else the first. */
+    private fun selectedIdOf(selection: Selection, visible: List<SportsLiveItem>): String? =
+        selection.itemId?.takeIf { id -> visible.any { it.id == id } }
+            ?: returnAnchor?.takeIf { selection.tab == SportsLiveTab.LIVE_NOW && it.id == selection.itemId }?.let {
+                sportsLiveNearestRow(it.rowIds, it.id, visible.map { row -> row.id })
+            }
+            ?: visible.firstOrNull()?.id
+
     // The mini player's game while it plays (TV QA BUG7): it stays listed.
     @Volatile
     private var miniPlayingNow: String? = null
@@ -1169,6 +1186,7 @@ class SportsLiveViewModel internal constructor(
      * re-probed when the last probe is stale; scrolling past items probes nothing.
      */
     fun selectItem(id: String?) {
+        returnAnchor = null
         selectionState.update { it.copy(itemId = id) }
         focusProbeJob?.cancel()
         if (id == null || selectionState.value.tab != SportsLiveTab.LIVE_NOW) return
@@ -1211,6 +1229,7 @@ class SportsLiveViewModel internal constructor(
             }
         }
         val playedFromMoreLive = moreLive.any { it.streamKey == item.streamKey }
+        playerLaunch = item.id to nowMs()
         val (items, tab) = if (playedFromMoreLive) {
             moreLive to state.selectedTab
         } else {
@@ -1291,6 +1310,8 @@ class SportsLiveViewModel internal constructor(
         val now = nowMs()
         if (!watching) {
             unwatchedSinceMs = now
+            leftForPlayerId = playerLaunch?.takeIf { now - it.second in 0..PLAYER_LEAVE_MS }?.first
+            playerLaunch = null
             return
         }
         val since = unwatchedSinceMs ?: return
@@ -1298,6 +1319,11 @@ class SportsLiveViewModel internal constructor(
         if (SportsLiveCalmOpen.longAbsence(since, now, zone)) {
             absentListAtMs = lastListAtMs
             freshAfterAbsence = true
+            // M3: back from the Player, focus stays on the game watched (its nearest row if the fresh board drops it).
+            returnAnchor = leftForPlayerId?.let { ReturnAnchor(it, shownLiveNow.map { row -> row.id }) }
+            if (returnAnchor != null && selectionState.value.tab == SportsLiveTab.LIVE_NOW) {
+                selectionState.update { it.copy(itemId = leftForPlayerId) }
+            }
             // Review M1: the list the absence left waits behind the loading rows, not shown as built, for at most HOLD_MS.
             selectionState.update { it.copy(freshHold = true) }
             freshHoldJob?.cancel()
@@ -1433,7 +1459,7 @@ class SportsLiveViewModel internal constructor(
             if (shown.size != shownBefore.size || shown.indices.any { shown[it] !== shownBefore[it] }) return null
         }
         val visible = last.state.visibleItems
-        val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } } ?: visible.firstOrNull()?.id
+        val selectedId = selectedIdOf(selection, visible)
         return last.state.copy(selectedItemId = selectedId)
     }
 
@@ -1678,8 +1704,7 @@ class SportsLiveViewModel internal constructor(
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
             else -> tabItems.filter { filterOf(it) == filter }
         }
-        val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } }
-            ?: visible.firstOrNull()?.id
+        val selectedId = selectedIdOf(selection, visible)
         // "N new" (TV QA Q5): the waiting rows this tab and filter would list.
         val newList = if (heldBack.isEmpty() || selection.tab != SportsLiveTab.LIVE_NOW) {
             emptyList<SportsLiveItem>()
@@ -1764,6 +1789,8 @@ class SportsLiveViewModel internal constructor(
 
         /** Coming back to the section, a list this old refreshes at once (live.20). */
         const val RETURN_STALE_MS = 3 * 60_000L
+        /** M3: a section left this soon after a player was launched is a Player round trip. */
+        const val PLAYER_LEAVE_MS = 30_000L
 
         /**
          * #143, tunable on the TV (NuvioTiming stage=pinned / stage=state / stage=board counts): a burst of learned logos
