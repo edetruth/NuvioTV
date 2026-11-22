@@ -246,6 +246,8 @@ class HomeViewModel @Inject constructor(
     internal var liveNowScoreLabels: Map<String, String> = emptyMap()
     /** The Live now cards' tags by item streamKey, read with their scores (the game identity's, as their cards show). */
     internal var liveNowTags: Map<String, String> = emptyMap()
+    /** The hero's "Starts 7:00 PM" by item streamKey, for games not started yet (live.25, [SportsLiveHomeRow.starts]). */
+    internal var liveNowStarts: Map<String, String> = emptyMap()
     internal var followAddonsOrderEnabled: Boolean = false
     internal var customCatalogTitles: Map<String, String> = emptyMap()
     internal var currentHeroCatalogKeys: List<String> = emptyList()

@@ -34,7 +34,7 @@ internal enum class SportsLivePlayerOk {
 
 /**
  * The full player's OK while nothing else wants it (#218): short, it does what it always did (opens the guide, or the
- * player's own OK); held, it opens the player menu (Report a problem first) and never also does the short action.
+ * player's own OK); held, it opens the player menu (Report a problem last) and never also does the short action.
  * - [menu] (the player menu is offered: a live game playing, the player idle): the press waits. Its first repeat (the
  *   system's long-press time, as Hold OK everywhere on the TV) is [SportsLivePlayerOk.HOLD] and its release
  *   [SportsLivePlayerOk.MENU]; a release before that is the short action ([SportsLivePlayerOk.OPEN_GUIDE] when [guide], else [SportsLivePlayerOk.SHORT]).
@@ -142,7 +142,11 @@ internal fun panelReportScope(chip: String?): String = when (chip) {
     else -> chip
 }
 
-/** A panel row for a report (#218): its tag (as the row draws it, plain words) and whether its score showed. No names. */
+/**
+ * A panel row for a report (#218): its tag (as the row draws it, plain words) and whether its score showed. A row with no
+ * score also names its game (live.25, TV report #21: seven FOOTBALL rows with no score could not be told apart), its
+ * clean one-line title: a title is no spoiler, and the report strips anything shaped like a score from it.
+ */
 internal fun panelReportRow(board: ScoreboardRow): String {
     val item = board.item
     val tag = SportsLiveTags.short(
@@ -153,10 +157,13 @@ internal fun panelReportRow(board: ScoreboardRow): String {
         is ScoreChip.Live -> if (chip.score != null) SportsLiveReport.SCORE_SHOWN else "no score"
         is ScoreChip.Final -> SportsLiveReport.SCORE_SHOWN
         ScoreChip.Hidden -> "score hidden"
-        else -> "no score"
+        else -> PANEL_REPORT_NO_SCORE
     }
-    return "$tag | $score"
+    if (score != PANEL_REPORT_NO_SCORE) return "$tag | $score"
+    return "$tag | $score | ${panelTitleOf(item).replace('|', '/')}"
 }
+
+private const val PANEL_REPORT_NO_SCORE = "no score"
 
 /** My sports as one report line (#218): "default (every sport)", else each sport with the leagues picked. */
 internal fun mySportsReportLine(sports: MySports): String {

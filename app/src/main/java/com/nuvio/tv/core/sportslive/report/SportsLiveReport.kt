@@ -145,7 +145,8 @@ object SportsLiveReport {
             section("Titles not placed, loads | title", input.unplaced.map(::title))
             section("Merge near misses", input.nearMisses?.map(::title) ?: listOf("not collected in this build"))
             section("Score feed data errors, newest first", input.feedDataErrors.map(::clean))
-            if (input.panelScope != null) section("Panel rows, tag | score", input.panelRows.map(::clean))
+            // A row with no score names its game (live.25): its title, never anything shaped like a score.
+            if (input.panelScope != null) section("Panel rows, tag | score", input.panelRows.map(::title))
             appendLine("Links, hosts, IP addresses, tokens, addon names and ids, e-mail and account ids are removed. No scores.")
         }
     }

@@ -72,7 +72,7 @@ data class SportsLiveUiState(
     val staleListAtMs: Long? = null,
     /** Live now's new rows waiting while it is browsed (TV QA BUG7 / Q5): "N new" on Refresh shows them. */
     val newLiveRows: Int = 0,
-    /** A followed team among [newLiveRows]' games (sorting model, live.24): the pill reads "2 new · ‹team› game". */
+    /** A followed team among [newLiveRows]' games, its short name (live.25 M): "Mavericks game started · 13 new — OK to show". */
     val newLiveFollowedTeam: String? = null,
     /**
      * More live (user 2026-11-21): under My sports, the live games Live now leaves out and the listings that are no game

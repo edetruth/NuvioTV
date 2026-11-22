@@ -215,6 +215,33 @@ class SportsLiveStageInfoTest {
     }
 
     @Test
+    fun `the value right after the first passes at once when it comes within the catch-up time, once`() = runTest {
+        // live.25 #226: collected again, the first value is the stale one; the current one follows within a moment.
+        fun source() = flow {
+            emit(1)
+            delay(200)
+            emit(2)
+            delay(10)
+            emit(3)
+            delay(2_000)
+            emit(4)
+            delay(10)
+            emit(5)
+        }
+        assertEquals(listOf(1, 2, 3, 5), source().firstThenCoalesce(300, catchUpMs = 1_000).toList())
+        assertEquals(listOf(1, 3, 5), source().firstThenCoalesce(300).toList())
+        // Later than the catch-up time: coalesced as before.
+        val late = flow {
+            emit(1)
+            delay(1_500)
+            emit(2)
+            delay(10)
+            emit(3)
+        }.firstThenCoalesce(300, catchUpMs = 1_000).toList()
+        assertEquals(listOf(1, 3), late)
+    }
+
+    @Test
     fun `values far apart are each built`() = runTest {
         val results = flow {
             emit(1)

@@ -137,6 +137,14 @@ class SportsLiveReportTest {
         assertTrue(summary, summary.contains("My sports: basketball: nba · soccer"))
         assertTrue(summary, summary.contains("Panel: All sports · 3 rows, 1 with a score"))
         assertTrue(text, text.contains("[Panel rows, tag | score]\nNBA | score shown\nBASKETBALL | no score\nRACING | score hidden"))
+        // live.25 (TV report #21): a row with no score names its game, never with anything shaped like a score.
+        val titled = SportsLiveReport.text(
+            input().copy(panelScope = "All sports", panelRows = listOf("FOOTBALL | no score | Illinois · Iowa", "SOCCER | no score | Arsenal 2-1 Chelsea")),
+            secrets
+        )
+        assertTrue(titled, titled.contains("FOOTBALL | no score | Illinois · Iowa"))
+        assertFalse(titled, titled.contains("2-1"))
+        assertTrue(titled, titled.contains("SOCCER | no score | Arsenal ${SportsLiveCrashReport.NUMBERS} Chelsea"))
         // No panel shown: no panel line, no section.
         val closed = SportsLiveReport.text(input(), secrets)
         assertFalse(closed, closed.contains("Panel:"))

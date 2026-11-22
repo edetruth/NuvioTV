@@ -70,18 +70,31 @@ private class Held<T>(val value: T)
  * a [ms] window, and when it closes the latest value of the window is sent. Unlike a debounce, a steady trickle (score
  * feeds answering one by one, logos learned one by one) never holds the update back for longer than [ms]. 0 or less:
  * every value as it comes.
+ *
+ * [catchUpMs] (live.25 #226): the one value that follows the first within that time is sent at once too. A flow
+ * collected again (back from the player) starts from the value it was left with, stale; the current one comes a moment
+ * later and was held back a whole window (the early board read an ended game LIVE, with no logos or scores, for ~4 s).
+ * One value at most: a first open's trickle of feed answers is still coalesced.
  */
-internal fun <T> Flow<T>.firstThenCoalesce(ms: Long): Flow<T> {
+internal fun <T> Flow<T>.firstThenCoalesce(ms: Long, catchUpMs: Long = 0L): Flow<T> {
     if (ms <= 0L) return this
     return channelFlow {
         val lock = Mutex()
         var first = true
         var pending: Held<T>? = null
         var window: Job? = null
+        var catchUp: Job? = null
         collect { value ->
             lock.withLock {
                 if (first) {
                     first = false
+                    send(value)
+                    if (catchUpMs > 0L) catchUp = launch { delay(catchUpMs) }
+                    return@withLock
+                }
+                if (catchUp?.isActive == true && window == null) {
+                    catchUp?.cancel()
+                    catchUp = null
                     send(value)
                     return@withLock
                 }

@@ -1122,7 +1122,7 @@ class SportsLiveZapViewModel internal constructor(
         val idle = playerIdle && !partyActive && controller.session(contentId) != null
         val menu = idle && playerOkOffered()
         // Audit G9 (live.24): in every other player state (a replay, OK = Pause, the end card, the controls) the press
-        // stays the player's, and only a hold of it opens the player menu, Report a problem first.
+        // stays the player's, and only a hold of it opens the player menu, Report a problem last.
         val lateMenu = !partyActive && nowPlaying != null
         return when (playerOk.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, guide = idle && guideOkOpens(), menu = menu, lateMenu = lateMenu)) {
             SportsLivePlayerOk.OPEN_GUIDE -> {

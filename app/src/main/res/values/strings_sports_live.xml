@@ -774,14 +774,14 @@
     <string name="sports_live_ready_pill">▶ Ready</string>
     <string name="sports_live_stage_stream_ready">▶ Stream ready</string>
     <string name="sports_live_agenda_earlier">‹ Earlier</string>
-    <!-- "N new" naming a followed team's game among them (live.24 sorting model): "2 new games · Lakers game". -->
-    <string name="sports_live_new_rows_followed">%1$s · %2$s game</string>
-    <plurals name="sports_live_new_rows">
-        <item quantity="one">%1$d new game</item>
-        <item quantity="other">%1$d new games</item>
+    <!-- live.25 M: Live now's "N new" line, the list's first line while games wait; OK adds them. -->
+    <plurals name="sports_live_new_rows_line">
+        <item quantity="one">%1$d new game — OK to show</item>
+        <item quantity="other">%1$d new games — OK to show</item>
     </plurals>
+    <!-- The same with a followed team's game among them, that game first (its short name): "Mavericks game started · 13 new — OK to show". -->
+    <string name="sports_live_new_rows_line_followed">%1$s game started · %2$d new — OK to show</string>
     <string name="sports_live_agenda_later">Later ›</string>
-    <string name="sports_live_no_stream_yet_mark">No stream yet</string>
     <string name="sports_live_no_stream_row_mark">No stream</string>
     <string name="sports_live_checking_mark">…</string>
     <string name="sports_live_checking_description">Checking for a stream</string>

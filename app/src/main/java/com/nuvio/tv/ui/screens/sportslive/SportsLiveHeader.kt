@@ -136,11 +136,7 @@ internal fun SportsLiveHeader(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
     /** Stale-while-revalidate (live.20 B1): when the list shown was loaded, while a refresh runs; null shows nothing. */
-    updatedAtMs: Long? = null,
-    /** Live now's rows waiting while it is browsed (TV QA Q5): Refresh reads "N new" and OK shows them. */
-    newRows: Int = 0,
-    /** A followed team whose game is among [newRows] (live.24): "2 new games · Lakers game". */
-    newRowsTeam: String? = null
+    updatedAtMs: Long? = null
 ) {
     val activeTabFocusRequester = tabFocusRequesters.getValue(selectedTab)
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
@@ -265,7 +261,7 @@ internal fun SportsLiveHeader(
             SportsLiveHeaderControl(
                 onClick = onRefresh,
                 onLongClick = if (badged) onShowFailures else null,
-                round = newRows == 0,
+                round = true,
                 modifier = Modifier
                     .focusRequester(refreshFocusRequester)
                     .then(controlsModifier(SportsLiveHeaderStop.REFRESH))
@@ -280,17 +276,6 @@ internal fun SportsLiveHeader(
                     tint = Colors.TextSecondary,
                     modifier = Modifier.size(Size.ControlIcon)
                 )
-                if (newRows > 0) {
-                    Text(
-                        text = pluralStringResource(R.plurals.sports_live_new_rows, newRows, newRows).let { count ->
-                            newRowsTeam?.let { stringResource(R.string.sports_live_new_rows_followed, count, it) } ?: count
-                        },
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
-                        color = Colors.TextPrimary,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
             }
             if (badged) {
                 Box(

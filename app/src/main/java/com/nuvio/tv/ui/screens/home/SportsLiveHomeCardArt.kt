@@ -57,6 +57,8 @@ internal fun rememberLiveNowCardArt(
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
             val title = SportsLiveHomeMeta.cleanTitle(item.displayName)
+            // live.25 #226: a race or fight card (no score feed) never gets a score, so it reads just "Live".
+            val noScoreYet = listedWord.takeIf { com.nuvio.tv.core.sportslive.scores.LiveScoresRepository.hasScoreFeed(item) }
             val card: @Composable () -> Unit = {
                 val snapshot by remember { derivedStateOf { scores.value[item.streamKey] } }
                 val confirmedUnmatched by remember { derivedStateOf { item.streamKey in unmatched.value } }
@@ -72,7 +74,7 @@ internal fun rememberLiveNowCardArt(
                     SportsLiveHomeMeta.cardFooter(
                         ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed },
                         halves = com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves(snapshot?.league),
-                        noScoreYet = listedWord,
+                        noScoreYet = noScoreYet,
                         startsAt = kickoff?.let { String.format(startsFormat, it) }
                     )
                 }

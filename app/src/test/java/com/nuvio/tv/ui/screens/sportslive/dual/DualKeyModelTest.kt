@@ -238,15 +238,15 @@ class DualKeyModelTest {
     }
 
     @Test
-    fun `the Hold OK menu offers Report a problem first, then the other layout, Swap, Change the other game and Full screen`() {
+    fun `the Hold OK menu offers the other layout, Swap, Change the other game, Full screen and Report a problem last`() {
         assertEquals(
             listOf(
-                DualMenuEntry.REPORT_PROBLEM, DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.SWAP,
-                DualMenuEntry.CHANGE_OTHER_GAME, DualMenuEntry.FULL_SCREEN
+                DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.SWAP, DualMenuEntry.CHANGE_OTHER_GAME,
+                DualMenuEntry.FULL_SCREEN, DualMenuEntry.REPORT_PROBLEM
             ),
             dualMenuEntries(split)
         )
-        assertEquals(DualMenuEntry.LAYOUT_SIDE_BY_SIDE, dualMenuEntries(bigSmall)[1])
+        assertEquals(DualMenuEntry.LAYOUT_SIDE_BY_SIDE, dualMenuEntries(bigSmall)[0])
         // Six at most (user, live.24).
         assertEquals(true, dualMenuEntries(split).size <= 6 && dualMenuEntries(bigSmall).size <= 6)
     }
