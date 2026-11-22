@@ -34,7 +34,7 @@ internal enum class SportsLivePlayerOk {
 
 /**
  * The full player's OK while nothing else wants it (#218): short, it does what it always did (opens the guide, or the
- * player's own OK); held, it opens the player menu (Report a problem first) and never also does the short action.
+ * player's own OK); held, it opens the player menu (Report a problem last) and never also does the short action.
  * - [menu] (the player menu is offered: a live game playing, the player idle): the press waits. Its first repeat (the
  *   system's long-press time, as Hold OK everywhere on the TV) is [SportsLivePlayerOk.HOLD] and its release
  *   [SportsLivePlayerOk.MENU]; a release before that is the short action ([SportsLivePlayerOk.OPEN_GUIDE] when [guide], else [SportsLivePlayerOk.SHORT]).

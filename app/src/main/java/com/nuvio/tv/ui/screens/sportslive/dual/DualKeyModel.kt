@@ -146,9 +146,6 @@ internal fun shouldShowDualKeysHint(shownCount: Int): Boolean = shownCount < DUA
 
 /** An entry of the Hold OK menu in dual screen. */
 internal enum class DualMenuEntry {
-    /** Report a problem (#172), with the snapshot taken as OK was held: first, as in every Hold OK sheet (#218). */
-    REPORT_PROBLEM,
-
     /** Split now: big + small. */
     LAYOUT_BIG_SMALL,
 
@@ -160,19 +157,22 @@ internal enum class DualMenuEntry {
     CHANGE_OTHER_GAME,
 
     /** The ringed pane's game in the full player, as OK does. */
-    FULL_SCREEN
+    FULL_SCREEN,
+
+    /** Report a problem (#172), with the snapshot taken as OK was held: last, as in every Hold OK menu (user, live.25). */
+    REPORT_PROBLEM
 }
 
 /**
- * The Hold OK menu for [state], in its order: Report a problem · Layout (the other one) · Swap panes · Change the other
- * game · Full screen. Five entries: it never grows past six (user, live.24).
+ * The Hold OK menu for [state], in its order: Layout (the other one) · Swap panes · Change the other game · Full screen ·
+ * Report a problem (last, user, live.25). Five entries: it never grows past six (user, live.24).
  */
 internal fun dualMenuEntries(state: DualState): List<DualMenuEntry> = listOf(
-    DualMenuEntry.REPORT_PROBLEM,
     if (state.layout == DualLayout.SPLIT) DualMenuEntry.LAYOUT_BIG_SMALL else DualMenuEntry.LAYOUT_SIDE_BY_SIDE,
     DualMenuEntry.SWAP,
     DualMenuEntry.CHANGE_OTHER_GAME,
-    DualMenuEntry.FULL_SCREEN
+    DualMenuEntry.FULL_SCREEN,
+    DualMenuEntry.REPORT_PROBLEM
 )
 
 /** A key pressed briefly or held, from [DualHoldKey]. */

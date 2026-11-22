@@ -341,8 +341,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
         }
     }
 
-    // #218: Hold OK while watching (nothing else open): the player menu, Report a problem first (its snapshot was taken
-    // as the hold started), then Choose stream and Scores ahead (a game only: a channel has no score to hold back).
+    // #218: Hold OK while watching (nothing else open): the player menu, Choose stream and Scores ahead (a game only: a
+    // channel has no score to hold back), then Report a problem last, as in every Hold OK menu (user, live.25); its
+    // snapshot was taken as the hold started.
     val playerMenu by viewModel.playerMenu.collectAsState()
     val playingNow = viewModel.nowPlaying
     if (playerMenu && playingNow != null) {
@@ -353,7 +354,6 @@ internal fun BoxScope.SportsLiveZapOverlay(
             onDetails = null,
             onDismiss = viewModel::dismissPlayerMenu,
             onReport = viewModel::onPlayerMenuReport,
-            reportFirst = true,
             onChooseStream = viewModel::onPlayerMenuChooseStream,
             onScoresAhead = if (playingNow.isChannel) {
                 null
@@ -430,8 +430,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
             } else {
                 null
             },
-            // TV QA: the one way to report on a remote with no Play/Pause or Info to hold. First, as in the player menu and
-            // dual screen (#218, live.25 #226): one order for every Hold OK menu over the player.
+            // TV QA: the one way to report on a remote with no Play/Pause or Info to hold. Last, as in every Hold OK menu.
             onReport = if (SportsLiveMoreEntry.REPORT in shown.entries) {
                 {
                     menu = null
@@ -440,7 +439,6 @@ internal fun BoxScope.SportsLiveZapOverlay(
             } else {
                 null
             },
-            reportFirst = true,
             // Channels phase 1: Hold OK on a channel row, Add to / Remove from favorites first.
             favorite = shown.favorite == true,
             onToggleFavorite = shown.favorite?.let { wasFavorite ->

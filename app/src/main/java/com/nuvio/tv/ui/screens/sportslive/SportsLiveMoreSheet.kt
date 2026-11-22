@@ -155,10 +155,8 @@ internal fun SportsLiveCardMenu(
     onRevealDay: (() -> Unit)? = null,
     /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
     onScoresAhead: (() -> Unit)? = null,
-    /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; last unless [reportFirst]; null hides it. */
+    /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; always last (user, live.25); null hides it. */
     onReport: (() -> Unit)? = null,
-    /** [onReport] first (#218: the player menu Hold OK opens, there to report what was just on screen). */
-    reportFirst: Boolean = false,
     /** "Add to favorites" / "Remove from favorites" (Channels phase 1) by [favorite]: first in a channel's menu; null hides it. */
     onToggleFavorite: (() -> Unit)? = null,
     favorite: Boolean = false
@@ -168,7 +166,6 @@ internal fun SportsLiveCardMenu(
     val slots = sportsLiveMenuSlots(
         SportsLiveMenuOffer(
             report = onReport != null,
-            reportFirst = reportFirst,
             favorite = onToggleFavorite != null,
             hide = onHide != null,
             hideFirst = hideFirst,
@@ -336,7 +333,6 @@ internal enum class SportsLiveMenuSlot {
 /** What one sheet offers: each flag an entry it has; the counts, its team entries (Follow per side, #154, #62). */
 internal data class SportsLiveMenuOffer(
     val report: Boolean = false,
-    val reportFirst: Boolean = false,
     val favorite: Boolean = false,
     val hide: Boolean = false,
     val hideFirst: Boolean = false,
@@ -359,7 +355,7 @@ internal data class SportsLiveMenuOffer(
 /**
  * The sheet's top level (Hold OK menu trim, docs/design/hold-ok-menu-trim.md; NN/g contextual menus: frequency order,
  * short enough never to scroll). Things for this game first, the teams' in one entry, info and support last:
- * Report (first only where [SportsLiveMenuOffer.reportFirst], the player menu, #218) · ★ Add to favorites (a channel) ·
+ * ★ Add to favorites (a channel) ·
  * Hide this ([SportsLiveMenuOffer.hideFirst]) · Watch postgame · Remind me · Choose stream… · Watch with another game
  * (before Choose stream where [SportsLiveMenuOffer.watchWithFirst], the player's "Watch both") · Game stats ·
  * Watch later · Reveal all for this day (Results) · **Teams…** · Scores ahead · Details · Hide from Live Now · Report a problem (last, always on screen).
@@ -367,7 +363,6 @@ internal data class SportsLiveMenuOffer(
  * a lone one is listed as itself.
  */
 internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMenuSlot> = buildList {
-    if (offer.report && offer.reportFirst) add(SportsLiveMenuSlot.REPORT)
     if (offer.favorite) add(SportsLiveMenuSlot.FAVORITE)
     if (offer.hide && offer.hideFirst) add(SportsLiveMenuSlot.HIDE)
     if (offer.postgame) add(SportsLiveMenuSlot.POSTGAME)
@@ -387,7 +382,8 @@ internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMen
     if (offer.scoresAhead) add(SportsLiveMenuSlot.SCORES_AHEAD)
     if (offer.details) add(SportsLiveMenuSlot.DETAILS)
     if (offer.hide && !offer.hideFirst) add(SportsLiveMenuSlot.HIDE)
-    if (offer.report && !offer.reportFirst) add(SportsLiveMenuSlot.REPORT)
+    // Report a problem last everywhere (user, live.25; NN/g and Android TV: most-used first, the rare one last, always shown).
+    if (offer.report) add(SportsLiveMenuSlot.REPORT)
 }
 
 /**

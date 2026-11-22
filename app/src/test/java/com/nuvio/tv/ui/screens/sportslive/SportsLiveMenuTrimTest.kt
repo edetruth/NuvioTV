@@ -55,18 +55,18 @@ class SportsLiveMenuTrimTest {
     }
 
     @Test
-    fun `the player's row menu puts Report first, then Watch both, and stays at 7`() {
-        // live.25 #226: the in-player table lists Report a problem first, as the player menu and dual screen do.
+    fun `the player's row menu puts Watch both first, Report last, and stays at 7`() {
+        // live.25 (user): Report a problem is last in every Hold OK menu, the in-player table's and the player's too.
         val panel = SportsLiveMenuOffer(
-            report = true, reportFirst = true, postgame = true, watchWith = true, watchWithFirst = true, chooseStream = true,
+            report = true, postgame = true, watchWith = true, watchWithFirst = true, chooseStream = true,
             gameStats = true, follows = 2, scoresAhead = true
         )
-        assertEquals(listOf(REPORT, POSTGAME, WATCH_WITH, CHOOSE_STREAM, GAME_STATS, TEAMS, SCORES_AHEAD), sportsLiveMenuSlots(panel))
-        // A channel row: Report, then Add to favorites.
-        assertEquals(listOf(REPORT, FAVORITE, CHOOSE_STREAM), sportsLiveMenuSlots(SportsLiveMenuOffer(report = true, reportFirst = true, favorite = true, chooseStream = true)))
-        // The player menu (#218): Report first.
-        val player = SportsLiveMenuOffer(report = true, reportFirst = true, chooseStream = true, scoresAhead = true)
-        assertEquals(listOf(REPORT, CHOOSE_STREAM, SCORES_AHEAD), sportsLiveMenuSlots(player))
+        assertEquals(listOf(POSTGAME, WATCH_WITH, CHOOSE_STREAM, GAME_STATS, TEAMS, SCORES_AHEAD, REPORT), sportsLiveMenuSlots(panel))
+        // A channel row: Add to favorites first, Report last.
+        assertEquals(listOf(FAVORITE, CHOOSE_STREAM, REPORT), sportsLiveMenuSlots(SportsLiveMenuOffer(report = true, favorite = true, chooseStream = true)))
+        // The player menu (#218): Report last too.
+        val player = SportsLiveMenuOffer(report = true, chooseStream = true, scoresAhead = true)
+        assertEquals(listOf(CHOOSE_STREAM, SCORES_AHEAD, REPORT), sportsLiveMenuSlots(player))
     }
 
     @Test
