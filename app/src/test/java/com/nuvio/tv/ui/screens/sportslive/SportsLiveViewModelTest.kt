@@ -683,9 +683,13 @@ class SportsLiveViewModelTest {
     } }
 
     @Test
-    fun `after zapping A to B, back from the player focuses B, after a long or a short absence (M3)`() = runTest { hidingShownAtEnd {
+    fun `after zapping A to B, back from the player focuses B after a long absence (M3)`() = runTest { hidingShownAtEnd {
         val long = returnTrip(listOf("a", "b", "c"), listOf("d", "c", "b", "a"), focus = "a", viaPlayer = true, zapTo = "b")
         assertEquals("b", long.selectedItemId)
+    } }
+
+    @Test
+    fun `after zapping A to B, back from the player focuses B after a short absence (M3)`() = runTest { hidingShownAtEnd {
         val short = returnTrip(listOf("a", "b", "c"), listOf("a", "b", "c"), focus = "a", viaPlayer = true, awayMs = 60_000L, zapTo = "c")
         assertEquals("c", short.selectedItemId)
     } }
