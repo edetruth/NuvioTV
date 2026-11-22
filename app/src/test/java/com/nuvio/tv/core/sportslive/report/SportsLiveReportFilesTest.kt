@@ -180,10 +180,7 @@ class SportsLiveReportFilesTest {
     @Test
     fun `the report text its latest copy and its QR code never mention the screenshot`() {
         val files = SportsLiveReportFiles(dir())
-        val text = "Nuvio Live report #1
-From: Hold OK
-${SportsLiveReport.DETAILS}
-"
+        val text = "Nuvio Live report #1\nFrom: Hold OK\n${SportsLiveReport.DETAILS}\n"
         val report = files.save(1, text, at, utc)
         val shot = files.saveShot(report, byteArrayOf(1, 2, 3))!!
         files.rewrite(report, SportsLiveReport.withNote(report.readText(), "the score is wrong", emptyList()))
