@@ -71,10 +71,10 @@ class ZapPanelLineupTest {
         return landed
     }
 
-    // live.24 (user): CH+ then CH- always return to the game you were on: the zap order is frozen at the first zap of a run
-    // of flips. live.25 (coordinator): opening the panel or the guide takes the fresh order, and the next flips follow it.
+    // live.24 (user): CH+ then CH- always return to the game you were on. The zap order is frozen at the session's first
+    // zap; the panel may re-sort as it opens, the zaps keep their order until a guide pick or a new session.
     @Test
-    fun `channel keys walk the panel's list, and an order change reaches the zaps only when the panel opens`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `channel keys walk the panel's list, and an order change re-sorts the panel but never the zaps`() = runTest(mainDispatcherRule.dispatcher) {
         // Live now is earliest start first: a, b, c, d.
         val a = item("a", now - 90 * MINUTE)
         val b = item("b", now - 60 * MINUTE)
@@ -89,20 +89,17 @@ class ZapPanelLineupTest {
         assertEquals("a", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
         assertEquals("b", SportsLiveZapSessions.current()!!.current.id)
 
-        // c started earliest after all: the list becomes c, a, b, d. Flips before the panel opens keep the old order.
+        // c started earliest after all: the list becomes c, a, b, d.
         latest.value = SportsLiveLoad(listOf(d, c.copy(startMs = now - 120 * MINUTE), b, a), emptyList(), 1L, setOf(CATALOG))
         runCurrent()
-        assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
-        assertEquals("a", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
         viewModel.openPanel()
-        runCurrent()
         // The panel is closed whatever happens: an open panel ticks on and the run never ends (it ran the test JVM out
         // of memory on the live.24 RC when an assertion here failed with the panel open).
         try {
             val shown = viewModel.panel.first { it?.items?.size == 4 }!!.items.map { it.id }
             assertEquals(listOf("c", "a", "b", "d"), shown)
-            // The open took the fresh order for the zaps too: from b, down is d and up is a.
-            assertEquals("d", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
+            // The zaps keep the order frozen at the first zap: from b, down is c and up is a, as before the re-sort.
+            assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
             assertEquals("a", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
             // The panel still shows its own order.
             assertEquals(shown, viewModel.panel.value!!.items.map { it.id })
@@ -183,59 +180,19 @@ class ZapPanelLineupTest {
             runCurrent()
         }
 
-        // Started from Live now while its calm order still showed n, e, u: CH± walk it, until the panel opens, which takes
-        // the fresh shared order (coordinator, live.25).
+        // Started from Live now while its calm order still showed n, e, u: the panel lists it so, and CH± walk it.
         SportsLiveZapSessions.clear()
         val seeded = panelViewModel(latest, playing = e, seed = listOf(n, e, u))
         runCurrent()
         assertEquals("u", zap(seeded, KeyEvent.KEYCODE_CHANNEL_DOWN))
         assertEquals("n", zap(seeded, KeyEvent.KEYCODE_CHANNEL_UP))
         seeded.openPanel()
-        runCurrent()
         try {
-            assertEquals(listOf("u", "e", "n"), seeded.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
-            assertEquals("n", zap(seeded, KeyEvent.KEYCODE_CHANNEL_DOWN))
-            assertEquals("u", zap(seeded, KeyEvent.KEYCODE_CHANNEL_UP))
+            assertEquals(listOf("n", "e", "u"), seeded.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
         } finally {
             seeded.closePanel()
             runCurrent()
         }
-    }
-
-    // live.25 (coordinator): the order is frozen only for a run of flips; opening the guide re-takes the shared order.
-    @Test
-    fun `a game that starts after the session began takes its league's place when the guide opens, not before`() = runTest(mainDispatcherRule.dispatcher) {
-        val ucl = item("a", now - 120 * MINUTE, sport = "Champions League")
-        val n1 = item("n1", now - 90 * MINUTE, sport = "NBA")
-        val n2 = item("n2", now - 60 * MINUTE, sport = "NBA")
-        val latest = MutableStateFlow(SportsLiveLoad(listOf(ucl, n1, n2), emptyList(), 0L, setOf(CATALOG)))
-        // Started from Live now, which showed a, n1, n2.
-        val viewModel = panelViewModel(latest, playing = ucl, seed = listOf(ucl, n1, n2))
-        runCurrent()
-        assertEquals("n1", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
-
-        // A Premier League game starts: in the shared order it goes after the Champions League game, before the NBA.
-        val epl = item("e", now - 5 * MINUTE, sport = "Premier League")
-        latest.value = SportsLiveLoad(listOf(ucl, n1, n2, epl), emptyList(), 1L, setOf(CATALOG))
-        runCurrent()
-        // Flips before the guide opens keep the old order: the new game waits at the end (a, n1, n2, e).
-        assertEquals("n1", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
-        assertEquals("e", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
-
-        viewModel.openPanel()
-        runCurrent()
-        try {
-            // The guide lists it in its league's place, and the next flips follow: from a, down is e.
-            assertEquals(listOf("a", "e", "n1", "n2"), viewModel.panel.first { it?.items?.size == 4 }!!.items.map { it.id })
-            assertEquals(listOf("a", "e", "n1", "n2"), viewModel.panel.value!!.guide.rows.map { it.item.id })
-            assertEquals("e", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
-            assertEquals("n2", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
-        } finally {
-            viewModel.closePanel()
-            runCurrent()
-        }
-        // Closed again, the flips keep the order the guide showed.
-        assertEquals("e", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
     }
 
     private fun TestScope.panelViewModel(

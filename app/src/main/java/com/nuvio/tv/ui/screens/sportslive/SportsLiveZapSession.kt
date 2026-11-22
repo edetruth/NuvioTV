@@ -32,8 +32,7 @@ data class SportsLiveZapSession(
     /**
      * Live Now's order as shown when the game was started there (live.25, #225: stream keys, calm order included); null
      * from anywhere else (Home, an alert, Upcoming, a Game page: the shared order fresh). The panel lists its games in this
-     * order ([panelLineup]), so CH± follow the list you launched from until the panel or the guide is first opened
-     * ([PlayerZapController.thaw]), which takes the fresh shared order.
+     * order ([panelLineup]), so CH± and the guide follow the list you launched from.
      */
     val seed: List<String>? = null
 ) {
