@@ -529,4 +529,30 @@ class SportsLiveSportInferenceTest {
         // Clubs that field basketball and handball sides under one name stay out (Portugal, Turkey, Greece).
         for (slug in listOf("por.1", "tur.1", "gre.1")) assertFalse(slug, EspnLeague("soccer", slug) in SportsLiveSportInference.leagues)
     }
+
+    // Report #23: "Arsenal vs West Ham" showed only SOCCER, and "CAW vs AVL" likewise.
+    private val epl = listOf(
+        team("Arsenal", "Arsenal", "Arsenal", "ARS"),
+        team("West Ham United", "West Ham United", "West Ham United", "WHU"),
+        team("Aston Villa", "Aston Villa", "Aston Villa", "AVL")
+    )
+
+    @Test
+    fun `a Soccer card of two Premier League clubs takes the Premier League tag`() {
+        val dir = directory(EspnLeague("soccer", "eng.1") to epl)
+        for (sport in listOf("Soccer", "Football")) {
+            val inferred = SportsLiveSportInference.infer(card("Arsenal vs West Ham", sport = sport, genres = listOf(sport)), dir)
+            assertEquals(sport, "Premier League", inferred.sport)
+            assertEquals(sport, listOf(EspnLeague("soccer", "eng.1")), EspnLeagueMap.leaguesFor(inferred))
+        }
+    }
+
+    @Test
+    fun `a card written by abbreviations only is never placed by a guess`() {
+        // CAW names no team of any list (several clubs could be it): untouched, even with AVL known.
+        val dir = directory(EspnLeague("soccer", "eng.1") to epl)
+        val item = card("CAW vs AVL", sport = "Soccer", genres = listOf("Soccer"))
+        assertNull(SportsLiveSportInference.leagueOf(item, dir))
+        assertSame(item, SportsLiveSportInference.infer(item, dir))
+    }
 }

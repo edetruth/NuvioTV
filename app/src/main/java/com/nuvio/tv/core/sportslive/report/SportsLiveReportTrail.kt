@@ -1,5 +1,7 @@
 package com.nuvio.tv.core.sportslive.report
 
+import com.nuvio.tv.domain.model.SportsLiveItem
+
 /**
  * What Report a problem (#172) reads that no other place keeps, in memory only: the screen open, the Sports & Live
  * card focused last, and short rings of the sign-in log and the merge near misses. Release builds strip
@@ -16,6 +18,11 @@ object SportsLiveReportTrail {
 
     @Volatile
     var focused: String? = null
+        private set
+
+    /** The Sports & Live card focused last, for a report saved from the list (report #23: "Game: none" for a focused game). */
+    @Volatile
+    var focusedItem: SportsLiveItem? = null
         private set
 
     /** The profile's My sports, as a line ("All sports (default)", "Basketball: NBA, NCAAM · Soccer"), #218. */
@@ -51,10 +58,20 @@ object SportsLiveReportTrail {
         screen = route
     }
 
-    /** A Sports & Live card took focus: its clean [title]. */
-    fun onFocused(title: String) {
+    /** A Sports & Live card took focus: its clean [title], and the card itself when known. */
+    fun onFocused(title: String, item: SportsLiveItem? = null) {
         focused = title
+        focusedItem = item
     }
+
+    /**
+     * The game a report describes: the one playing; else, on the Sports & Live list, the focused card (a report from a
+     * row is about that row); else the one watched last. Never a stale focus from another screen.
+     */
+    fun <T> gameOf(playing: T?, focused: T?, lastWatched: T?, screen: String?): T? =
+        playing ?: focused.takeIf { screen == SECTION_ROUTE } ?: lastWatched
+
+    private const val SECTION_ROUTE = "sports_live"
 
     fun onSignInLine(line: String) = signIn.add(line)
 
