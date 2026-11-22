@@ -157,13 +157,54 @@ class ZapPanelLineupTest {
         assertNotEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
     }
 
+    // live.25 (#225): the panel and CH± take the one shared order (league priority before start), and a game started from
+    // Live now's list follows that list as it was shown.
+    @Test
+    fun `the panel and CH take the shared order, and follow Live now's list as shown when started there`() = runTest(mainDispatcherRule.dispatcher) {
+        // Start order: n (NBA), e (Premier League), u (Champions League). The shared order: u, e, n.
+        val n = item("n", now - 90 * MINUTE, sport = "NBA")
+        val e = item("e", now - 60 * MINUTE, sport = "Premier League")
+        val u = item("u", now - 30 * MINUTE, sport = "Champions League")
+        val latest = MutableStateFlow(SportsLiveLoad(listOf(n, e, u), emptyList(), 0L, setOf(CATALOG)))
+
+        // Started from Home or an alert (no seed): the shared order, u, e, n.
+        val fresh = panelViewModel(latest, playing = e)
+        runCurrent()
+        assertEquals("n", zap(fresh, KeyEvent.KEYCODE_CHANNEL_DOWN))
+        assertEquals("u", zap(fresh, KeyEvent.KEYCODE_CHANNEL_UP))
+        fresh.openPanel()
+        try {
+            assertEquals(listOf("u", "e", "n"), fresh.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
+        } finally {
+            fresh.closePanel()
+            runCurrent()
+        }
+
+        // Started from Live now while its calm order still showed n, e, u: the panel lists it so, and CH± walk it.
+        SportsLiveZapSessions.clear()
+        val seeded = panelViewModel(latest, playing = e, seed = listOf(n, e, u))
+        runCurrent()
+        assertEquals("u", zap(seeded, KeyEvent.KEYCODE_CHANNEL_DOWN))
+        assertEquals("n", zap(seeded, KeyEvent.KEYCODE_CHANNEL_UP))
+        seeded.openPanel()
+        try {
+            assertEquals(listOf("n", "e", "u"), seeded.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
+        } finally {
+            seeded.closePanel()
+            runCurrent()
+        }
+    }
+
     private fun TestScope.panelViewModel(
         latest: MutableStateFlow<SportsLiveLoad>,
         playing: SportsLiveItem,
-        mySports: MySports = MySports.DEFAULT
+        mySports: MySports = MySports.DEFAULT,
+        /** Live now's order as shown, when the game was started there (live.25). */
+        seed: List<SportsLiveItem>? = null
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(latest.value.items, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
+                .copy(seed = seed?.map { it.streamKey })
         )
         val scores = LiveScoresRepository(
             provider = object : ScoreProvider {

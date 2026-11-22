@@ -1166,18 +1166,21 @@ class SportsLiveViewModel internal constructor(
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
         }
-        val (items, tab) = if (moreLive.any { it.streamKey == item.streamKey }) {
+        val playedFromMoreLive = moreLive.any { it.streamKey == item.streamKey }
+        val (items, tab) = if (playedFromMoreLive) {
             moreLive to state.selectedTab
         } else {
             sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
         }
+        // live.25 (#225): started from Live now's list, the panel, the guide and CH± follow it as shown (calm order kept).
+        val seed = if (!playedFromMoreLive && state.selectedTab == SportsLiveTab.LIVE_NOW) items.map { it.streamKey } else null
         val session = SportsLiveZapSession.of(
             items = items,
             itemKey = item.streamKey,
             tab = tab,
             filter = state.selectedFilter.takeIf { tab == state.selectedTab },
             returnToHomeOnBack = false
-        )
+        )?.copy(seed = seed)
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
     }
 
