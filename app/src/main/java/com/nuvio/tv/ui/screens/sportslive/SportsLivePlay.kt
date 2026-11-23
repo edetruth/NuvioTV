@@ -9,6 +9,11 @@ import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
+import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
@@ -151,7 +156,8 @@ internal fun sportsLiveBackToMiniGame(
 sealed interface SportsLivePlayState {
     data object Idle : SportsLivePlayState
     data class Resolving(val item: SportsLiveItem) : SportsLivePlayState
-    data class Picking(val item: SportsLiveItem, val streams: List<Stream>) : SportsLivePlayState
+    /** [spoilerSafe]: a replay whose result is hidden (#223), its [streams] named with any score masked. */
+    data class Picking(val item: SportsLiveItem, val streams: List<Stream>, val spoilerSafe: Boolean = false) : SportsLivePlayState
 
     /** A catch-up replay's streams are looked up (#58); [title] is ESPN's matchup, never the replay's name. */
     data class ResolvingReplay(val title: String) : SportsLivePlayState
@@ -194,6 +200,23 @@ private val SPLIT_SCORE_IN_LINK_TEXT =
  */
 internal fun spoilerSafeLinkText(text: String?): String? =
     text?.replace(SPLIT_SCORE_IN_LINK_TEXT, "–")?.replace(SCORE_IN_LINK_TEXT, "–")
+
+/**
+ * Whether a replay's links are named with any score masked where the user lists or plays them outside Watch replay
+ * (Choose stream, a merged replay's picker, OK on a replay card; #223): when its result is hidden for the user as a
+ * Results row hides it ([SpoilerPolicy]: the Scores setting [mode], [revealed], the game's protection
+ * [spoilerProtected]; [eventState] null, no ESPN game, counts as a result). Under Show with nothing hidden, names stay
+ * as the addon gives them; anything not a [replay] keeps them too.
+ */
+internal fun sportsLiveHidesReplayLinks(
+    replay: Boolean,
+    mode: ScoresMode?,
+    eventState: ScoreState?,
+    revealed: Boolean,
+    spoilerProtected: Boolean
+): Boolean = replay && !SpoilerPolicy.visibility(
+    mode, revealed, SpoilerContext(SpoilerSurface.RESULTS, eventState = eventState, spoilerProtected = spoilerProtected)
+).showsScore
 
 /** [stream] of a replay as the player names it: its name, title and description with any score masked. */
 internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(
@@ -311,8 +334,12 @@ class SportsLivePlayViewModel @Inject constructor(
         job = viewModelScope.launch { playStream(replay, stream, token = token, zapSession = false) }
     }
 
-    /** "Choose stream" on [item]: its streams to pick from (the Stream screen, or a merged card's picker). */
-    fun chooseStream(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) = start(item, returnToHomeOnBack, choose = true)
+    /**
+     * "Choose stream" on [item]: its streams to pick from (the Stream screen, or a merged card's picker). [spoilerSafe]: a
+     * replay whose result is hidden ([sportsLiveHidesReplayLinks]), its links named with any score masked (#223).
+     */
+    fun chooseStream(item: SportsLiveItem, returnToHomeOnBack: Boolean = false, spoilerSafe: Boolean = false) =
+        start(item, returnToHomeOnBack, choose = true, spoilerSafe = spoilerSafe)
 
     /**
      * OK on a section card whose hover preview may be playing: unless the stored setting lets the
@@ -329,7 +356,7 @@ class SportsLivePlayViewModel @Inject constructor(
         job = viewModelScope.launch { playStream(item, stream, liveEdge = true, token = token) }
     }
 
-    fun playCard(item: SportsLiveItem, takeOverPreview: () -> Stream?) {
+    fun playCard(item: SportsLiveItem, spoilerSafe: Boolean = false, takeOverPreview: () -> Stream?) {
         if (backToMiniGame(item)) return
         job?.cancel()
         returnToHomeOnBack = false
@@ -339,9 +366,12 @@ class SportsLivePlayViewModel @Inject constructor(
             val chooses = sportsLiveAutoPlayEligible(item) && openGame() == SportsLiveOpenGame.LET_ME_CHOOSE
             val previewed = if (chooses) null else takeOverPreview()
             if (previewed != null) {
-                playStream(item, previewed, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item), token = token)
+                playStream(
+                    item, previewed, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item), token = token,
+                    spoilerSafe = spoilerSafe
+                )
             } else {
-                run(item, choose = false, token = token)
+                run(item, choose = false, token = token, spoilerSafe = spoilerSafe)
             }
         }
     }
@@ -357,7 +387,7 @@ class SportsLivePlayViewModel @Inject constructor(
         }
     )
 
-    private fun start(item: SportsLiveItem, returnToHomeOnBack: Boolean, choose: Boolean) {
+    private fun start(item: SportsLiveItem, returnToHomeOnBack: Boolean, choose: Boolean, spoilerSafe: Boolean = false) {
         // Watch on the mini player's game (Home's Live now card, the Game or Team page, an alert): back full screen.
         if (!choose && backToMiniGame(item)) return
         job?.cancel()
@@ -365,16 +395,18 @@ class SportsLivePlayViewModel @Inject constructor(
         _state.value = SportsLivePlayState.Idle
         val token = gate.begin(item.streamKey)
         SportsLiveSpeedClock.action("ok")
-        job = viewModelScope.launch { run(item, choose, token) }
+        job = viewModelScope.launch { run(item, choose, token, spoilerSafe) }
     }
 
-    private suspend fun run(item: SportsLiveItem, choose: Boolean, token: SportsLiveRequestToken) {
+    /** [spoilerSafe]: a replay whose result is hidden (#223), every list of its links and its player masking scores. */
+    private suspend fun run(item: SportsLiveItem, choose: Boolean, token: SportsLiveRequestToken, spoilerSafe: Boolean = false) {
         val eligible = sportsLiveAutoPlayEligible(item)
         if (item.alternates.isEmpty() && (choose || !eligible)) {
             // Nothing to read or look up: the Stream screen opens at once, as before.
-            openStreamScreen(item, manualSelection = choose)
+            openStreamScreen(item, manualSelection = choose, spoilerSafe = spoilerSafe)
             return
         }
+        val linksOf: (List<Stream>) -> List<Stream> = { streams -> if (spoilerSafe) streams.map(::spoilerSafeReplayStream) else streams }
         val openGame = openGame()
         val mode = playerSettingsDataStore.playerSettings.first().streamAutoPlayMode
         when (sportsLivePlayAction(item, mode, openGame, choose)) {
@@ -388,16 +420,18 @@ class SportsLivePlayViewModel @Inject constructor(
                 if (!gate.mayPlay(token)) return
                 _state.value = SportsLivePlayState.Idle
                 when {
-                    found is SportsLiveLookup.Found ->
-                        playStream(item, found.stream, autoPicked = item.alternates.isNotEmpty(), announce = eligible, token = token)
+                    found is SportsLiveLookup.Found -> playStream(
+                        item, found.stream, autoPicked = item.alternates.isNotEmpty(), announce = eligible, token = token,
+                        spoilerSafe = spoilerSafe
+                    )
                     !eligible -> noStream(item)
                     // No source returned anything: a toast, and no Stream screen re-asking every addon.
                     found is SportsLiveLookup.NothingFound -> _events.send(SportsLivePlayEvent.NothingFound)
                     // Streams came back but none may play. A single source's Stream screen joins the
                     // repository's search session just run (kept 15 minutes), so it asks no addon again.
-                    item.alternates.isEmpty() -> openStreamScreen(item, manualSelection = true, noStreamFound = true)
+                    item.alternates.isEmpty() -> openStreamScreen(item, manualSelection = true, noStreamFound = true, spoilerSafe = spoilerSafe)
                     // A merged game: its sources' streams, already fetched, in the picker.
-                    else -> _state.value = SportsLivePlayState.Picking(item, (found as SportsLiveLookup.NonePlayable).streams)
+                    else -> _state.value = SportsLivePlayState.Picking(item, linksOf((found as SportsLiveLookup.NonePlayable).streams), spoilerSafe)
                 }
             }
             SportsLivePlayAction.PICK -> {
@@ -408,7 +442,7 @@ class SportsLivePlayViewModel @Inject constructor(
                     _state.value = SportsLivePlayState.Idle
                     noStream(item)
                 } else {
-                    _state.value = SportsLivePlayState.Picking(item, streams)
+                    _state.value = SportsLivePlayState.Picking(item, linksOf(streams), spoilerSafe)
                 }
             }
         }
@@ -437,7 +471,7 @@ class SportsLivePlayViewModel @Inject constructor(
         if (backToMiniGame(picking.item, stream)) return
         _state.value = SportsLivePlayState.Idle
         val token = gate.begin(picking.item.streamKey)
-        job = viewModelScope.launch { playStream(picking.item, stream, token = token) }
+        job = viewModelScope.launch { playStream(picking.item, stream, token = token, spoilerSafe = picking.spoilerSafe) }
     }
 
     /**
@@ -455,9 +489,16 @@ class SportsLivePlayViewModel @Inject constructor(
      * [item]'s Stream screen, marked sports so its full player still auto-fails over across the
      * addon's links (and a merged card's other sources) and shows the recovery overlay.
      */
-    private suspend fun openStreamScreen(item: SportsLiveItem, manualSelection: Boolean, noStreamFound: Boolean = false) {
+    private suspend fun openStreamScreen(
+        item: SportsLiveItem,
+        manualSelection: Boolean,
+        noStreamFound: Boolean = false,
+        spoilerSafe: Boolean = false
+    ) {
         ensureZapSession(item)
         SportsLiveExtraSources.markSportsPlayback(item.id, item)
+        // A replay whose result is hidden lists its links with the score masked there (#223); any other item as they are.
+        SportsLiveExtraSources.markSpoilerSafe(item.id, spoilerSafe)
         if (item.alternates.isNotEmpty()) SportsLiveExtraSources.register(item.id, item)
         _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item, manualSelection, noStreamFound))
     }
@@ -470,12 +511,14 @@ class SportsLivePlayViewModel @Inject constructor(
         liveEdge: Boolean = false,
         token: SportsLiveRequestToken,
         /** False for a replay: it has no live games to zap through. */
-        zapSession: Boolean = true
+        zapSession: Boolean = true,
+        /** A replay's link names may carry its score (#223): Watch replay's, or a hidden one's chosen or played from its card. */
+        spoilerSafe: Boolean = !zapSession
     ) {
         val target = sportsLiveZapTarget(
             item = item,
-            // A replay's link names may carry its score (#223): the player names it with the score masked.
-            stream = if (zapSession) stream else spoilerSafeReplayStream(stream),
+            // The player names a spoiler-safe replay's link with the score masked.
+            stream = if (spoilerSafe) spoilerSafeReplayStream(stream) else stream,
             profileId = profileManager.activeProfileId.value,
             returnToHomeOnBack = returnToHomeOnBack,
             directDebridResolver = directDebridResolver,
@@ -488,7 +531,7 @@ class SportsLivePlayViewModel @Inject constructor(
         SportsLiveExtraSources.register(item.id, item)
         // A replay's other links (the Stream screen a link needing preparation opens, the Sources panel) are named
         // with the score masked too (#223); the same item played as a game is not.
-        SportsLiveExtraSources.markSpoilerSafe(item.id, !zapSession)
+        SportsLiveExtraSources.markSpoilerSafe(item.id, spoilerSafe)
         // A stream that opens the Stream screen for preparation is not announced: it is not playing yet.
         val source = stream.addonName.takeIf { announce && target.playback != null && it.isNotBlank() }
         _events.send(SportsLivePlayEvent.Play(target, source))

@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.Stream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,6 +52,20 @@ class SportsLiveWatchReplayRowTest {
         assertEquals("Final – AET", spoilerSafeLinkText("Final 1:0 AET"))
         assertEquals("NBA 2024-25 1080p H.265 5.1", spoilerSafeLinkText("NBA 2024-25 1080p H.265 5.1"))
         assertNull(spoilerSafeLinkText(null))
+    }
+
+    @Test
+    fun `a replay's links are masked wherever its result is hidden for the user, never under Show with nothing hidden`() {
+        val post = ScoreState.POST
+        assertFalse(sportsLiveHidesReplayLinks(true, ScoresMode.SHOW, post, revealed = false, spoilerProtected = false))
+        assertFalse("no ESPN game", sportsLiveHidesReplayLinks(true, ScoresMode.SHOW, null, revealed = false, spoilerProtected = false))
+        assertTrue("saved for later", sportsLiveHidesReplayLinks(true, ScoresMode.SHOW, post, revealed = false, spoilerProtected = true))
+        assertTrue(sportsLiveHidesReplayLinks(true, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = false, spoilerProtected = false))
+        assertTrue("no ESPN game", sportsLiveHidesReplayLinks(true, ScoresMode.HIDE_UNTIL_FOCUSED, null, revealed = false, spoilerProtected = false))
+        assertFalse("revealed", sportsLiveHidesReplayLinks(true, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = true, spoilerProtected = false))
+        assertTrue(sportsLiveHidesReplayLinks(true, ScoresMode.OFF, post, revealed = true, spoilerProtected = false))
+        assertTrue("setting not read yet", sportsLiveHidesReplayLinks(true, null, post, revealed = false, spoilerProtected = false))
+        assertFalse("not a replay", sportsLiveHidesReplayLinks(false, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = false, spoilerProtected = true))
     }
 
     @Test
