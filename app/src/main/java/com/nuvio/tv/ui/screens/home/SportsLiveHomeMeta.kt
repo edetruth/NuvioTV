@@ -41,7 +41,13 @@ internal object SportsLiveHomeMeta {
          * "Starts 7:00 PM" when the score feed says the game has not started (l24 polish P2): the card reads its start,
          * never "● Live", as Live Now's rows show its kickoff.
          */
-        startsAt: String? = null
+        startsAt: String? = null,
+        /**
+         * "▶ Watching" for the game playing in a player (live.26 TV): its score is masked while it plays
+         * ([com.nuvio.tv.core.sportslive.scores.ScoreWatch.masked]), so it has no chip; it reads as Live Now's row does,
+         * never "No score yet".
+         */
+        watching: String? = null
     ): DrawnCardFooter = when (chip) {
         is ScoreChip.Live -> {
             // The game grammar's one clock line (live.24): "Q4 4:12", period first.
@@ -61,6 +67,7 @@ internal object SportsLiveHomeMeta {
         // #215, live.24 grammar: a live game with no score of ours reads "● Live · No score yet", never "Listed live".
         null -> when {
             startsAt != null -> DrawnCardFooter(lead = startsAt)
+            watching != null -> DrawnCardFooter(lead = liveWord, live = true, trailing = DrawnCardTrailing.Note(watching))
             listedLive != null -> DrawnCardFooter(lead = liveWord, live = true, trailing = DrawnCardTrailing.Note(listedLive))
             else -> DrawnCardFooter(
                 lead = liveWord,

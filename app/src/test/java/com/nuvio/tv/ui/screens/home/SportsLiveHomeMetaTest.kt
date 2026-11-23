@@ -90,6 +90,21 @@ class SportsLiveHomeMetaTest {
     }
 
     @Test
+    fun `the game playing in the mini player reads Watching, never No score yet`() {
+        // live.26 TV: its score is masked while it plays (the broadcast shows its own), so it has no chip; Live Now's row
+        // says Watching, and Home's card said "No score yet" during a 2-0 game.
+        assertEquals(
+            DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("▶ Watching")),
+            SportsLiveHomeMeta.cardFooter(null, ScoresMode.SHOW, strings, "Live", noScoreYet = "No score yet", watching = "▶ Watching")
+        )
+        // Hide until focused keeps its one chip.
+        assertEquals(
+            DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("Score hidden")),
+            SportsLiveHomeMeta.cardFooter(ScoreChip.Hidden, ScoresMode.HIDE_UNTIL_FOCUSED, strings, "Live", watching = "▶ Watching")
+        )
+    }
+
+    @Test
     fun `a game the feed says has not started reads its start, never Live`() {
         assertEquals(
             DrawnCardFooter(lead = "Starts 7:00 PM"),
