@@ -15,9 +15,12 @@ internal class SportsLiveHeldKeyGuard {
         closedAt = uptimeMs
     }
 
-    /** True when the event of [keyCode] whose press went down at [downTime] is the rest of a press held across the close. */
+    /**
+     * True when the event of [keyCode] whose press went down at [downTime] is the rest of a press held across the close.
+     * An event with no down time (0: some remotes and injected keys) is never taken, or zap would stop for good.
+     */
     fun swallows(keyCode: Int, downTime: Long): Boolean =
-        zapDirection(keyCode, partyActive = false) != null && downTime <= closedAt
+        zapDirection(keyCode, partyActive = false) != null && downTime > 0L && downTime <= closedAt
 
     companion object {
         /** One for the app: a pick that switches the game opens a new player, which must still take the held press. */
