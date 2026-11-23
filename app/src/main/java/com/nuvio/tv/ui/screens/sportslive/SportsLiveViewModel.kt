@@ -1198,7 +1198,8 @@ class SportsLiveViewModel internal constructor(
         noteUpcomingFilter(selectionState.value.tab, value)
         selectionState.update {
             val remembered = if (value == null) it.filterByTab - it.tab else it.filterByTab + (it.tab to value)
-            it.copy(filter = value, filterByTab = remembered)
+            // My sports or My teams picked in My sports ▾ leaves More live's or All sports' view (gemini review #4).
+            it.copy(filter = value, filterByTab = remembered, moreLiveOpen = false, moreLiveAll = false)
         }
     }
 
@@ -1265,12 +1266,13 @@ class SportsLiveViewModel internal constructor(
 
     /** OK on Live now's "More live" row: its view, the games My sports leaves out by sport. */
     fun openMoreLive() {
-        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = false, itemId = null) }
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = false, itemId = null, filter = null, filterByTab = it.filterByTab - it.tab) }
     }
 
     /** OK on "All sports" in My sports ▾ (live.26 decision): the same view, with EVERY live game by sport. */
     fun openAllSports() {
-        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = true, itemId = null) }
+        // ★ My teams gives way (gemini review #4): the view lists every live game, never only the followed ones.
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = true, itemId = null, filter = null, filterByTab = it.filterByTab - it.tab) }
     }
 
     /** Back from the "More live" view: Live now's own list again. */
@@ -1894,6 +1896,7 @@ class SportsLiveViewModel internal constructor(
             allSports = allSportsGroups,
             moreLiveViewGroups = moreLiveViewGroups,
             moreLiveOpen = moreLiveOpen,
+            moreLiveAll = moreLiveOpen && selection.moreLiveAll,
             moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
             // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
             addSportPrompt = selection.addSport?.takeIf {

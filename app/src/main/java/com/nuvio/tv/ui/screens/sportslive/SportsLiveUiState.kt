@@ -89,6 +89,8 @@ data class SportsLiveUiState(
     val moreLiveViewGroups: List<SportsLiveMoreLive.Group>? = null,
     /** Its view is open: [visibleItems] are [moreLiveViewGroups]' games, group by group. */
     val moreLiveOpen: Boolean = false,
+    /** That open view is All sports (My sports ▾), every live game; false: More live's, the games My sports leaves out. */
+    val moreLiveAll: Boolean = false,
     /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
     val moreLiveOther: Set<String> = emptySet(),
     /** "You watched ‹sport› · Add to My sports?": the sport its card at the top of Live now offers; null for none. */

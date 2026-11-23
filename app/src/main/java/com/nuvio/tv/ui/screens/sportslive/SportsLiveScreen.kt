@@ -730,7 +730,8 @@ private fun SportsLiveContent(
     val channelViewKey = SportsLiveChannelSummary.viewKey(channelBrowse).takeIf { uiState.selectedTab == SportsLiveTab.CHANNELS }
     val shownBoard = board?.takeIf {
         it.shows(uiState.selectedTab, uiState.selectedFilter) && (channelViewKey == null || it.channels?.view == channelViewKey) &&
-            it.moreLive == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen)
+            it.moreLive == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) &&
+            it.moreLiveAll == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveAll)
     }
     // More live's view (user 2026-11-21) is its own list: it opens at its top, and Back returns to Live now's.
     val moreLiveShown = shownBoard?.moreLive == true
@@ -745,7 +746,8 @@ private fun SportsLiveContent(
     // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.
     val agenda = shownBoard?.agenda
     val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}" + channelViewKey?.let { "|$it" }.orEmpty() +
-        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) "|more" else "")
+        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) "|more" else "") +
+        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveAll) "|all" else "")
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val liveLabel = stringResource(R.string.sports_live_live_pill)
@@ -1182,7 +1184,16 @@ private fun SportsLiveContent(
         }
     }
     val filterDropdown = when (uiState.selectedTab) {
-        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport), actions = allSportsActions)
+        // The pill and menu say which view shows (gemini review #4): All sports, More live, else the picked option.
+        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(
+            stringResource(R.string.sports_live_filter_title_sport),
+            actions = allSportsActions,
+            viewLabel = when {
+                !uiState.moreLiveOpen -> null
+                uiState.moreLiveAll -> allSportsLabel
+                else -> stringResource(R.string.sports_live_more_live_title)
+            }
+        )
         // F16: Upcoming's sports as one dropdown too; the inline strip clipped its last option ("G…").
         SportsLiveTab.UPCOMING -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
