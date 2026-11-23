@@ -1096,7 +1096,7 @@ internal fun PlayerRuntimeController.initializePlayer(
             } else {
                 buildDefaultPlayer()
             }
-            _exoPlayer?.let { com.nuvio.tv.core.debug.TestMute.applyTo(context, it) } // debug-only test mute
+            _exoPlayer?.let { com.nuvio.tv.core.debug.TestMute.applyTo(context, it, "main") } // debug-only test mute
             _loadControl = loadControl
             activePlayerUsesLibass = useLibass
             libassPipelineSwitchInFlight = false
