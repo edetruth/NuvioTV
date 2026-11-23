@@ -294,6 +294,14 @@ fun SportsLiveScreen(
                 protection.savedReplayKeys(listOf(item), replayMatches).isNotEmpty()
         )
     }
+    // ... and opens its Stream screen and player as Watch replay does: under ESPN's matchup (as Results names it), with
+    // no addon title or artwork; with its result shown, the addon's own header.
+    val cardToPlay: (SportsLiveItem, Boolean) -> SportsLiveItem = { item, hidden ->
+        sportsLiveCardToPlay(item, hidden) {
+            replayMatches[item.streamKey]?.let { context.getString(R.string.sports_live_results_menu_title, it.away.catchUpName, it.home.catchUpName) }
+                ?: singleLineTitle(item)
+        }
+    }
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the
     // screen pauses or leaves, or OK hands its stream to the full player.
@@ -447,7 +455,8 @@ fun SportsLiveScreen(
                     if (item.kind == SportsLiveKind.REPLAY) scoresViewModel.onReplayStarted(listOf(item) + item.alternates, replayMatches[item.streamKey])
                     // OK on a playing preview: its stream plays full screen at once (unless the stored
                     // setting lets the user choose); otherwise the best stream is looked up.
-                    playViewModel.playCard(item, spoilerSafe = hidesReplayLinks(item)) {
+                    val hidden = hidesReplayLinks(item)
+                    playViewModel.playCard(cardToPlay(item, hidden), spoilerSafe = hidden) {
                         viewModel.takeOverPreview(item)?.let { previewed ->
                             // Freed before the full player starts, so the two never hold decoders together.
                             previewPlayer.release()
@@ -458,7 +467,8 @@ fun SportsLiveScreen(
             },
             onChooseStream = { item ->
                 viewModel.onChannelPlayed(item)
-                playViewModel.chooseStream(item, spoilerSafe = hidesReplayLinks(item))
+                val hidden = hidesReplayLinks(item)
+                playViewModel.chooseStream(cardToPlay(item, hidden), spoilerSafe = hidden)
             },
             preview = playing,
             noStreamKey = (preview as? SportsLivePreviewState.NoStream)?.item?.listKey,

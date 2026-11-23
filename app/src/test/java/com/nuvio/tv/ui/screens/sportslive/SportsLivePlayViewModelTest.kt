@@ -584,6 +584,43 @@ class SportsLivePlayViewModelTest {
         }
 
     @Test
+    fun `a replay whose result is hidden opens its Stream screen and player under ESPN's matchup, with no addon title or art`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveExtraSources.reset()
+            val scored = REPLAY.copy(
+                meta = REPLAY.meta.copy(
+                    name = "A 2-1 B", poster = "https://img.example.invalid/final-score.jpg",
+                    background = "https://img.example.invalid/celebration.jpg", logo = "https://img.example.invalid/logo.png"
+                )
+            )
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            // Choose stream: the Stream screen's header is the matchup, with no poster, backdrop or logo.
+            viewModel.chooseStream(sportsLiveCardToPlay(scored, hidden = true) { "Away at Home" }, spoilerSafe = true)
+            advanceUntilIdle()
+            val open = events.single() as SportsLivePlayEvent.OpenStreamScreen
+            val route = streamRouteFor(open.item, returnToHomeOnBack = false, manualSelection = open.manualSelection)
+            assertTrue(route, route.contains("?poster=&backdrop=&logo=&"))
+            assertTrue(route, route.contains("&contentName=Away%20at%20Home&"))
+            assertFalse(route, route.contains("2-1") || route.contains("img.example.invalid"))
+
+            // OK on the card: the player (or the Stream screen a link needing preparation opens) is named the same way.
+            viewModel.playCard(sportsLiveCardToPlay(scored, hidden = true) { "Away at Home" }, spoilerSafe = true) { MINI_STREAM }
+            advanceUntilIdle()
+            val played = (events.last() as SportsLivePlayEvent.Play).target.item
+            assertEquals("Away at Home", played.meta.name)
+            assertNull(played.meta.poster)
+            assertNull(played.meta.backdropUrl)
+
+            // Its result shown (Show with nothing hidden, or Reveal): the addon's own header, as before.
+            val shown = sportsLiveCardToPlay(scored, hidden = false) { "Away at Home" }
+            assertEquals(scored, shown)
+            assertTrue(streamRouteFor(shown, returnToHomeOnBack = false).contains("final-score"))
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
     fun `a catch-up replay from several sources offers the sources, and the pick plays`() = runTest(mainDispatcherRule.dispatcher) {
         val other = item("replay-2", "two").copy(kind = SportsLiveKind.REPLAY, isLive = false)
         coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
