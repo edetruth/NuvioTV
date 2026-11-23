@@ -293,13 +293,100 @@ class SportsLiveOpenSpeedTest {
         assertEquals(sorted, shared.upcomingSorted)
         assertEquals(builds, viewModel.stateBuilds)
 
-        // A change it has not read sorts again.
+        // A change it has not read sorts again (live.26: Upcoming at once while it is the tab shown).
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(sorted, shared.upcomingSorted)
         stamp = 1L
         directoryChanges.emit(Unit)
         advanceTimeBy(3_000)
         runCurrent()
         assertTrue(shared.upcomingSorted > sorted)
         assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+    }
+
+    @Test
+    fun `a directory change while Live now shows keeps Upcoming's sorting until Upcoming is opened`() = runTest {
+        // live.26: on the TV each directory change after the open sorted Upcoming again (3-7 s, 3 times per open) while
+        // nobody was on it; Live now and the other tabs are still sorted again for it.
+        latestFlow.value = load(listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR)))
+        val shared = SportsLiveSharedBuckets()
+        val directoryChanges = MutableSharedFlow<Unit>()
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            directoryChanges = directoryChanges,
+            directoryStamp = { stamp },
+            sharedBuckets = shared,
+            computeDispatcher = compute,
+            upcomingWindowDays = 3,
+            zone = ZoneOffset.UTC
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceTimeBy(SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
+        val sorted = shared.upcomingSorted
+        assertTrue(sorted > 0)
+        val builds = viewModel.stateBuilds
+
+        // Two changes on Live now: the load is sorted again (the state follows), Upcoming is not; its rows stay.
+        repeat(2) { index ->
+            stamp = index + 1L
+            directoryChanges.emit(Unit)
+            advanceTimeBy(3_000)
+            runCurrent()
+        }
+        assertEquals(sorted, shared.upcomingSorted)
+        assertTrue(viewModel.stateBuilds > builds)
+        assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertEquals(listOf("live"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        // Opened: sorted again at once, with the directory as it is now, and only once.
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        val resorted = shared.upcomingSorted
+        assertTrue(resorted > sorted)
+        assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(resorted, shared.upcomingSorted)
+    }
+
+    @Test
+    fun `a new load is sorted in full, Upcoming included, while Live now shows`() = runTest {
+        // live.26: only a directory change keeps Upcoming's sorting; new games are never left out of it.
+        latestFlow.value = load(listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR)))
+        val shared = SportsLiveSharedBuckets()
+        val directoryChanges = MutableSharedFlow<Unit>()
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            directoryChanges = directoryChanges,
+            directoryStamp = { stamp },
+            sharedBuckets = shared,
+            computeDispatcher = compute,
+            upcomingWindowDays = 3,
+            zone = ZoneOffset.UTC
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceTimeBy(SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
+        stamp = 1L
+        directoryChanges.emit(Unit)
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        latestFlow.value = load(
+            listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR), item("later", isLive = false, startMs = NOW + 2 * HOUR))
+        )
+        runCurrent()
+        assertEquals(setOf("next", "later"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id }.toSet())
     }
 
     @Test

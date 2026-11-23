@@ -90,7 +90,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -447,10 +449,15 @@ class SportsLiveViewModel internal constructor(
     // A team list landing or a team identified (live.18) buckets the same load again, so copies that resolve to
     // the same teams fold without waiting for the next catalog refresh; Live now's focused card stays put
     // ([sportsLiveKeepFocused]).
-    @OptIn(FlowPreview::class)
     // RC regression (#143): bucketing the whole load (4-6 s on the onn) ran every few seconds while team lists and
     // identities kept landing; now at most once per rebucketGapMs after the first.
-    private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).firstThenCoalesce(rebucketGapMs).onStart { emit(Unit) }
+    // live.26: Upcoming opened while its sorting is stale ([SortInputs.upcomingStale]) sorts again at once, outside the
+    // debounce and the gap.
+    private val upcomingResorts = MutableStateFlow(0)
+    @OptIn(FlowPreview::class)
+    private val rebucket: Flow<Unit> =
+        merge(directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).firstThenCoalesce(rebucketGapMs), upcomingResorts.drop(1).map { })
+            .onStart { emit(Unit) }
 
     // live.24: Upcoming's days and sports asked for so far this visit ([showUpcomingDay], All sports).
     private val upcomingAsk = MutableStateFlow(UpcomingAsk(days = upcomingWindowDays ?: SportsLiveUpcomingWindow.NEAR_DAYS))
@@ -489,10 +496,44 @@ class SportsLiveViewModel internal constructor(
         val addonOrder: List<String>,
         val stamp: Long,
         val upcoming: UpcomingInputs?,
-        val atMs: Long
-    )
+        val atMs: Long,
+        /** live.26: Upcoming's windowed sorting as listed, the directory stamp and time it was sorted at (null: none). */
+        val upcomingBucket: SportsLiveUpcomingBucket? = null,
+        val upcomingStamp: Long = stamp,
+        val upcomingAtMs: Long = atMs
+    ) {
+        /** Upcoming was kept from a sorting under an older directory ([keptUpcoming]): it is sorted again once shown. */
+        val upcomingStale: Boolean get() = upcomingBucket != null && upcomingStamp != stamp
+    }
 
+    @Volatile
     private var lastSortInputs: SortInputs? = null
+
+    private fun resortUpcomingIfStale() {
+        if (selectionState.value.tab == SportsLiveTab.UPCOMING && lastSortInputs?.upcomingStale == true) upcomingResorts.update { it + 1 }
+    }
+
+    /**
+     * live.26: Upcoming's last sorting, kept when only the team directory moved since it, while Upcoming is not the tab
+     * shown. On the TV each directory change (team lists and score matches landing after the open's score prefetch)
+     * sorted Upcoming again in full (3-7 s, 3 times per open, competing with the first sport inference), for a tab
+     * nobody was looking at. Kept only for the same load, catalogs, order and Upcoming ask, while no game changed tab by
+     * the clock since it was sorted and the sorting is under [SportsLiveSharedBuckets.MAX_AGE_MS] old. A directory change
+     * only folds copies or tells a team: its rows stay right meanwhile, and opening Upcoming sorts it again.
+     */
+    private fun keptUpcoming(
+        latest: SportsLiveLoad,
+        claimedKeys: Set<String>,
+        addonOrder: List<String>,
+        upcoming: UpcomingInputs?,
+        items: List<SportsLiveItem>,
+        now: Long
+    ): SortInputs? = lastSortInputs?.takeIf { last ->
+        upcoming != null && last.upcomingBucket != null && selectionState.value.tab != SportsLiveTab.UPCOMING &&
+            last.load === latest && last.claimedKeys == claimedKeys && last.addonOrder == addonOrder && last.upcoming == upcoming &&
+            now - last.upcomingAtMs in 0 until SportsLiveSharedBuckets.MAX_AGE_MS &&
+            !SportsLiveItemBucketer.clockChangedBetween(items, last.upcomingAtMs, now)
+    }
 
     /** Runs between the cold open's Live now and the other tabs' sorting; tests hold it to see Live now first. */
     @VisibleForTesting
@@ -520,10 +561,12 @@ class SportsLiveViewModel internal constructor(
         // live.25 (#221): a signal with nothing new for the last sorting sorts nothing again: Upcoming was sorted 3 times in
         // one open on the TV (3-7 s each), one of them for a directory change the sorting before had already read (its
         // debounced signal landed after it). Same load, catalogs, order, directory, Upcoming ask, and no game changed tab.
+        // live.26: not while Upcoming, kept from an older directory ([keptUpcoming]), is the tab shown.
         lastSortInputs?.let { last ->
             if (last.load === latest && last.stamp == stamp && last.claimedKeys == claimedKeys && last.addonOrder == addonOrder &&
                 last.upcoming == upcoming && now - last.atMs in 0 until SportsLiveSharedBuckets.MAX_AGE_MS &&
-                !SportsLiveItemBucketer.clockChangedBetween(items, last.atMs, now)
+                !SportsLiveItemBucketer.clockChangedBetween(items, last.atMs, now) &&
+                !(last.upcomingStale && selectionState.value.tab == SportsLiveTab.UPCOMING)
             ) {
                 SportsLiveDebugTiming.log { "sportsOpen stage=bucketSkipped t=${sinceOpenMs()}" }
                 return@combineTransform
@@ -537,6 +580,7 @@ class SportsLiveViewModel internal constructor(
                 !SportsLiveItemBucketer.clockChangedBetween(items, it.builtAtMs, now)
         }
         var upcomingBucket: SportsLiveUpcomingBucket? = null
+        val kept = if (sharedBuckets != null) keptUpcoming(latest, claimedKeys, addonOrder, upcoming, items, now) else null
         val tabs = if (reused != null) {
             SportsLiveDebugTiming.log { "sportsOpen stage=bucketReused t=${sinceOpenMs()}" }
             reused.tabs
@@ -567,7 +611,9 @@ class SportsLiveViewModel internal constructor(
                     mySports = upcoming.mySports.takeUnless { upcoming.ask.allSports },
                     followed = upcoming.followed
                 )
-                val windowed = sharedBuckets.upcoming(latest, claimedKeys, addonOrder, now, window, stamp)
+                val windowed = kept?.upcomingBucket?.also {
+                    SportsLiveDebugTiming.log { "sportsOpen stage=upcomingKept t=${sinceOpenMs()} rows=${it.rows.size}" }
+                } ?: sharedBuckets.upcoming(latest, claimedKeys, addonOrder, now, window, stamp)
                 upcomingBucket = windowed
                 SportsLiveTab.entries.associateWith { tab ->
                     if (tab == SportsLiveTab.UPCOMING) windowed.rows else sharedBuckets.tab(latest, claimedKeys, addonOrder, tab, now, stamp)
@@ -596,7 +642,12 @@ class SportsLiveViewModel internal constructor(
             upcomingPending = upcomingBucket?.pendingDates.orEmpty(), upcomingWaiting = upcomingBucket?.waitingBySport ?: 0
         )
         lastSorted = done
-        lastSortInputs = SortInputs(latest, claimedKeys, addonOrder, stamp, upcoming, now)
+        lastSortInputs = SortInputs(
+            latest, claimedKeys, addonOrder, stamp, upcoming, now, upcomingBucket,
+            upcomingStamp = kept?.upcomingStamp ?: stamp, upcomingAtMs = kept?.upcomingAtMs ?: now
+        )
+        // Upcoming opened while this kept it (the selection read above was Live now's).
+        resortUpcomingIfStale()
         emit(done)
     }.flowOn(computeDispatcher)
 
@@ -1090,6 +1141,8 @@ class SportsLiveViewModel internal constructor(
                 addSportShown = it.addSport != null && tab == SportsLiveTab.LIVE_NOW
             )
         }
+        // live.26: Upcoming kept from an older team directory while another tab showed is sorted again now.
+        resortUpcomingIfStale()
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()
