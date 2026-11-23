@@ -119,7 +119,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
-import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerRows
+import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerBoards
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
@@ -340,7 +340,9 @@ fun SportsLiveScreen(
 
     // "Watch with another game" (#57): the picker ([dualPick]) for a game or a channel (F13); the pick starts
     // dual screen with the card in slot 1, with no lookup until the panes start.
-    val canWatchWith: (SportsLiveItem) -> Boolean = { item -> uiState.offersWatchWith(item, scores[item.streamKey]) }
+    // live.26 (#222): offered only while another live game can go beside it (never an empty picker).
+    val canWatchWith: (SportsLiveItem) -> Boolean = { item -> uiState.offersWatchWith(item, scores[item.streamKey]) && uiState.watchWithFor(item, scores) != null }
+    val channelPicks by viewModel.channelPicksNow.collectAsStateWithLifecycle()
     var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
     fun startDual(session: SportsLiveDualSession) {
         // Slot 1 keeps the stream its preview plays, with no lookup (#65); freed before dual starts.
@@ -352,11 +354,14 @@ fun SportsLiveScreen(
     dualPick?.let { pick ->
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
-            // Each row's logos and score under the Scores setting (live.23 TV test: none showed).
-            rows = remember(pick, scores, scoresMode, revealed, uiState.nowMs) {
-                dualPickerRows(pick.candidates, scores, scoresMode, revealed, uiState.nowMs)
+            // Each row as Live Now draws it, under the one spoiler gate (live.26, #222).
+            boards = remember(pick, scores, scoresMode, revealed, uiState.nowMs) {
+                dualPickerBoards(pick.candidates, scores, scoresMode, revealed, uiState.nowMs)
             },
             onFocus = scoresViewModel::onCardFocus,
+            anchor = pick.chosen,
+            scores = scores,
+            channelPicks = channelPicks,
             onPick = { second ->
                 dualPick = null
                 startDual(pick.session(second))

@@ -170,12 +170,13 @@ internal enum class DualMenuEntry {
 
 /**
  * The Hold OK menu for [state], in its order: Layout (the other one) · Swap panes · Change the other game · Full screen ·
- * Report a problem (last, user, live.25). Five entries: it never grows past six (user, live.24).
+ * Report a problem (last, user, live.25). Five entries: it never grows past six (user, live.24). Change the other game
+ * only while another live game can go beside the two ([canChange], live.26: never an empty picker).
  */
-internal fun dualMenuEntries(state: DualState): List<DualMenuEntry> = listOf(
+internal fun dualMenuEntries(state: DualState, canChange: Boolean = true): List<DualMenuEntry> = listOfNotNull(
     if (state.layout == DualLayout.SPLIT) DualMenuEntry.LAYOUT_BIG_SMALL else DualMenuEntry.LAYOUT_SIDE_BY_SIDE,
     DualMenuEntry.SWAP,
-    DualMenuEntry.CHANGE_OTHER_GAME,
+    DualMenuEntry.CHANGE_OTHER_GAME.takeIf { canChange },
     DualMenuEntry.FULL_SCREEN,
     DualMenuEntry.REPORT_PROBLEM
 )

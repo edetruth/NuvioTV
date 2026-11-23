@@ -839,6 +839,10 @@ class SportsLiveViewModel internal constructor(
     // a favorite added or removed never moves a row under focus; the ★ follows the picks at once.
     private val channelOrderTakes = MutableStateFlow(0)
     private val storedChannelPicks: Flow<SportsLiveChannelPicks> = channelPicks.catch { emit(SportsLiveChannelPicks.NONE) }
+
+    /** The profile's channel picks now: the dual picker's Channels are its favourites and recent ones only (live.26, #222). */
+    val channelPicksNow: StateFlow<SportsLiveChannelPicks> =
+        storedChannelPicks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveChannelPicks.NONE)
     private val channelBrowseState = MutableStateFlow<SportsLiveChannelBrowse?>(null)
 
     /** Channels' browse view (phase 2): null while the tab shows its own sections. */

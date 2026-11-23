@@ -14,6 +14,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
+import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerOffers
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
 import java.time.LocalDate
@@ -168,18 +169,26 @@ internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: S
 /**
  * "Watch with another game" on [item] from the More… menu ([scores]: the delayed snapshots by card key):
  * always the picker (F13), for a game as for a channel, so the viewer sees what goes beside it; null when
- * nothing may.
+ * no other live game may (live.26, #222: the entry is then not offered). On Channels the picker offers Live now's
+ * games first, then the channels (only the favourite and recent ones show, [dualPickerList]).
  */
 internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveDualPick? {
+    val pool = if (selectedTab == SportsLiveTab.CHANNELS) {
+        // Each card once (the picker's rows are keyed by card key).
+        (tabs[SportsLiveTab.LIVE_NOW].orEmpty().filter { !it.isChannel } + visibleItems).distinctBy { it.streamKey }
+    } else {
+        visibleItems
+    }
     val pick = SportsLiveDualPick(
         chosen = item,
         items = visibleItems,
         filter = selectedFilter,
         tab = selectedTab,
         endedKeys = finishedKeys(scores),
-        zapItems = zapItems
+        zapItems = zapItems,
+        pool = pool
     )
-    return pick.takeIf { it.candidates.isNotEmpty() }
+    return pick.takeIf { dualPickerOffers(it.candidates) }
 }
 
 /**

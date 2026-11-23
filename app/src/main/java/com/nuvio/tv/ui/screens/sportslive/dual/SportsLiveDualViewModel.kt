@@ -53,6 +53,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.stateIn
+import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -95,10 +99,12 @@ data class SportsLiveDualPick(
     /** The player panel's rows by stream key: the picker draws logos and score chips from them (M11). */
     val rows: Map<String, ZapPanelRow> = emptyMap(),
     /** Picked in [chosen]'s full player: Back from dual screen returns to it (M11). */
-    val fromPlayer: Boolean = false
+    val fromPlayer: Boolean = false,
+    /** What the picker offers ([items] by default; on Channels, Live now's games before the channels, live.26). */
+    val pool: List<SportsLiveItem> = items
 ) {
-    /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
-    val candidates: List<SportsLiveItem> by lazy { items.filter(::isCandidate) }
+    /** The other games of [pool] that are not known to have ended; never [chosen] or one of its sources. */
+    val candidates: List<SportsLiveItem> by lazy { pool.filter(::isCandidate) }
 
     // Built once per pick, not once per item checked.
     private val chosenKeys: Set<String> by lazy { chosen.sourceKeys() }
@@ -276,6 +282,8 @@ class SportsLiveDualViewModel internal constructor(
      * what "Pick another to watch" offers (live.24), not only the list dual screen was opened from.
      */
     liveGames: Flow<List<SportsLiveItem>> = flowOf(emptyList()),
+    /** The profile's channel picks: the picker's Channels are its favourite and recent ones only (live.26). */
+    channelPicks: Flow<SportsLiveChannelPicks> = flowOf(SportsLiveChannelPicks.NONE),
     /**
      * Called once per entry: true when the keys hint shows this time (the profile's first [DUAL_KEYS_HINT_OPENS]
      * entries, [shouldShowDualKeysHint]), which is then counted.
@@ -317,6 +325,7 @@ class SportsLiveDualViewModel internal constructor(
         reminders = preferences.reminders,
         // live.25 (#225): the one shared order, with the inputs Live now and the player's panel use ([SportsLiveLineup]).
         liveGames = dualPickerGames(repo.liveNow(limit = Int.MAX_VALUE, forHomeRow = false), preferences.mySports, liveScores.scores, liveScores.mode, PICKER_LIMIT),
+        channelPicks = preferences.channelPicks,
         claimKeysHint = { preferences.claimDualKeysHint(::shouldShowDualKeysHint) }
     )
 
@@ -348,6 +357,11 @@ class SportsLiveDualViewModel internal constructor(
 
     /** The games the right pane may change to (#57), while its picker is open; null when closed. */
     val pairPicker: StateFlow<List<SportsLiveItem>?> = _pairPicker.asStateFlow()
+
+    /** The profile's channel picks now, for the picker's Channels (live.26). */
+    val channelPicksNow: StateFlow<SportsLiveChannelPicks> = channelPicks
+        .catch { emit(SportsLiveChannelPicks.NONE) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveChannelPicks.NONE)
 
     // MENU was held this session: the saved layout read late does not undo it.
     private var layoutChosen = false
@@ -473,12 +487,23 @@ class SportsLiveDualViewModel internal constructor(
      * before the ranked list has loaded the session's list stands in. Nothing is looked up until one is picked.
      */
     fun openPairPicker(side: Side = Side.RIGHT) {
-        val state = _state.value ?: return
+        val candidates = pairCandidates() ?: return
         pickerSide = side
+        _pairHint.value = null
+        _pairPicker.value = candidates
+    }
+
+    /** "Change the other game" is offered only while another live game can go beside the two (live.26: never an empty picker). */
+    fun offersPairPicker(): Boolean = pairCandidates()?.let(::dualPickerOffers) == true
+
+    /** The pane that stays while the picker is open: the picker's Same league is its game's (live.26). */
+    fun pairPickerAnchor(): SportsLiveItem? = _state.value?.pane(pickerSide.other)?.item
+
+    private fun pairCandidates(): List<SportsLiveItem>? {
+        val state = _state.value ?: return null
         val pool = rankedPool()
         val over = finishedKeys + overKeys(pool, scoresMode == ScoresMode.OFF)
-        _pairHint.value = null
-        _pairPicker.value = dualPickerCandidates(pool, state.left.item.sourceKeys() + state.right.item.sourceKeys(), over, endedKeys())
+        return dualPickerCandidates(pool, state.left.item.sourceKeys() + state.right.item.sourceKeys(), over, endedKeys())
     }
 
     /**

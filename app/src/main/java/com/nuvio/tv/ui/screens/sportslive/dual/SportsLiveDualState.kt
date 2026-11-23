@@ -181,6 +181,16 @@ val DualPane.okStream: Stream?
     get() = stream.takeIf { status == PaneStatus.Playing }
 
 /**
+ * Two decoders failed (live.26 item 3): one pane hit this TV's device limit while the other plays. Dual screen then
+ * leaves for the pane that plays, full screen, with its stream as is (no new lookup); null otherwise (the other game
+ * not started yet, failed too, or both play).
+ */
+internal fun dualDecoderFallback(state: DualState): DualPane? {
+    val limited = Side.entries.firstOrNull { state.pane(it).status == PaneStatus.DeviceLimit } ?: return null
+    return state.pane(limited.other).takeIf { it.okStream != null }
+}
+
+/**
  * The pane the game info overlay is about in dual (#139): the one with sound, never both games. It
  * follows [DualState.audibleSide], so a failed highlighted pane leaves it on the game still heard.
  */

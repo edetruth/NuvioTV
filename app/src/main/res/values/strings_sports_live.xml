@@ -761,6 +761,13 @@
     <string name="sports_live_stop">Stop</string>
     <string name="sports_live_dual_paired_hint">Paired with %1$s · Hold OK to change</string>
     <string name="sports_live_dual_no_pair">No other live game to watch with</string>
+    <!-- live.26 (#222): the picker's section headings, and OK on a game that ended while it was open. -->
+    <string name="sports_live_dual_picker_your_teams">Your teams</string>
+    <string name="sports_live_dual_picker_same_league">Same league</string>
+    <string name="sports_live_dual_picker_more_live">More live</string>
+    <string name="sports_live_dual_picker_ended">This game has ended</string>
+    <!-- live.26: two decoders failed, so dual screen leaves for the game that plays, full screen (one line). -->
+    <string name="sports_live_dual_fallback">This TV can\'t play two games at once · Full screen</string>
     <string name="sports_live_full_time">Full time</string>
     <string name="sports_live_full_time_score">Full time · %1$s</string>
     <string name="sports_live_full_time_actions">Stay for postgame · Next live game →</string>
