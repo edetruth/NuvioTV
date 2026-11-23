@@ -21,9 +21,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -121,22 +118,25 @@ class SportsLivePlayerCardViewModel internal constructor(
         val target = request?.target
         if (target != null) {
             viewModelScope.launch {
-                combine(settings.map { it.mode }, revealRequested) { mode, revealed -> mode to revealed }
-                    .distinctUntilChanged()
-                    .collectLatest { (mode, revealed) ->
+                revealGatedLoad(
+                    settings = settings.map { it.mode },
+                    revealed = revealRequested,
+                    mode = { it },
+                    context = SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = request?.spoilerSafe == true),
+                    onChange = { mode, revealed, mayLoad ->
                         state.update { it.copy(mode = mode, revealed = revealed) }
-                        if (mode == ScoresMode.OFF && !revealed && state.value.card == null) {
-                            state.update { it.copy(status = PlayerCardStatus.WAITING_REVEAL) }
-                            return@collectLatest
-                        }
-                        if (state.value.card != null) return@collectLatest
-                        state.update { it.copy(status = PlayerCardStatus.LOADING) }
-                        val card = loadCard(target.league, target.athleteId)
-                        state.update {
-                            if (card != null) it.copy(card = card, status = PlayerCardStatus.READY)
-                            else it.copy(status = PlayerCardStatus.FAILED)
-                        }
+                        // A card already loaded stays (Scores turned Off while it is open).
+                        if (!mayLoad && state.value.card == null) state.update { it.copy(status = PlayerCardStatus.WAITING_REVEAL) }
                     }
+                ) {
+                    if (state.value.card != null) return@revealGatedLoad
+                    state.update { it.copy(status = PlayerCardStatus.LOADING) }
+                    val card = loadCard(target.league, target.athleteId)
+                    state.update {
+                        if (card != null) it.copy(card = card, status = PlayerCardStatus.READY)
+                        else it.copy(status = PlayerCardStatus.FAILED)
+                    }
+                }
             }
         }
     }

@@ -35,9 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -298,18 +296,21 @@ class SportsLiveGameViewModel internal constructor(
         val event = request?.event
         if (event != null) {
             viewModelScope.launch {
-                combine(settings, revealRequested, visible) { settings, revealed, visible -> Triple(settings, revealed, visible) }
-                    .distinctUntilChanged()
-                    .collectLatest { (settings, revealed, isVisible) ->
-                        page.update { it.copy(mode = settings.mode, revealed = revealed) }
-                        if (settings.mode == ScoresMode.OFF && !revealed) {
+                revealGatedLoad(
+                    settings = settings,
+                    revealed = revealRequested,
+                    visible = visible,
+                    mode = { it.mode },
+                    context = SpoilerContext(SpoilerSurface.GAME, spoilerSafe = request?.spoilerSafe == true),
+                    onChange = { current, revealed, mayLoad ->
+                        page.update { it.copy(mode = current.mode, revealed = revealed) }
+                        if (!mayLoad) {
                             page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL) }
-                            return@collectLatest
+                        } else if (page.value.status == GameLoadStatus.WAITING_REVEAL) {
+                            page.update { it.copy(status = GameLoadStatus.LOADING) }
                         }
-                        if (page.value.status == GameLoadStatus.WAITING_REVEAL) page.update { it.copy(status = GameLoadStatus.LOADING) }
-                        if (!isVisible) return@collectLatest
-                        refreshWhileVisible(event, settings.effectiveDelayMs, scoresOff = settings.mode == ScoresMode.OFF)
                     }
+                ) { current -> refreshWhileVisible(event, current.effectiveDelayMs, scoresOff = current.mode == ScoresMode.OFF) }
             }
         }
     }
