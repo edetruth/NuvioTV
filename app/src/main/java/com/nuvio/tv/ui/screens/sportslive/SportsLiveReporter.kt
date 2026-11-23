@@ -305,7 +305,8 @@ class SportsLiveReporter @Inject constructor(
             feedDataErrors = feedHealth.dataErrorLines(now),
             mySports = SportsLiveReportTrail.mySports,
             panelScope = SportsLiveReportTrail.panelScope,
-            panelRows = SportsLiveReportTrail.panelRows
+            panelRows = SportsLiveReportTrail.panelRows,
+            channels = SportsLiveReportTrail.channels
         )
     }
 

@@ -224,7 +224,8 @@ internal fun channelBoard(
         all = listed.size,
         selected = selected,
         yours = yours.map { it to (countOf[it.country] ?: 0) },
-        countryCounts = counts
+        countryCounts = counts,
+        report = SportsLiveChannelCountries.reportLine(items, merged, selected)
     )
     val browse = lists.browse
     if (browse != null) {

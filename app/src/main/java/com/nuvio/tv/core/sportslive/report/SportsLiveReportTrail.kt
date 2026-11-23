@@ -40,6 +40,15 @@ object SportsLiveReportTrail {
     var panelRows: List<String> = emptyList()
         private set
 
+    /** Channels' last board: channels loaded per source, merged and listed ([com.nuvio.tv.core.sportslive.SportsLiveChannelCountries.reportLine], #26). */
+    @Volatile
+    var channels: String? = null
+        private set
+
+    fun onChannels(line: String) {
+        channels = line
+    }
+
     fun onMySports(line: String) {
         mySports = line
     }

@@ -26,7 +26,13 @@ object SportsLiveChannelCountries {
     /** The stored choice that lists every country. */
     const val ALL = "*"
 
-    fun countryOf(item: SportsLiveItem): String = SportsLiveChannelRegions.regionOf(item)
+    /**
+     * [item]'s country: its region when that is a country or region code; a group's long name (a catalog's or addon's
+     * name, "SPORTS - TV (ACME)") is no country, so it is [SportsLiveChannelRegions.OTHER] (#26: such channels were
+     * neither a country nor "No country listed", and the viewer's countries left them all out).
+     */
+    fun countryOf(item: SportsLiveItem): String =
+        SportsLiveChannelRegions.regionOf(item).takeIf(SportsLiveChannelRegions::isCode) ?: SportsLiveChannelRegions.OTHER
 
     /** This TV's region as a channel region ("GB" is "UK"); null when the TV names none. */
     fun tvRegion(locale: Locale = Locale.getDefault()): String? =
@@ -73,6 +79,24 @@ object SportsLiveChannelCountries {
         counts.filter { (country, _) -> country !in exclude && country != SportsLiveChannelRegions.OTHER }.take(limit)
 
     const val MOST_SHOWN = 6
+
+    /**
+     * Report a problem's Channels line (#26): the channels each source loaded (most first, never a name), the channels
+     * once merged ([merged]), how many [selected] lists and the countries most left out, as codes.
+     */
+    fun reportLine(items: List<SportsLiveItem>, merged: List<SportsLiveItem>, selected: Set<String>?): String {
+        if (items.isEmpty()) return "no channels loaded"
+        val sources = items.groupingBy { it.addonId }.eachCount().values.sortedDescending()
+        val loaded = "loaded ${sources.joinToString(", ")} from ${sources.size} source" + if (sources.size == 1) "" else "s"
+        if (selected == null) return "$loaded · ${merged.size} channels · ${merged.size} listed in every country"
+        val (shown, left) = merged.partition { listed(it, selected) }
+        val named = selected.joinToString(", ") { if (it == SportsLiveChannelRegions.OTHER) "no country" else it }
+        val most = counts(left).take(REPORT_LEFT_OUT)
+            .joinToString(", ") { (country, count) -> "${if (country == SportsLiveChannelRegions.OTHER) "no country" else country} $count" }
+        return "$loaded · ${merged.size} channels · ${shown.size} listed in $named" + if (most.isEmpty()) "" else " · left out: $most"
+    }
+
+    private const val REPORT_LEFT_OUT = 3
 
     /**
      * The country of an ESPN league path ("soccer/eng.1" is UK, "football/nfl" US); null for one with no single

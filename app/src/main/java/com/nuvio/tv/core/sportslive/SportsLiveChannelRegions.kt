@@ -44,8 +44,10 @@ object SportsLiveChannelRegions {
         val (name, group) = key
         val region = TAGS[group.uppercase(Locale.ROOT)]
             ?: code(group)
-            ?: group.substringAfterLast('-').let(::code)
+            // A tag's code after its dash ("ASIA-IN"); never a catalog name's last word ("SOCCER - TV" is no Tuvalu, #26).
+            ?: group.takeIf { it.none(Char::isWhitespace) }?.substringAfterLast('-')?.let(::code)
             ?: namePrefixRegion(name)
+            ?: nameSuffixCountry(name)
             ?: SportsLiveDisplayText.of(name).region?.let(::code)
         // "24/7 AR| <Arabic title>": AR is Arabic there, not Argentina.
         if (region == "AR" && ARABIC_SCRIPT.containsMatchIn(name)) ARABIC else region
@@ -65,6 +67,12 @@ object SportsLiveChannelRegions {
     }
 
     private const val PREFIX_MAX = 16
+
+    /** A country written out in brackets after the name ("ESPN (United States)", #26); null for any other bracket. */
+    private fun nameSuffixCountry(name: String): String? =
+        BRACKET_SUFFIX.find(name)?.groupValues?.get(1)?.trim()?.uppercase(Locale.ROOT)?.let { COUNTRY_NAMES[it] }
+
+    private val BRACKET_SUFFIX = Regex("""\(([^()]+)\)\s*$""")
 
     /** Arabic channels' region (non-ISO, labelled [NAMES]). */
     private const val ARABIC = "ARB"
