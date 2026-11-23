@@ -1,9 +1,14 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.Meta
+import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -51,6 +56,51 @@ class SportsLiveSourceNoticesTest {
         SportsLiveExtraSources.markSpoilerSafe("replay-id", true)
         assertEquals(listOf("Team A – Team B"), sportsLiveStreamScreenOrder("replay-id", listOf(scored)).map { it.name })
         assertEquals(scored.url, sportsLiveStreamScreenOrder("replay-id", listOf(scored)).single().url)
+    }
+
+    @Test
+    fun `a link the Stream screen picks for a spoiler-safe replay reaches the player with the score masked`() {
+        val scored = stream("Team A 2-1 Team B", "https://cdn.example.invalid/replay/index.m3u8")
+            .copy(description = "Full match 3 vs 0 1080p")
+        val info = streamPlaybackInfoFor(
+            stream = scored, title = "Away at Home", year = null, contentId = "replay-id", contentType = "sport",
+            contentName = "Away at Home", poster = null, backdrop = null, logo = null, videoId = "replay-id", season = null,
+            episode = null, episodeTitle = null, profileId = 1, contentLanguage = null
+        )
+        assertSame(info, sportsLiveSpoilerSafePlayback(info))
+
+        SportsLiveExtraSources.markSpoilerSafe("replay-id", true)
+        val masked = sportsLiveSpoilerSafePlayback(info)
+        assertEquals("Team A – Team B", masked.streamName)
+        assertEquals("Full match – 1080p", masked.streamDescription)
+        assertEquals(info.url, masked.url)
+
+        // Another title's link, or the same item played as a game, keeps its name.
+        assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info.copy(videoId = "game-id")).streamName)
+        SportsLiveExtraSources.markSpoilerSafe("replay-id", false)
+        assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info).streamName)
+    }
+
+    @Test
+    fun `a spoiler-safe replay's Stream screen takes no artwork or date from the addon's meta, another title does`() {
+        val meta = Meta(
+            id = "replay-id", type = ContentType.UNKNOWN, rawType = "sport", name = "Team A 2-1 Team B",
+            poster = "https://img.example.invalid/final-score.jpg", posterShape = PosterShape.LANDSCAPE,
+            background = "https://img.example.invalid/celebration.jpg", logo = "https://img.example.invalid/logo.png",
+            description = null, releaseInfo = "Final 2-1", imdbRating = null, genres = listOf("Soccer"), runtime = null,
+            director = emptyList(), cast = emptyList(), videos = emptyList(), country = null, awards = null, language = null,
+            links = emptyList(), landscapePoster = "https://img.example.invalid/landscape.jpg"
+        )
+        assertSame(meta, sportsLiveStreamScreenMeta("replay-id", meta))
+
+        SportsLiveExtraSources.markSpoilerSafe("replay-id", true)
+        val safe = sportsLiveStreamScreenMeta("replay-id", meta)
+        assertNull(safe.poster)
+        assertNull(safe.backdropUrl)
+        assertNull(safe.logo)
+        assertNull(safe.releaseInfo)
+        assertEquals(listOf("Soccer"), safe.genres)
+        assertEquals(meta.poster, sportsLiveStreamScreenMeta("game-id", meta).poster)
     }
 
     private fun stream(name: String, url: String) = Stream(

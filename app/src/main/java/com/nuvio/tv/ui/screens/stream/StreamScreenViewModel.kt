@@ -3,6 +3,8 @@ package com.nuvio.tv.ui.screens.stream
 import android.content.Context
 import android.util.Log
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveLocalStamps
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveSpoilerSafePlayback
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveStreamScreenMeta
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -560,7 +562,7 @@ class StreamScreenViewModel @Inject constructor(
                                 addonLogo = cached.addonLogo,
                                 streamDescription = cached.streamDescription,
                                 fromLinkCache = true
-                            ),
+                            ).let(::sportsLiveSpoilerSafePlayback),
                             showDirectAutoPlayOverlay = showOverlay || it.showDirectAutoPlayOverlay,
                             isDirectAutoPlayFlow = showOverlay || it.isDirectAutoPlayFlow
                         )
@@ -1287,7 +1289,7 @@ class StreamScreenViewModel @Inject constructor(
 
             if (result !is NetworkResult.Success) return@launch
 
-            val meta = result.data
+            val meta = sportsLiveStreamScreenMeta(videoId, result.data)
             playbackMetaVideos = meta.videos
             if (!requiresMetadataLookup) return@launch
             val metaGenres = meta.genres.takeIf { it.isNotEmpty() }
@@ -1876,7 +1878,7 @@ class StreamScreenViewModel @Inject constructor(
             episodeTitle = episodeName,
             profileId = playbackProfileId,
             contentLanguage = contentLanguage
-        )
+        ).let(::sportsLiveSpoilerSafePlayback)
         StreamSidecarSubtitles.set(playbackUrlFor(playbackInfo), stream.subtitles)
 
         val url = playbackInfo.url

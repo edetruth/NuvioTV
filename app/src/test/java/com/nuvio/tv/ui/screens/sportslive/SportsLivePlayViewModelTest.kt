@@ -520,6 +520,110 @@ class SportsLivePlayViewModelTest {
         }
 
     @Test
+    fun `choose stream on a merged replay whose result is hidden lists and plays its links with the score masked`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveExtraSources.reset()
+            coEvery { resolver.resolveAll(any()) } returns listOf(STREAM.copy(name = "A 2-1 B 720p"))
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            viewModel.chooseStream(MERGED_REPLAY, spoilerSafe = true)
+            advanceUntilIdle()
+            val picking = viewModel.state.value as SportsLivePlayState.Picking
+            assertEquals(listOf("A – B 720p"), picking.streams.map { it.name })
+
+            viewModel.pick(picking.streams.single())
+            advanceUntilIdle()
+            val play = events.single() as SportsLivePlayEvent.Play
+            assertEquals("A – B 720p", play.target.playback?.streamName)
+            // Its other links (the Stream screen, the Sources panel) stay masked too.
+            assertTrue(SportsLiveExtraSources.isSpoilerSafe(MERGED_REPLAY.id))
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
+    fun `a merged replay whose result shows lists its links as they are`() = runTest(mainDispatcherRule.dispatcher) {
+        SportsLiveExtraSources.reset()
+        val scored = STREAM.copy(name = "A 2-1 B 720p")
+        coEvery { resolver.resolveAll(any()) } returns listOf(scored)
+        val viewModel = newViewModel()
+        val events = eventsOf(viewModel)
+
+        viewModel.chooseStream(MERGED_REPLAY)
+        advanceUntilIdle()
+        assertEquals(SportsLivePlayState.Picking(MERGED_REPLAY, listOf(scored)), viewModel.state.value)
+        viewModel.pick(scored)
+        advanceUntilIdle()
+        assertEquals("A 2-1 B 720p", (events.single() as SportsLivePlayEvent.Play).target.playback?.streamName)
+        assertFalse(SportsLiveExtraSources.isSpoilerSafe(MERGED_REPLAY.id))
+        SportsLiveExtraSources.reset()
+    }
+
+    @Test
+    fun `a single-source replay whose result is hidden opens its Stream screen flagged spoiler-safe, until shown`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveExtraSources.reset()
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            viewModel.chooseStream(REPLAY, spoilerSafe = true)
+            advanceUntilIdle()
+            assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(REPLAY, manualSelection = true)), events)
+            assertTrue(SportsLiveExtraSources.isSpoilerSafe(REPLAY.id))
+
+            viewModel.chooseStream(REPLAY)
+            advanceUntilIdle()
+            assertFalse(SportsLiveExtraSources.isSpoilerSafe(REPLAY.id))
+
+            // OK on the card goes the same way.
+            viewModel.playCard(REPLAY, spoilerSafe = true) { null }
+            advanceUntilIdle()
+            assertEquals(SportsLivePlayEvent.OpenStreamScreen(REPLAY), events.last())
+            assertTrue(SportsLiveExtraSources.isSpoilerSafe(REPLAY.id))
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
+    fun `a replay whose result is hidden opens its Stream screen and player under ESPN's matchup, with no addon title or art`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveExtraSources.reset()
+            val scored = REPLAY.copy(
+                meta = REPLAY.meta.copy(
+                    name = "A 2-1 B", poster = "https://img.example.invalid/final-score.jpg",
+                    background = "https://img.example.invalid/celebration.jpg", logo = "https://img.example.invalid/logo.png"
+                )
+            )
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            // Choose stream: the Stream screen's header is the matchup, with no poster, backdrop or logo.
+            viewModel.chooseStream(sportsLiveCardToPlay(scored, hidden = true) { "Away at Home" }, spoilerSafe = true)
+            advanceUntilIdle()
+            val open = events.single() as SportsLivePlayEvent.OpenStreamScreen
+            val route = streamRouteFor(open.item, returnToHomeOnBack = false, manualSelection = open.manualSelection)
+            assertTrue(route, route.contains("?poster=&backdrop=&logo=&"))
+            assertTrue(route, route.contains("&contentName=Away%20at%20Home&"))
+            assertFalse(route, route.contains("2-1") || route.contains("img.example.invalid"))
+
+            // OK on the card: the player (or the Stream screen a link needing preparation opens) is named the same way.
+            viewModel.playCard(sportsLiveCardToPlay(scored, hidden = true) { "Away at Home" }, spoilerSafe = true) { MINI_STREAM }
+            advanceUntilIdle()
+            val played = (events.last() as SportsLivePlayEvent.Play).target.item
+            assertEquals("Away at Home", played.meta.name)
+            assertNull(played.meta.poster)
+            assertNull(played.meta.backdropUrl)
+
+            // Its result shown (Show with nothing hidden, or Reveal): the addon's own header, as before.
+            val shown = sportsLiveCardToPlay(scored, hidden = false) { "Away at Home" }
+            assertEquals(scored, shown)
+            assertTrue(streamRouteFor(shown, returnToHomeOnBack = false).contains("final-score"))
+
+            // No ESPN game: the card's own title stands in, with its score masked.
+            assertEquals("A – B", sportsLiveCardToPlay(scored, hidden = true) { "A 2-1 B" }.meta.name)
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
     fun `a catch-up replay from several sources offers the sources, and the pick plays`() = runTest(mainDispatcherRule.dispatcher) {
         val other = item("replay-2", "two").copy(kind = SportsLiveKind.REPLAY, isLive = false)
         coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
@@ -700,6 +804,7 @@ class SportsLivePlayViewModelTest {
         val UPCOMING = item("later", "one").copy(isLive = false, startMs = 4_000_000_000_000L, startHasTimeOfDay = true)
         val UPCOMING_MERGED = MERGED.copy(isLive = false, startMs = 4_000_000_000_000L, startHasTimeOfDay = true)
         val REPLAY = item("replay", "one").copy(kind = SportsLiveKind.REPLAY, isLive = false)
+        val MERGED_REPLAY = REPLAY.copy(alternates = listOf(item("other-replay", "two").copy(kind = SportsLiveKind.REPLAY, isLive = false)))
 
         val STREAM = Stream(
             name = "Two 720p",
