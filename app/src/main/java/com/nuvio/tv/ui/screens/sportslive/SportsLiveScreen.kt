@@ -1595,6 +1595,23 @@ private fun SportsLiveContent(
             withFrameNanos { }
         }
         runCatching { (if (first != null) cardFocusRequester(first) else activeTabFocusRequester).requestFocus() }
+        // TV F3: the list's jump to the top and the menu closing can still move focus after this request (a row below the
+        // first took it); it is asked again until it has stayed on the row for a few frames.
+        if (first != null) {
+            var steady = 0
+            var frames = 0
+            while (steady < MORE_LIVE_FOCUS_STEADY_FRAMES && frames < MORE_LIVE_FOCUS_MAX_FRAMES) {
+                withFrameNanos { }
+                frames++
+                if (focusedCardKey == first.listKey && listHasFocus) {
+                    steady++
+                } else {
+                    steady = 0
+                    scrollToCard(first.listKey, items.indexOf(first))
+                    runCatching { cardFocusRequester(first).requestFocus() }
+                }
+            }
+        }
         moreLiveFocusPending = false
     }
     // Channels phase 2: Back from the browse view goes back to the tab's sections (composed later, so it wins).
@@ -2492,6 +2509,10 @@ private const val STRIP_RETURN_WAIT_MS = 3_000L
 /** How long Results' "N games live now" keeps focus on Live now's first row while its board settles. */
 private const val LIVE_NOW_FOCUS_MS = 3_000L
 private const val LIVE_NOW_SCROLL_MS = 300L
+
+/** More live / All sports picked from the menu: focus must stay on its first row this many frames (of at most the second number). */
+private const val MORE_LIVE_FOCUS_STEADY_FRAMES = 5
+private const val MORE_LIVE_FOCUS_MAX_FRAMES = 45
 
 /** On return to Live Now the list shows its top while the row returned to is among this many first rows. */
 private const val RETURN_ROWS_ON_SCREEN = 4
