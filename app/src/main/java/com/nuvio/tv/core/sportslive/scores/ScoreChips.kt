@@ -48,17 +48,19 @@ data class ScoreChipStrings(
  */
 object ScoreChips {
 
-    private val HIDDEN_STATES = setOf(ScoreState.PRE, ScoreState.IN, ScoreState.POST)
-
     fun of(item: SportsLiveItem, snapshot: ScoreSnapshot?, mode: ScoresMode?, revealed: Boolean): ScoreChip? {
-        if (mode == null || mode == ScoresMode.OFF || snapshot == null) return null
+        snapshot ?: return null
+        val spoilers = SpoilerPolicy.visibility(
+            mode, revealed, SpoilerContext(SpoilerSurface.SCORE_CHIP, eventState = snapshot.state, spoilerProtected = snapshot.spoilerProtected)
+        )
+        // No chip before the Scores setting is read, nor under Never show.
+        if (!spoilers.mayLoad) return null
         val (first, second) = orderedSides(item) ?: return null
         val firstIsHome = ScoreMatcher.firstIsHome(first, second, snapshot) ?: return null
         val score = scoreOf(snapshot, firstIsHome)
-        // Spoiler-protected (#151): hidden whatever the setting, and a focus never reveals it.
-        if (snapshot.spoilerProtected && snapshot.state in HIDDEN_STATES) return ScoreChip.Hidden
-        // Hidden: one chip for scheduled, live and finished games alike, whatever the feed has yet.
-        if (mode == ScoresMode.HIDE_UNTIL_FOCUSED && !revealed && snapshot.state in HIDDEN_STATES) return ScoreChip.Hidden
+        // Hidden: one chip for scheduled, live and finished games alike, whatever the feed has yet; a spoiler-protected
+        // game (#151) whatever the setting, and a focus never reveals it.
+        if (!spoilers.showsScore) return ScoreChip.Hidden
         return when (snapshot.state) {
             ScoreState.OFF -> ScoreChip.Status(snapshot.clockText?.takeIf { it.isNotBlank() })
             ScoreState.IN -> when {
