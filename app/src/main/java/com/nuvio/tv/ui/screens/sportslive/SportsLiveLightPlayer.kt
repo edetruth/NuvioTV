@@ -28,7 +28,7 @@ internal fun buildSportsLiveLightPlayer(appContext: Context): ExoPlayer = ExoPla
 )
     .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
     .build()
-    .also { com.nuvio.tv.core.debug.TestMute.applyTo(appContext, it) } // debug-only test mute
+    .also { com.nuvio.tv.core.debug.TestMute.applyTo(appContext, it, "light") } // debug-only test mute
 
 /**
  * The one correct way to describe a Sports & Live media source: the normalized playback url, the

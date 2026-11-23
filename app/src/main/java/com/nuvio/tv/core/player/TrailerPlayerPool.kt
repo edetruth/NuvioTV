@@ -391,7 +391,7 @@ class TrailerPlayerPool @Inject constructor(
             .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS)
             .build()
             .apply {
-                com.nuvio.tv.core.debug.TestMute.applyTo(context, this) // debug-only test mute
+                com.nuvio.tv.core.debug.TestMute.applyTo(context, this, "trailer-pool") // debug-only test mute
                 repeatMode = Player.REPEAT_MODE_OFF
                 addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
