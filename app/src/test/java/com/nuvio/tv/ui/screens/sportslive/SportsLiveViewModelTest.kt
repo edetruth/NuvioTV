@@ -887,6 +887,57 @@ class SportsLiveViewModelTest {
         assertEquals("o", viewModel.uiState.value.selectedItemId)
     }
 
+    @Test
+    fun `the first Live now list waits for its games' scores, so a game already over never shows live first`() = runTest {
+        // live.26 TV: an ACL game already over was listed LIVE at the cold open, then read FT in place 1.4 s later.
+        val game = item("p", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - HOUR)
+        val other = item("o", isLive = true, sport = "Soccer", name = "O")
+        nextLoad = load(listOf(game, other))
+        // No feed has answered for either game yet.
+        val inputs = MutableStateFlow(EndedInputs(canEstimate = { false }))
+        val viewModel = SportsLiveViewModel(repo, endedInputs = inputs, endedGames = SportsLiveEndedGames(), computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        val waiting = viewModel.uiState.value
+        assertEquals("no row before the scores", emptyList<String>(), waiting.visibleItems.map { it.id })
+        assertTrue("loading rows", waiting.firstLoadPending)
+        assertEquals("its games are looked up meanwhile", setOf("p", "o"), waiting.liveNowWaiting.map { it.id }.toSet())
+        assertEquals(setOf("p", "o"), sectionTrackedCards(waiting, emptyList()).map { it.id }.toSet())
+
+        // The feeds answer: the game is over; the other has no game of ESPN's (confirmed unmatched).
+        val pacers = nbaGames.first { it.eventId == "401909985" }
+        val over = pacers.copy(
+            state = ScoreState.POST, isFinal = true, clockText = "Final", startMs = NOW - 5 * HOUR, timeValid = true,
+            home = pacers.home.copy(score = 110), away = pacers.away.copy(score = 100)
+        )
+        inputs.value = EndedInputs(mapOf(game.streamKey to over), canEstimate = { it.id == "o" })
+        runCurrent()
+        val shown = viewModel.uiState.value
+        assertFalse(shown.firstLoadPending)
+        assertTrue(shown.liveNowWaiting.isEmpty())
+        assertTrue("o" in shown.visibleItems.map { it.id })
+        assertFalse("the game over is never a live row", shown.visibleItems.any { it.id == "p" && it.streamKey !in shown.justEnded })
+    }
+
+    @Test
+    fun `the first Live now list waits for the scores at most HOLD_MS from opening`() = runTest {
+        nextLoad = load(listOf(item("o", isLive = true, sport = "Soccer", name = "O")))
+        // A feed that never answers.
+        val viewModel = SportsLiveViewModel(
+            repo, endedInputs = flowOf(EndedInputs(canEstimate = { false })), endedGames = SportsLiveEndedGames(), computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        assertTrue(viewModel.uiState.value.visibleItems.isEmpty())
+
+        advanceTimeBy(com.nuvio.tv.core.sportslive.SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
+        assertEquals(listOf("o"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertTrue(viewModel.uiState.value.liveNowWaiting.isEmpty())
+    }
+
     // Report #25 (live.25 on the TV, 20:18): Upcoming's Today still listed games of 14:00-15:25, long final, with Watch.
     // Upcoming is sorted at a load, a directory change or a tip-off of a game whose start alone says it is on; a game its
     // addon marks itself schedules no tip-off, so time passing alone never took it off.

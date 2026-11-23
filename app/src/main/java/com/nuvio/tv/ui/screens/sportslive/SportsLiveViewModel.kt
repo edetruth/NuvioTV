@@ -1681,8 +1681,19 @@ class SportsLiveViewModel internal constructor(
             holdOver = selection.holdOver || holdPassed,
             savedAgeMs = bucketed.listAtMs?.let { now - it }
         ) || freshHolding
+        // Settled screens (live.26 TV): the visit's first Live now list also waits for its games' scores (at most HOLD_MS
+        // from opening), so a game the feeds already have over never shows LIVE first and turns FT in place a moment later.
+        // Its games are looked up meanwhile ([SportsLiveUiState.liveNowWaiting]).
+        val liveNowWaiting: List<SportsLiveItem> = if (holdLiveNow || liveNowShown || selection.holdOver || holdPassed) {
+            emptyList()
+        } else {
+            val live = bucketed.tabs[SportsLiveTab.LIVE_NOW].orEmpty().let { if (mySports.isDefault) it else SportsLiveMySportsScope.scope(it, mySports) }
+            val scores = inputs.scores
+            live.takeIf { SportsLiveCalmOpen.awaitsScores(it) { item -> item.streamKey in scores || inputs.canEstimate(item) } }.orEmpty()
+        }
+        val scoresHolding = liveNowWaiting.isNotEmpty()
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
-            if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
+            if (tab == SportsLiveTab.LIVE_NOW && (holdLiveNow || scoresHolding)) {
                 emptyList<SportsLiveItem>()
             } else if (tab == SportsLiveTab.LIVE_NOW) {
                 // H (live.23): listings that are no game and no event of their own leave the list for More live's Other.
@@ -1888,7 +1899,7 @@ class SportsLiveViewModel internal constructor(
             // #214: until the first load of this visit lands (or fails), an empty tab is loading, never "nothing here".
             firstLoadPending = (hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
                 (selection.isRefreshing || selection.lastRefreshedMs == null)) || selection.tab in bucketed.sortingTabs ||
-                (freshHolding && selection.tab == SportsLiveTab.LIVE_NOW),
+                ((freshHolding || scoresHolding) && selection.tab == SportsLiveTab.LIVE_NOW),
             hasClaimedCatalogs = hasClaimed,
             tabs = if (allSports) scopedTabs + (selection.tab to fullItems) else scopedTabs,
             selectedTab = selection.tab,
@@ -1923,7 +1934,8 @@ class SportsLiveViewModel internal constructor(
             },
             upcomingPendingDates = bucketed.upcomingPending,
             liveNowSettled = liveNowSettled,
-            liveNowEpoch = liveNowEpoch
+            liveNowEpoch = liveNowEpoch,
+            liveNowWaiting = liveNowWaiting
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

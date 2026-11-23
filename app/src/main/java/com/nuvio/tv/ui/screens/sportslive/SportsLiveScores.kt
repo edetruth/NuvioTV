@@ -155,7 +155,8 @@ internal fun rememberSportsLiveClockMs(stepMs: Long = 30_000L): State<Long> =
 internal fun sectionTrackedCards(state: SportsLiveUiState, laterToday: List<SportsLiveItem>): List<SportsLiveItem> =
     when (state.selectedTab) {
         SportsLiveTab.LIVE_NOW -> {
-            val listed = state.tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+            // While the first list waits for the scores (live.26 TV), its games are looked up all the same.
+            val listed = state.tabs[SportsLiveTab.LIVE_NOW].orEmpty().ifEmpty { state.liveNowWaiting }
             val moreLive = if (state.moreLiveOpen) {
                 val keys = listed.mapTo(HashSet()) { it.streamKey }
                 state.visibleItems.filter { it.streamKey !in keys }
