@@ -68,7 +68,10 @@ internal fun rememberLiveNowCardArt(
                 val scheduled = remember(snapshot) { ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.PRE }
                 val kickoff = if (scheduled) art?.let { kickoffText(it) } else null
                 // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
-                val footer = remember(snapshot, confirmedUnmatched, kickoff) {
+                // live.26 TV (spoiler): keyed on the Scores setting too. A setting change rebuilds this lookup, but the new
+                // card is drawn in the old card's place, so a footer keyed on the score alone kept the old setting's
+                // (a score under Hide) until the score next changed.
+                val footer = remember(snapshot, confirmedUnmatched, kickoff, mode) {
                     // #215: listed live by its addon, not found by ESPN ([listedLiveOnly]).
                     val listed = item.isLive && !item.isChannel && SportsLiveHomeMeta.listedLiveOnly(mode, confirmedUnmatched, ScoreChips.matchedEvent(item, snapshot) != null)
                     SportsLiveHomeMeta.cardFooter(
