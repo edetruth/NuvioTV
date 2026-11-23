@@ -278,7 +278,15 @@ fun SportsLiveGameScreen(
                     GameAction.REMIND -> remindCard?.let { remindersViewModel.toggle(it) } ?: remindEvent?.let { remindersViewModel.toggle(it) }
                     GameAction.REPLAY -> state.replay?.let { replay ->
                         viewModel.onReplayStarted(replay)
-                        if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
+                        // As Results' and Replays' Watch replay: at once under ESPN's matchup, links named without the score.
+                        if (replay.apiType == "series") {
+                            onOpenDetail(replay)
+                        } else {
+                            playViewModel.playReplay(
+                                listOf(replay) + replay.alternates,
+                                context.getString(R.string.sports_live_results_menu_title, event.away.catchUpName, event.home.catchUpName)
+                            )
+                        }
                     }
                     GameAction.REVEAL -> {
                         revealPressed = true

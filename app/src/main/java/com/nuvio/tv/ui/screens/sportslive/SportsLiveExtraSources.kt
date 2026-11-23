@@ -73,6 +73,9 @@ object SportsLiveExtraSources {
     // player can scope auto-failover and the error overlay to sports only. Bounded like [entries].
     private val sportsPlaybackIds = LinkedHashSet<String>()
 
+    // Content ids of replays played spoiler-safe (#223): every list of their links masks scores. Bounded like [entries].
+    private val spoilerSafeIds = LinkedHashSet<String>()
+
     // Per played content id: each source's Sources-panel name (its label, and the primary's addon name)
     // to its reliability key, so the full player can credit the source it plays. Bounded like [entries].
     private val sourceNames = LinkedHashMap<String, SourceNames>()
@@ -227,7 +230,13 @@ object SportsLiveExtraSources {
      * [shown] (the panel's previous group names) keep their places; groups that arrive later go below them,
      * so rows do not move under the user as sources answer.
      */
-    fun orderGroups(contentId: String?, groups: List<AddonStreams>, shown: List<String> = emptyList()): List<AddonStreams> {
+    fun orderGroups(contentId: String?, groups: List<AddonStreams>, shown: List<String> = emptyList()): List<AddonStreams> =
+        rankGroups(contentId, spoilerSafeGroups(contentId, groups), shown)
+
+    private fun spoilerSafeGroups(contentId: String?, groups: List<AddonStreams>): List<AddonStreams> =
+        if (!isSpoilerSafe(contentId)) groups else groups.map { it.copy(streams = it.streams.map(::spoilerSafeReplayStream)) }
+
+    private fun rankGroups(contentId: String?, groups: List<AddonStreams>, shown: List<String>): List<AddonStreams> {
         if (!isSportsPlayback(contentId) || groups.size < 2) return groups
         val names = synchronized(sourceNames) { sourceNames[contentId] } ?: return groups
         // Only the card's own groups move, among the places they hold; any other group stays put.
@@ -248,6 +257,26 @@ object SportsLiveExtraSources {
         return ordered
     }
 
+    /**
+     * [contentId] plays as a spoiler-safe replay ([safe]) or not (#223): set on every start from the section, so the
+     * same item played as a game lists its links as they are.
+     */
+    fun markSpoilerSafe(contentId: String?, safe: Boolean) {
+        if (contentId == null) return
+        synchronized(spoilerSafeIds) {
+            spoilerSafeIds.remove(contentId)
+            if (safe) spoilerSafeIds.add(contentId)
+            while (spoilerSafeIds.size > MAX_ENTRIES) spoilerSafeIds.remove(spoilerSafeIds.first())
+        }
+    }
+
+    fun isSpoilerSafe(contentId: String?): Boolean =
+        contentId != null && synchronized(spoilerSafeIds) { contentId in spoilerSafeIds }
+
+    /** [streams] of [contentId] as its lists name them: a spoiler-safe replay's with any score masked. */
+    fun spoilerSafeStreams(contentId: String?, streams: List<Stream>): List<Stream> =
+        if (!isSpoilerSafe(contentId)) streams else streams.map(::spoilerSafeReplayStream)
+
     /** Whether the player for [contentId] is playing a Sports & Live game/channel. */
     fun isSportsPlayback(contentId: String?): Boolean =
         contentId != null && synchronized(sportsPlaybackIds) { contentId in sportsPlaybackIds }
@@ -261,14 +290,14 @@ object SportsLiveExtraSources {
         contentId != null && synchronized(entries) { contentId in entries }
 
     /** The extra streams resolved and cached for [contentId]; empty when not registered or not resolved yet. */
-    fun cachedStreamsFor(contentId: String?): List<Stream> = entry(contentId)?.streams.orEmpty()
+    fun cachedStreamsFor(contentId: String?): List<Stream> = spoilerSafeStreams(contentId, entry(contentId)?.streams.orEmpty())
 
     /**
      * The extra streams known for [contentId]: the cached ones, else those of a running (or incomplete)
      * lookup that have answered so far, so the failover treats them as extras before every source is in.
      */
     fun availableStreamsFor(contentId: String?): List<Stream> =
-        entry(contentId)?.let { it.streams ?: it.partial }.orEmpty()
+        spoilerSafeStreams(contentId, entry(contentId)?.let { it.streams ?: it.partial }.orEmpty())
 
     /** The alternates' streams of the game registered for [contentId], all at once; see [extraStreamsProgress]. */
     suspend fun extraStreamsFor(contentId: String?, refresh: Boolean = false): List<Stream> =
@@ -356,6 +385,7 @@ object SportsLiveExtraSources {
     internal fun reset() {
         synchronized(entries) { entries.clear() }
         synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
+        synchronized(spoilerSafeIds) { spoilerSafeIds.clear() }
         synchronized(sourceNames) { sourceNames.clear() }
         synchronized(streamSources) { streamSources.clear() }
         synchronized(seeds) { seeds.clear() }

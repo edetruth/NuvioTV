@@ -53,6 +53,19 @@ class SportsLiveWatchReplayRowTest {
     }
 
     @Test
+    fun `a split score between team names is masked, a plain vs, dates and aspect ratios stay`() {
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 2 vs 1 Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 2 v 1 Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 3 VS. 0 Team B"))
+        assertEquals("Team A vs Team B", spoilerSafeLinkText("Team A vs Team B"))
+        assertEquals("Team A vs Team B 2026-11-22", spoilerSafeLinkText("Team A vs Team B 2026-11-22"))
+        assertEquals("Replay 22-11-2026 1080p 16:9", spoilerSafeLinkText("Replay 22-11-2026 1080p 16:9"))
+        assertEquals("Round 2 vs 3rd seed", spoilerSafeLinkText("Round 2 vs 3rd seed"))
+        // A score next to a date still goes.
+        assertEquals("Team A – Team B 2026-11-22", spoilerSafeLinkText("Team A 2-1 Team B 2026-11-22"))
+    }
+
+    @Test
     fun `a replay's stream reaches the player with its name, title and description masked`() {
         val stream = Stream(
             name = "Replay 3-0", title = "Team A 3-0 Team B", description = "Full match, 3 - 0",

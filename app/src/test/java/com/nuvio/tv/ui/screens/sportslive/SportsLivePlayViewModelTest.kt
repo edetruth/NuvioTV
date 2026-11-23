@@ -502,6 +502,24 @@ class SportsLivePlayViewModelTest {
     }
 
     @Test
+    fun `a catch-up replay's links stay masked on the next screen and in Sources, the same item played as a game does not`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveExtraSources.reset()
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+            val viewModel = newViewModel()
+            eventsOf(viewModel)
+
+            viewModel.playReplay(listOf(REPLAY), "Away at Home")
+            advanceUntilIdle()
+            assertTrue(SportsLiveExtraSources.isSpoilerSafe(REPLAY.id))
+
+            viewModel.playResolved(REPLAY, STREAM)
+            advanceUntilIdle()
+            assertFalse(SportsLiveExtraSources.isSpoilerSafe(REPLAY.id))
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
     fun `a catch-up replay from several sources offers the sources, and the pick plays`() = runTest(mainDispatcherRule.dispatcher) {
         val other = item("replay-2", "two").copy(kind = SportsLiveKind.REPLAY, isLive = false)
         coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)

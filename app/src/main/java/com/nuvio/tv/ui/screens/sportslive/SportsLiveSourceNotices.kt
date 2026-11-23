@@ -47,7 +47,7 @@ internal fun <T> sportsLiveNoticesLast(streams: List<T>, isNotice: (T) -> Boolea
  */
 internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>): List<Stream> =
     if (!SportsLiveExtraSources.isSportsPlayback(videoId)) streams
-    else sportsLiveNoticesLast(streams, SportsLiveZapResolver::isNoticeEntry)
+    else sportsLiveNoticesLast(SportsLiveExtraSources.spoilerSafeStreams(videoId, streams), SportsLiveZapResolver::isNoticeEntry)
 
 /**
  * A source's message in a stream list (N2): one small dimmed line, "Note from the source: ‹its text in words›" (V2,

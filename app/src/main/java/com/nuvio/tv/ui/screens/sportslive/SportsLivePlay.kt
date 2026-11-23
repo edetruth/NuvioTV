@@ -177,14 +177,23 @@ internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiv
     )
 )
 
-/** A score in a link's words: "2-1", "102 - 99", "3–2", "1:0". */
-private val SCORE_IN_LINK_TEXT = Regex("""\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b""")
+/**
+ * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0"; not part of a date ("2026-11-22", "22-11-2026") or a
+ * picture's aspect ratio ("16:9").
+ */
+private val SCORE_IN_LINK_TEXT =
+    Regex("""(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-–—:/.]\d)""")
+
+/** A score split by "vs" between the team names: "Team A 2 vs 1 Team B", "2 v 1" (a "vs" alone stays). */
+private val SPLIT_SCORE_IN_LINK_TEXT =
+    Regex("""(?<![\d.])\b\d{1,3}\s+vs?\.?\s+\d{1,3}\b(?![-–—:/.]\d)""", RegexOption.IGNORE_CASE)
 
 /**
  * [text] with any score in it masked ("Arsenal 2-1 Chelsea highlights" → "Arsenal – Chelsea highlights"): live.26 shorter
  * paths (#223, review gap 1), a replay's link names often carry its result.
  */
-internal fun spoilerSafeLinkText(text: String?): String? = text?.replace(SCORE_IN_LINK_TEXT, "–")
+internal fun spoilerSafeLinkText(text: String?): String? =
+    text?.replace(SPLIT_SCORE_IN_LINK_TEXT, "–")?.replace(SCORE_IN_LINK_TEXT, "–")
 
 /** [stream] of a replay as the player names it: its name, title and description with any score masked. */
 internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(
@@ -477,6 +486,9 @@ class SportsLivePlayViewModel @Inject constructor(
         if (zapSession) ensureZapSession(item)
         // The player (or the primary's Stream screen) gets the other addons' streams for fallback and Sources.
         SportsLiveExtraSources.register(item.id, item)
+        // A replay's other links (the Stream screen a link needing preparation opens, the Sources panel) are named
+        // with the score masked too (#223); the same item played as a game is not.
+        SportsLiveExtraSources.markSpoilerSafe(item.id, !zapSession)
         // A stream that opens the Stream screen for preparation is not announced: it is not playing yet.
         val source = stream.addonName.takeIf { announce && target.playback != null && it.isNotBlank() }
         _events.send(SportsLivePlayEvent.Play(target, source))

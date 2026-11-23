@@ -42,6 +42,17 @@ class SportsLiveSourceNoticesTest {
         assertFalse(sportsLiveSourceNotice("game-id", real))
     }
 
+    @Test
+    fun `a spoiler-safe replay's Stream screen lists its links with the score masked, another game's as they are`() {
+        val scored = stream("Team A 2-1 Team B", "https://cdn.example.invalid/replay/index.m3u8")
+        SportsLiveExtraSources.markSportsPlayback("replay-id")
+        assertEquals(listOf(scored), sportsLiveStreamScreenOrder("replay-id", listOf(scored)))
+
+        SportsLiveExtraSources.markSpoilerSafe("replay-id", true)
+        assertEquals(listOf("Team A – Team B"), sportsLiveStreamScreenOrder("replay-id", listOf(scored)).map { it.name })
+        assertEquals(scored.url, sportsLiveStreamScreenOrder("replay-id", listOf(scored)).single().url)
+    }
+
     private fun stream(name: String, url: String) = Stream(
         name = name, title = null, description = null, url = url, ytId = null, infoHash = null, fileIdx = null,
         externalUrl = null, behaviorHints = null, addonName = "Sports", addonLogo = null
