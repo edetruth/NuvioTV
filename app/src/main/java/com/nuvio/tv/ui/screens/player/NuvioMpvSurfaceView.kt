@@ -328,7 +328,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         if (!initialized) return
         val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
         val linearScale = 10.0.pow(clampedDb / 20.0)
-        val targetVolumePercent = (100.0 * linearScale).coerceIn(0.0, MPV_MAX_VOLUME_PERCENT)
+        val targetVolumePercent = if (com.nuvio.tv.core.debug.TestMute.isActive(context)) 0.0 else (100.0 * linearScale).coerceIn(0.0, MPV_MAX_VOLUME_PERCENT) // debug-only test mute
         runCatching {
             mpv.setPropertyDouble("volume", targetVolumePercent)
         }.onFailure {

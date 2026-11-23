@@ -165,6 +165,7 @@ fun TrailerPlayer(
     LaunchedEffect(trailerPlayer, muted, cropToFill, miniPlaying) {
         val player = trailerPlayer ?: return@LaunchedEffect
         player.volume = if (muted || miniPlaying) 0f else 1f
+        com.nuvio.tv.core.debug.TestMute.applyTo(context, player) // debug-only test mute
         player.videoScalingMode = if (cropToFill) {
             C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
         } else {
@@ -175,6 +176,7 @@ fun TrailerPlayer(
     LaunchedEffect(isPlaying, trailerUrl, trailerAudioUrl, trailerPlayer) {
         val player = trailerPlayer ?: return@LaunchedEffect
         player.volume = if (muted || miniPlaying) 0f else 1f
+        com.nuvio.tv.core.debug.TestMute.applyTo(context, player) // debug-only test mute
         if (isPlaying && trailerUrl != null) {
             if (resolvedPool?.isLoadedBy(ownerToken, trailerUrl) == true && player.currentMediaItem != null) {
                 player.playWhenReady = true
