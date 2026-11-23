@@ -231,6 +231,13 @@ internal object YourTeams {
     }
 
     /**
+     * Where Live Now opens (live.24 A7, live.26 item 4): on the strip's first card when it is a followed team's live
+     * game (one press to watch your team), else on the list's first row. Once per visit, on the finished board only: it
+     * never moves focus later (settled screens), and Back from another screen keeps its own return.
+     */
+    fun opensOnStrip(strip: List<YourTeamsEntry>): Boolean = strip.firstOrNull() is YourTeamsEntry.Live
+
+    /**
      * OK on a strip card plays (live, replay); on a game not started yet it plays only once its verified link is held
      * ([mark] READY: "Watch now", the held link at once, 1b HARD RULE), else it sets the reminder.
      */

@@ -106,6 +106,7 @@ import com.nuvio.tv.domain.model.Stream
 import java.time.LocalDate
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveSecondGame
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniDock
@@ -465,6 +466,18 @@ fun SportsLiveScreen(
                     SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_dual_no_pair))
                 }
             },
+            // "Watch with the ‹team› game" (live.26 item 4): the picker's own games and rules, never a Watch later game.
+            teamPairPool = { item -> uiState.watchWithFor(item, scores)?.candidates.orEmpty() },
+            teamPairSaved = sportsLiveSavedForLater(protection, scores),
+            onWatchWithTeam = { item, second ->
+                // One press: the session the picker starts for this pick, with no picker.
+                val session = uiState.watchWithFor(item, scores)?.pairWith(second)
+                if (session != null) {
+                    startDual(session)
+                } else {
+                    SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_dual_no_pair))
+                }
+            },
             results = resultsState,
             onSelectResultsDay = resultsViewModel::selectDay,
             resultsActions = resultsViewModel,
@@ -617,6 +630,12 @@ private fun SportsLiveContent(
     canWatchWith: (SportsLiveItem) -> Boolean,
     /** "Watch with another game": dual screen with the card in slot 1 and a game picked for it (#57). */
     onWatchWith: (SportsLiveItem) -> Unit,
+    /** The games "Watch with another game" offers beside a card (the picker's), for "Watch with the ‹team› game". */
+    teamPairPool: (SportsLiveItem) -> List<SportsLiveItem> = { emptyList() },
+    /** A game saved with Watch later (#151): never the one-press pair. */
+    teamPairSaved: (SportsLiveItem) -> Boolean = { false },
+    /** "Watch with the ‹team› game" (live.26 item 4): dual screen with the card and that game, in one press. */
+    onWatchWithTeam: (SportsLiveItem, SportsLiveItem) -> Unit = { _, _ -> },
     results: SportsLiveResultsUiState,
     onSelectResultsDay: (Int) -> Unit,
     /** Results' Jump to and reveals (results redesign). */
@@ -1042,7 +1061,7 @@ private fun SportsLiveContent(
     var entryFocusDone by rememberSaveable { mutableStateOf(false) }
     val entryTarget = when {
         uiState.selectedTab != SportsLiveTab.LIVE_NOW || boardPending -> null
-        yourTeams.firstOrNull() is YourTeamsEntry.Live -> catchUpFocusRequester
+        YourTeams.opensOnStrip(yourTeams) -> catchUpFocusRequester
         else -> entryCardFocusRequester
     }
     // Not keyed on the flag: setting it must not cancel the move it marks.
@@ -1312,6 +1331,11 @@ private fun SportsLiveContent(
             hideFirst = hideFirst
         )
         val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
+        // live.26 item 4: a followed team's live game from Your teams, one press into dual screen beside this one.
+        val teamPair = if (watchWith) SportsLiveSecondGame.teamPair(yourTeams, teamPairPool(item), teamPairSaved) else null
+        val teamPairName = teamPair?.let { pair ->
+            SportsLiveSecondGame.teamPairName(pair) { a, b -> context.getString(R.string.sports_live_matchup, a, b) }
+        }
         val canRemind = SportsLiveMoreEntry.REMIND in entries
         val heading = rememberMoreHeading(item, boardRowOf[item.listKey] ?: stripRowOf(item.listKey))
         // #154: per matched side, hidden for a followed team while "Remind me for my teams" is On.
@@ -1334,6 +1358,13 @@ private fun SportsLiveContent(
             } else {
                 null
             },
+            onWatchWithTeam = teamPair?.let { pair ->
+                {
+                    menuCardKey = null
+                    onWatchWithTeam(item, pair.item)
+                }
+            },
+            watchWithTeamName = teamPairName,
             onChooseStream = if (SportsLiveMoreEntry.CHOOSE_STREAM in entries) {
                 {
                     menuCardKey = null

@@ -740,6 +740,8 @@
         <item quantity="other">%1$d sources didn\'t respond</item>
     </plurals>
     <string name="sports_live_dual_watch_with">Watch with another game</string>
+    <!-- live.26 item 4: Hold OK on a game, one press into dual screen with a followed team's live game ("Lakers", or "Lakers vs Celtics"). -->
+    <string name="sports_live_dual_watch_with_team">Watch with the %1$s game</string>
     <string name="sports_live_dual_pick">Pick another to watch</string>
     <string name="sports_live_preview_label">Preview</string>
     <string name="sports_live_mini_hint">%1$s · Play/Pause full screen</string>
