@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
@@ -630,6 +631,7 @@ class SportsLiveZapViewModel internal constructor(
             )
             // Laid out here, off the main thread.
             state.guide
+            ShownGamesLog.noteItems(if (guideTable.value) ShownGamesLog.TABLE else ShownGamesLog.PANEL, current.rows.map { it.item }, current.boardScores.takeIf { current.mode != ScoresMode.OFF })
             ShownPanel(current, state, session)
         }
     }.flowOn(computeDispatcher)

@@ -30,6 +30,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.NuvioDialog
@@ -66,7 +67,7 @@ internal fun SportsLiveDualPickerDialog(
     channelPicks: SportsLiveChannelPicks = SportsLiveChannelPicks.NONE
 ) {
     // Settled (principle 3): the sections are taken when the picker opens, not on every score update.
-    val list = remember(candidates, anchor, channelPicks) { dualPickerList(candidates, anchor, scores, channelPicks) }
+    val list = remember(candidates, anchor, channelPicks) { dualPickerList(candidates, anchor, scores, channelPicks).also { ShownGamesLog.noteItems(ShownGamesLog.DUAL_PICKER, it.rows.map { row -> row.item }, scores) } }
     val firstFocusRequester = remember { FocusRequester() }
     var firstFocused by remember { mutableStateOf(false) }
     var endedNotice by remember { mutableStateOf(false) }

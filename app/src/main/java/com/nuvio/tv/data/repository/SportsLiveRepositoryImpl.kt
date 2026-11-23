@@ -5,6 +5,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
@@ -350,6 +351,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 SportsLiveHomeLiveNow.of(live, followed, mySports, hidden)
                     .filterNot { it.hasEnded(ended) }
                     .take(limit)
+                    .also { ShownGamesLog.noteItems(ShownGamesLog.HOME_ROW, it, null) }
             }
         }.flowOn(computeDispatcher)
 }

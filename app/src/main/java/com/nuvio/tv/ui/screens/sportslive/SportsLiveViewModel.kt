@@ -43,6 +43,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.SportsLiveInferredSport
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.SportsLiveListCache
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshots
@@ -800,6 +801,7 @@ class SportsLiveViewModel internal constructor(
                     }
                 }.also { state ->
                     stateBuilds++
+                    ShownGamesLog.noteTab(state.selectedTab, state.visibleItems, boardScores.value.let { b -> b.scores.takeUnless { b.mode == null || b.mode == ScoresMode.OFF } }, state.justEnded.keys)
                     lastBuild = StateBuild(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick, lastBuiltLiveNow, lastBuiltLiveCount, state)
                 }
         }

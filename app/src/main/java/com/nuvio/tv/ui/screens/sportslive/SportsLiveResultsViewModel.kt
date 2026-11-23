@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.scores.ResultsNextGames
@@ -343,6 +344,7 @@ class SportsLiveResultsViewModel internal constructor(
         combine(otherAsked, other, selection) { asked, other, selected -> Triple(asked, other, selected.jump) }
     ) { (days, load, earlier, fresh), (mode, protection), revealed, listing, (asked, other, jump) ->
         val loaded = load as? ResultsLoad.Loaded
+        ShownGamesLog.noteEvents(ShownGamesLog.RESULTS, listing.items.mapNotNull { (it as? ResultListItem.Row)?.row?.event })
         SportsLiveResultsUiState(
             daysAgo = days,
             freshOpens = fresh,
