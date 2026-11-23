@@ -866,6 +866,100 @@ class SportsLiveViewModelTest {
         assertEquals("o", viewModel.uiState.value.selectedItemId)
     }
 
+    // Report #25 (live.25 on the TV, 20:18): Upcoming's Today still listed games of 14:00-15:25, long final, with Watch.
+    // Upcoming is sorted at a load, a directory change or a tip-off of a game whose start alone says it is on; a game its
+    // addon marks itself schedules no tip-off, so time passing alone never took it off.
+    private fun TestScope.clockedViewModel(inputs: Flow<EndedInputs>, ticks: Flow<Unit>, now: () -> Long): SportsLiveViewModel {
+        val viewModel = SportsLiveViewModel(
+            repo, endedInputs = inputs, endedGames = SportsLiveEndedGames(), clock = ticks, computeDispatcher = compute
+        )
+        viewModel.nowMs = now
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        return viewModel
+    }
+
+    private fun SportsLiveViewModel.upcomingIds(): List<String> =
+        uiState.value.tabs[SportsLiveTab.UPCOMING].orEmpty().map { it.id }
+
+    @Test
+    fun `Upcoming built at 13h00 lists no game that started by 20h18 with no load in between (report 25)`() = runTest {
+        var now = NOW
+        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+        // Its addon's own mark says whether it is on (no tip-off by the clock); the evening game and a Time TBA one stay.
+        nextLoad = load(
+            listOf(
+                item("getafe", isLive = false, sport = "Soccer", name = "Getafe vs Atletico Madrid", startMs = NOW + HOUR),
+                item("hawks", isLive = false, sport = "Basketball", name = "Atlanta Hawks vs Detroit Pistons", startMs = NOW + 90 * MINUTE),
+                item("evening", isLive = false, sport = "Football", name = "Evening vs Game", startMs = NOW + 8 * HOUR),
+                item("tba", isLive = false, sport = "Football", name = "Night vs Owls")
+            )
+        )
+        val viewModel = clockedViewModel(flowOf(EndedInputs()), ticks) { now }
+        advanceUntilIdle()
+        assertEquals(setOf("getafe", "hawks", "evening", "tba"), viewModel.upcomingIds().toSet())
+        val loadsBefore = kindsAsked.size
+
+        now = NOW + 7 * HOUR + 18 * MINUTE
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(setOf("evening", "tba"), viewModel.upcomingIds().toSet())
+        assertEquals(loadsBefore, kindsAsked.size)
+    }
+
+    @Test
+    fun `a game ESPN calls final leaves Upcoming at once, even with focus on it (report 25)`() = runTest {
+        // Listed with no time of its own: Upcoming keeps it as Time TBA and the Agenda places it at ESPN's time.
+        val game = item("p", isLive = false, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers")
+        val other = item("o", isLive = false, sport = "Soccer", name = "O", startMs = NOW + 3 * HOUR)
+        nextLoad = load(listOf(game, other))
+        val inputs = MutableStateFlow(EndedInputs(canEstimate = { false }))
+        val viewModel = clockedViewModel(inputs, flowOf(Unit)) { NOW }
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        viewModel.selectItem("p")
+        runCurrent()
+        assertEquals(setOf("p", "o"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+
+        val pacers = nbaGames.first { it.eventId == "401909985" }
+        val over = pacers.copy(
+            state = ScoreState.POST, isFinal = true, clockText = "Final", startMs = NOW - 5 * HOUR, timeValid = true,
+            home = pacers.home.copy(score = 110), away = pacers.away.copy(score = 100)
+        )
+        inputs.value = EndedInputs(mapOf(game.streamKey to over), canEstimate = { false })
+        runCurrent()
+        assertEquals(listOf("o"), viewModel.upcomingIds())
+        assertEquals(listOf("o"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `a game that starts with focus on it stays on Upcoming until focus moves on (report 25)`() = runTest {
+        // Settled screens (live.26): no row jumps under focus; the started game goes on the next build after focus moves.
+        var now = NOW
+        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+        nextLoad = load(
+            listOf(
+                item("soon", isLive = false, sport = "Soccer", name = "Soon vs Game", startMs = NOW + 10 * MINUTE),
+                item("later", isLive = false, sport = "Soccer", name = "Later vs Game", startMs = NOW + 3 * HOUR)
+            )
+        )
+        val viewModel = clockedViewModel(flowOf(EndedInputs()), ticks) { now }
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        viewModel.selectItem("soon")
+        runCurrent()
+
+        now = NOW + 20 * MINUTE
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(listOf("soon", "later"), viewModel.upcomingIds())
+        assertEquals("soon", viewModel.uiState.value.selectedItemId)
+
+        viewModel.selectItem("later")
+        runCurrent()
+        assertEquals(listOf("later"), viewModel.upcomingIds())
+        assertEquals("later", viewModel.uiState.value.selectedItemId)
+    }
+
     @Test
     fun `N new names a followed team's game when one is among the new rows (sorting model)`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Lakers", null))
