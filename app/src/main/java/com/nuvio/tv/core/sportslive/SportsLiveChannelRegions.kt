@@ -50,7 +50,7 @@ object SportsLiveChannelRegions {
             ?: nameSuffixCountry(name)
             ?: SportsLiveDisplayText.of(name).region?.let(::code)
         // "24/7 AR| <Arabic title>": AR is Arabic there, not Argentina.
-        if (region == "AR" && ARABIC_SCRIPT.containsMatchIn(name)) ARABIC else region
+        if (region == "AR" && name.any(::isArabicLetter)) ARABIC else region
     }
 
     /**
@@ -90,7 +90,9 @@ object SportsLiveChannelRegions {
         "AR-SP" to ARABIC, "ARABIC" to ARABIC, "ARAB" to ARABIC, "LATIN-CAR" to "LAT", "LATIN" to "LAT", "LATINO" to "LAT"
     )
 
-    private val ARABIC_SCRIPT = Regex("""\p{InArabic}""")
+    // A character check, not a regex Unicode-block property: Android's regex engine may reject that syntax and crash
+    // where the JVM tests pass (AndroidRegexCompatibilityTest).
+    private fun isArabicLetter(c: Char): Boolean = Character.UnicodeBlock.of(c) == Character.UnicodeBlock.ARABIC
 
     /** Countries written out in English ("SRI LANKA"), upper case, to their region code. */
     private val COUNTRY_NAMES: Map<String, String> by lazy {

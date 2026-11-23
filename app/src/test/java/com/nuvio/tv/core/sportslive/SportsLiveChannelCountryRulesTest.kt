@@ -35,6 +35,12 @@ class SportsLiveChannelCountryRulesTest {
     }
 
     @Test
+    fun `AR before an Arabic title is Arabic, before a Latin one Argentina`() {
+        assertEquals("ARB", SportsLiveChannelRegions.regionOf(channel("AR| قناة الرياضة", null)))
+        assertEquals("AR", SportsLiveChannelRegions.regionOf(channel("AR| TyC SPORTS", null)))
+    }
+
+    @Test
     fun `a dashed tag still names its country`() {
         assertEquals("IN", SportsLiveChannelRegions.regionOf(channel("STAR SPORTS 1", "ASIA-IN")))
         assertEquals("BR", SportsLiveChannelRegions.regionOf(channel("BAND SPORTS", "LATIN-BR")))
