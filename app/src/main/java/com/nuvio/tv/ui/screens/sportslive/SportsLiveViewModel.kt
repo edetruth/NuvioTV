@@ -394,6 +394,9 @@ class SportsLiveViewModel internal constructor(
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
 
+    // Live now's layout epoch ([SportsLiveUiState.liveNowEpoch]): bumped by each build laid out afresh.
+    private var liveNowEpoch = 0
+
     // The profile's answers to "Add ‹sport› to My sports?", as last read.
     @Volatile
     private var addSportMemoryNow = SportsLiveAddSportPrompt.Memory()
@@ -1745,6 +1748,7 @@ class SportsLiveViewModel internal constructor(
                 lastListAtMs = bucketed.listAtMs
                 val thawed = selection.thaw != thawApplied || reranked || fresh
                 thawApplied = selection.thaw
+                if (thawed) liveNowEpoch++
                 // live.26 settled screens: kept as shown (not thawed, shown this visit) and past its landing window.
                 liveNowSettled = !thawed && liveNowShown && SportsLiveSettledRows.settles(liveNowShownAtMs, now)
                 // O: the games ESPN confirms over leave at once, even focused (kept, a dropped one would read as live); and a
@@ -1903,7 +1907,8 @@ class SportsLiveViewModel internal constructor(
                 selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
             },
             upcomingPendingDates = bucketed.upcomingPending,
-            liveNowSettled = liveNowSettled
+            liveNowSettled = liveNowSettled,
+            liveNowEpoch = liveNowEpoch
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

@@ -194,12 +194,17 @@ class SportsLiveOpenSpeedTest {
         assertEquals(1, viewModel.uiState.value.newLiveRows)
 
         // "N new" is the user's own: that build is as built, the next one settled again.
+        val epochBefore = viewModel.uiState.value.liveNowEpoch
         viewModel.showNewRows()
         runCurrent()
         assertFalse(viewModel.uiState.value.liveNowSettled)
+        // Gemini review #7: a new epoch, so a later settled build never settles on a board from before the thaw.
+        val thawEpoch = viewModel.uiState.value.liveNowEpoch
+        assertTrue(thawEpoch > epochBefore)
         latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = true)))
         runCurrent()
         assertTrue(viewModel.uiState.value.liveNowSettled)
+        assertEquals(thawEpoch, viewModel.uiState.value.liveNowEpoch)
         assertEquals(1, viewModel.uiState.value.newLiveRows)
     }
 

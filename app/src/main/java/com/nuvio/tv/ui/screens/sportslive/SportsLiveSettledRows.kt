@@ -77,7 +77,10 @@ internal val ScoreboardRow.endedInPlace: Boolean
 internal fun SportsLiveBoard.settledOn(previous: SportsLiveBoard?): SportsLiveBoard {
     val built = rows ?: return this
     if (agenda != null || moreLive) return this
-    val before = previous?.takeIf { it.tab == tab && it.filter == filter && !it.moreLive && it.agenda == null }?.rows
+    // A board from before "N new" or a follow (another epoch) never lends its order (gemini review #7).
+    val before = previous?.takeIf {
+        it.tab == tab && it.filter == filter && !it.moreLive && it.agenda == null && it.settleEpoch == settleEpoch
+    }?.rows
     if (before.isNullOrEmpty()) return this
     val settled = SportsLiveSettledRows.settle(before, built)
     if (settled === built) return this

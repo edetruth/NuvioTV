@@ -86,7 +86,9 @@ data class SportsLiveBoardInputs(
     /** live.24: Upcoming's later dates not sorted yet: their day tabs show ahead of their games. Empty on other tabs. */
     val pendingDates: List<LocalDate> = emptyList(),
     /** Live now's list is settled (live.26, [SportsLiveSettledRows]): the board keeps the shown board's rows in place. */
-    val settled: Boolean = false
+    val settled: Boolean = false,
+    /** Live now's layout epoch ([SportsLiveUiState.liveNowEpoch]): it settles only on a board of the same one. */
+    val settleEpoch: Int = 0
 )
 
 /**
@@ -126,7 +128,8 @@ internal fun sportsLiveBoardInputsOf(
         standings = if (tab == SportsLiveTab.UPCOMING) standings else emptyMap(),
         pendingDates = if (tab == SportsLiveTab.UPCOMING) state.upcomingPendingDates else emptyList(),
         channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE,
-        settled = live && state.liveNowSettled && !state.moreLiveOpen
+        settled = live && state.liveNowSettled && !state.moreLiveOpen,
+        settleEpoch = if (live) state.liveNowEpoch else 0
     )
 }
 
@@ -154,7 +157,9 @@ data class SportsLiveBoard(
     /** Live now's More live view: [rows] are its games, by sport ([ScoreboardRow.section]). */
     val moreLive: Boolean = false,
     /** That view is All sports' ([SportsLiveBoardInputs.moreLiveAll]). */
-    val moreLiveAll: Boolean = false
+    val moreLiveAll: Boolean = false,
+    /** Live now's layout epoch it was built in ([SportsLiveBoardInputs.settleEpoch]). */
+    val settleEpoch: Int = 0
 ) {
     /** True when this board shows [tab] with [filter]. */
     fun shows(tab: SportsLiveTab, filter: String?): Boolean = this.tab == tab && this.filter == filter
@@ -264,7 +269,8 @@ data class SportsLiveBoard(
             return SportsLiveBoard(
                 tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda, channels = channelView?.summary,
                 moreLive = liveNow && inputs.moreLive.isNotEmpty(),
-                moreLiveAll = liveNow && inputs.moreLive.isNotEmpty() && inputs.moreLiveAll
+                moreLiveAll = liveNow && inputs.moreLive.isNotEmpty() && inputs.moreLiveAll,
+                settleEpoch = inputs.settleEpoch
             )
         }
     }
