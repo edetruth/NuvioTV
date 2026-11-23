@@ -21,7 +21,16 @@ class SportsLiveWatchReplayRowTest {
     }
 
     @Test
-    fun `no replay, an older result, an unknown start, an individual sport or a shown score keep the row as before`() {
+    fun `a Watch later game keeps Watch replay with no time limit while its replay is there, your teams keep 36 h`() {
+        assertTrue(resultsRowWatchesReplay(ResultHiddenReason.SAVED, hasReplay = true, individual = false, startMs = now - 5 * 24 * hour, nowMs = now))
+        assertTrue(resultsRowWatchesReplay(ResultHiddenReason.SAVED, hasReplay = true, individual = false, startMs = null, nowMs = now))
+        assertFalse(resultsRowWatchesReplay(ResultHiddenReason.SAVED, hasReplay = false, individual = false, startMs = now - 5 * 24 * hour, nowMs = now))
+        assertFalse(resultsRowWatchesReplay(ResultHiddenReason.SAVED, hasReplay = true, individual = true, startMs = now - hour, nowMs = now))
+        assertFalse(resultsRowWatchesReplay(ResultHiddenReason.YOUR_TEAM, hasReplay = true, individual = false, startMs = now - 5 * 24 * hour, nowMs = now))
+    }
+
+    @Test
+    fun `no replay, an older result of your team, an unknown start, an individual sport or a shown score keep the row as before`() {
         assertFalse(resultsRowWatchesReplay(ResultHiddenReason.YOUR_TEAM, hasReplay = false, individual = false, startMs = now - hour, nowMs = now))
         assertFalse(resultsRowWatchesReplay(ResultHiddenReason.YOUR_TEAM, hasReplay = true, individual = false, startMs = now - 37 * hour, nowMs = now))
         assertFalse(resultsRowWatchesReplay(ResultHiddenReason.YOUR_TEAM, hasReplay = true, individual = false, startMs = null, nowMs = now))

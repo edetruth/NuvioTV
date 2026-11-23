@@ -125,7 +125,7 @@ internal fun resultsOffersYesterday(daysAgo: Int?, hasRows: Boolean): Boolean = 
  * Now, so a score sits right after its names; ◂ ▸ on a row jump to the previous / next league ([resultsLeagueJump]).
  * The stage on the right shows the focused game's drawn matchup, its final score (spoiler rules applied, or why it
  * is hidden), and **Watch replay** (a strict replay match) and **More…** (Game page, Reveal, Team page, Follow).
- * OK on a row opens the Game page; on a protected row of the last 36 h with a replay, which reads only "▶ Watch replay"
+ * OK on a row opens the Game page; on a protected row with a replay (Watch later: any age; your team's: the last 36 h), which reads only "▶ Watch replay"
  * ([resultsRowWatchesReplay], live.26), it plays the replay. A followed team's score shows only once revealed; a row reveals under Hide until
  * focused only after a key press in the list, never on entry or when focus comes back ([ResultsRevealGuard], #86).
  */
@@ -748,12 +748,16 @@ internal const val RESULTS_HIDDEN_TODAY_MS = 36 * 60 * 60 * 1000L
  * A Results row that reads only "▶ Watch replay" and whose OK plays its replay (live.26 shorter paths, #223): the safe
  * path for the most spoiler-sensitive job. Its score is protected ([hidden] Watch later or your team's, which focus never
  * reveals; "Hide until I reveal" rows reveal on focus, so they keep "Score hidden"), it has a strict replay
- * ([hasReplay]), it is a team game ([individual] rows have their own OK) and it started in the last 36 h ([startMs],
- * [nowMs]; unknown: no). Otherwise the row is as before and OK opens the Game page.
+ * ([hasReplay]) and it is a team game ([individual] rows have their own OK). A Watch later game ([ResultHiddenReason.SAVED])
+ * has no time limit (live.26 decision: it stays offered until its replay is gone); your team's game started in the
+ * last 36 h ([startMs], [nowMs]; unknown: no). Otherwise the row is as before and OK opens the Game page.
  */
 internal fun resultsRowWatchesReplay(hidden: ResultHiddenReason?, hasReplay: Boolean, individual: Boolean, startMs: Long?, nowMs: Long): Boolean =
-    (hidden == ResultHiddenReason.SAVED || hidden == ResultHiddenReason.YOUR_TEAM) && hasReplay && !individual &&
-        startMs != null && nowMs - startMs <= RESULTS_HIDDEN_TODAY_MS
+    hasReplay && !individual && when (hidden) {
+        ResultHiddenReason.SAVED -> true
+        ResultHiddenReason.YOUR_TEAM -> startMs != null && nowMs - startMs <= RESULTS_HIDDEN_TODAY_MS
+        else -> false
+    }
 
 /** The title's day name: "Today", "Yesterday", else its date ("Sun 15 Nov", the device's locale). */
 @Composable
