@@ -9,6 +9,10 @@ import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
+import com.nuvio.tv.core.sportslive.scores.SpoilerVisibility
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,14 +70,17 @@ data class SportsLivePlayerCardUiState(
     val revealed: Boolean = false,
     val spoilerSafe: Boolean = false
 ) {
+    private val spoilers: SpoilerVisibility
+        get() = SpoilerPolicy.visibility(mode, revealed, SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = spoilerSafe))
+
     /** The last games' results and stat lines show: Scores Show (unless [spoilerSafe]), or revealed. */
-    val showsLastGames: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
+    val showsLastGames: Boolean get() = spoilers.showsScore
 
     /** Hide until focused (#134): each last game's result and line show while its row has focus; no Reveal needed. */
-    val revealsOnFocus: Boolean get() = mode == ScoresMode.HIDE_UNTIL_FOCUSED && !spoilerSafe && !revealed
+    val revealsOnFocus: Boolean get() = spoilers.revealsOnFocus
 
     /** Whether a last game's result and stat line show, its row [focused] or not. */
-    fun showsGame(focused: Boolean): Boolean = showsLastGames || (revealsOnFocus && focused)
+    fun showsGame(focused: Boolean): Boolean = spoilers.showsRow(focused)
 
     /** Reveal is offered while something is hidden (Off, or spoiler-safe) and not known to be unavailable. */
     val showsReveal: Boolean get() = !showsLastGames && !revealsOnFocus && status != PlayerCardStatus.FAILED
