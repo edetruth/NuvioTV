@@ -106,12 +106,7 @@ data class SportsLiveUiState(
      * Bumped by each Live now build laid out afresh ("N new", a follow, My sports, a fresh open): a settled board settles
      * only on a board of the same epoch, so a thaw is never undone by a later build (gemini review #7).
      */
-    val liveNowEpoch: Int = 0,
-    /**
-     * Live now's games while its first list waits for their scores ([com.nuvio.tv.core.sportslive.SportsLiveCalmOpen.awaitsScores],
-     * live.26 TV): not listed yet, but looked up, so the wait ends when the feeds answer; empty otherwise.
-     */
-    val liveNowWaiting: List<SportsLiveItem> = emptyList()
+    val liveNowEpoch: Int = 0
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {

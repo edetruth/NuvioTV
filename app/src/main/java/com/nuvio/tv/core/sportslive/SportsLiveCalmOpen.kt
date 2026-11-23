@@ -1,6 +1,5 @@
 package com.nuvio.tv.core.sportslive
 
-import com.nuvio.tv.domain.model.SportsLiveItem
 import java.time.Instant
 import java.time.ZoneId
 
@@ -57,15 +56,6 @@ object SportsLiveCalmOpen {
         val recent = savedAgeMs != null && savedAgeMs in 0..RECENT_LIST_MS
         return !(readyOver && recent)
     }
-
-    /**
-     * Settled screens (live.26 TV: an ACL game already over was listed LIVE for 1.4 s, then read FT in place): Live now's
-     * first list of a visit waits behind its loading rows while any of its games ([items]) has a score feed that has not
-     * answered yet ([answered]: matched, confirmed to have no game, or no feed at all), at most [HOLD_MS] from opening.
-     * Channels never wait.
-     */
-    fun awaitsScores(items: List<SportsLiveItem>, answered: (SportsLiveItem) -> Boolean): Boolean =
-        items.any { !it.isChannel && !answered(it) }
 
     /** O (live.25): Live now unwatched this long comes back as a fresh open ([longAbsence]). */
     const val LONG_ABSENCE_MS = 10 * 60_000L
