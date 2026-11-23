@@ -380,6 +380,11 @@ class SportsLiveViewModel internal constructor(
     // Live now as last built, so the focused card is kept when a load drops it (#145).
     private var shownLiveNow: List<SportsLiveItem> = emptyList()
 
+    // Upcoming as last built, and its started row kept only while it has focus (report #25, [sportsLiveUpcomingShown]).
+    private var shownUpcoming: List<SportsLiveItem> = emptyList()
+    @Volatile
+    private var upcomingHeldId: String? = null
+
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
 
@@ -1504,6 +1509,8 @@ class SportsLiveViewModel internal constructor(
             return null
         }
         if (last.selection.copy(itemId = null) != selection.copy(itemId = null)) return null
+        // Report #25: Upcoming's started row kept for focus leaves once focus moves off it.
+        if (upcomingHeldId != null && selection.itemId != upcomingHeldId) return null
         val built = last.builtLiveNow
         if (built != null) {
             val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
@@ -1700,6 +1707,17 @@ class SportsLiveViewModel internal constructor(
                     shownLiveNow = it
                     // J1: shown once this visit, Live now keeps its rows in place from now on; new ones wait for "N new".
                     if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) liveNowShown = true
+                }
+            } else if (tab == SportsLiveTab.UPCOMING) {
+                // Report #25: a started game leaves at every build (each clock tick too), not only at the next sorting.
+                val scores = inputs.scores
+                val liveNowEvents = bucketed.tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+                    .mapNotNullTo(HashSet()) { ScoreChips.matchedEvent(it, scores[it.streamKey])?.eventId }
+                val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.UPCOMING }
+                sportsLiveUpcomingShown(shownUpcoming, allItems, scores, now, focusedId, liveNowEvents).let {
+                    shownUpcoming = it.items
+                    upcomingHeldId = it.heldId
+                    it.items
                 }
             } else {
                 allItems
