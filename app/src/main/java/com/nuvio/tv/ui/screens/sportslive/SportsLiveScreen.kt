@@ -1571,8 +1571,9 @@ private fun SportsLiveContent(
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
-    // More live: Back from its view goes back to Live now's list (composed later, so it wins over the list's own Back).
-    BackHandler(enabled = uiState.moreLiveOpen && uiState.selectedTab == SportsLiveTab.LIVE_NOW && listHasFocus) {
+    // More live: Back from its view goes back to Live now's list (composed later, so it wins over the list's own Back);
+    // from the stage's buttons too (gemini final review #8), never out of the section.
+    BackHandler(enabled = uiState.moreLiveOpen && uiState.selectedTab == SportsLiveTab.LIVE_NOW && (listHasFocus || paneHasFocus)) {
         focusMoreLiveView(open = false)
         onCloseMoreLive()
     }
@@ -1587,7 +1588,9 @@ private fun SportsLiveContent(
         val group = moreLiveFocusGroup
         moreLiveFocusGroup = null
         val first = sportsLiveMoreLiveFocusTarget(items, uiState.moreLiveGroupOf, group)
-        if (first != null && group != null) {
+        // All sports picked again while its view is scrolled down: its first row is brought back on screen too (gemini
+        // final review #8); scrollToCard leaves a row already on screen alone.
+        if (first != null) {
             scrollToCard(first.listKey, items.indexOf(first))
             withFrameNanos { }
         }
