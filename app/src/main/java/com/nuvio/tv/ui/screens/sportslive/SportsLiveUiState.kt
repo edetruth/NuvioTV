@@ -245,3 +245,9 @@ internal fun SportsLiveUiState.finishedKeys(scores: Map<String, ScoreSnapshot>):
  */
 internal fun sportsLiveSameScreen(old: SportsLiveUiState, new: SportsLiveUiState): Boolean =
     old.nowMs == new.nowMs && old == new.copy(selectedItemId = old.selectedItemId)
+
+/**
+ * The screen draws a list (and so a board) for [state] (live.26 TV, settled screens): not the placeholder or a loading
+ * state, which show the loading rows, nor one before the claimed catalogs are known.
+ */
+internal fun sportsLiveListsBoard(state: SportsLiveUiState): Boolean = !state.isLoading && state.hasClaimedCatalogs

@@ -94,6 +94,7 @@ import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -944,7 +945,10 @@ class SportsLiveViewModel internal constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val board: StateFlow<SportsLiveBoard?> =
         combine(
-            uiState,
+            // live.26 TV (settled screens): only a state the screen draws a list for. A board built from the placeholder
+            // or a loading state (no rows yet) was still the board shown when the first list's state landed, and the
+            // screen read its zero rows as "Nothing live right now" until the real board followed (1-2 s on the TV).
+            uiState.filter { sportsLiveListsBoard(it) },
             // live.25 #226: back from the player, the current scores right after the stale first value, never a window later.
             boardScores.firstThenCoalesce(scoresSettleMs, SCORES_CATCH_UP_MS),
             repo.followedTeams,

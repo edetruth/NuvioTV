@@ -1970,8 +1970,12 @@ private fun SportsLiveContent(
             }
         }
 
-        // The board is being built (#71): nothing to draw for a moment, and never "nothing here".
-        if (boardPending && uiState.visibleItems.isNotEmpty()) return@Column
+        // The board is being built (#71): nothing to draw for a moment, and never "nothing here". Before the section's
+        // first board (live.26 TV, settled screens) its loading rows stay until the list shows, never a blank list area.
+        if (boardPending && uiState.visibleItems.isNotEmpty()) {
+            if (board == null) SportsLiveSkeletonRows()
+            return@Column
+        }
         if (selected == null || selectedCardFocusRequester == null) {
             // One empty card (#134) that always offers the next step.
             SportsLiveEmptyCard(

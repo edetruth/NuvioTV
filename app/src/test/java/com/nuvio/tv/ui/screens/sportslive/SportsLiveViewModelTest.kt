@@ -428,6 +428,27 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `no board is published before the first list, so a cold open never reads Nothing live`() = runTest {
+        // live.26 TV: a Live now board built from the placeholder or loading state (no rows) was still the board shown
+        // when the first list's state landed, and the screen read its zero rows as "Nothing live right now" for 1-2 s.
+        nextLoad = load(listOf(item("live", isLive = true, sport = "Soccer", name = "A vs B")))
+        val gate = CompletableDeferred<Unit>()
+        loadGate = gate
+        val viewModel = SportsLiveViewModel(repo, computeDispatcher = StandardTestDispatcher(testScheduler, name = "compute"))
+        viewModel.nowMs = { NOW }
+        val boards = mutableListOf<SportsLiveBoard>()
+        backgroundScope.launch { viewModel.board.collect { board -> board?.let(boards::add) } }
+        advanceUntilIdle()
+        assertTrue("loading", viewModel.uiState.value.isLoading)
+        assertNull("no board while the first load runs", viewModel.board.value)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("live"), viewModel.board.value!!.items.map { it.id })
+        assertTrue("never an empty Live now board", boards.none { it.tab == SportsLiveTab.LIVE_NOW && it.items.isEmpty() })
+    }
+
+    @Test
     fun `boards are built on the compute dispatcher, and a focus move builds none`() = runTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer", name = "A"), item("b", isLive = true, sport = "Soccer", name = "B")))
         val boardDispatcher = StandardTestDispatcher(testScheduler, name = "compute")
