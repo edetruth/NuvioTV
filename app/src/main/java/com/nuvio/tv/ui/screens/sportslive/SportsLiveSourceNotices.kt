@@ -21,6 +21,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import androidx.compose.ui.unit.dp
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 
@@ -48,6 +49,17 @@ internal fun <T> sportsLiveNoticesLast(streams: List<T>, isNotice: (T) -> Boolea
 internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>): List<Stream> =
     if (!SportsLiveExtraSources.isSportsPlayback(videoId)) streams
     else sportsLiveNoticesLast(SportsLiveExtraSources.spoilerSafeStreams(videoId, streams), SportsLiveZapResolver::isNoticeEntry)
+
+/**
+ * [info], a link the Stream screen hands the player (picked there, auto-picked or the last link reused), as the player
+ * names it: for a spoiler-safe replay (#223) its link name and description with any score masked; any other as is.
+ */
+internal fun sportsLiveSpoilerSafePlayback(info: StreamPlaybackInfo): StreamPlaybackInfo =
+    if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId)) info
+    else info.copy(
+        streamName = spoilerSafeLinkText(info.streamName) ?: info.streamName,
+        streamDescription = spoilerSafeLinkText(info.streamDescription)
+    )
 
 /**
  * A source's message in a stream list (N2): one small dimmed line, "Note from the source: ‹its text in words›" (V2,
