@@ -128,6 +128,16 @@ class SportsLiveSettledRowsTest {
     }
 
     @Test
+    fun `a board after N new or a follow never settles on a board from before it`() {
+        // Gemini review #7: the thawed build skipped (conflated), the next settled build put the old order back.
+        val (a, b) = listOf("a", "b").map(::item)
+        val beforeThaw = board(listOf(row(a), row(b)))
+        val afterThaw = board(listOf(row(b), row(a))).copy(settleEpoch = 1)
+        assertSame(afterThaw, afterThaw.settledOn(beforeThaw))
+        assertEquals(listOf("b", "a"), afterThaw.copy(rows = listOf(row(a), row(b))).settledOn(afterThaw).rows!!.map { it.item.id })
+    }
+
+    @Test
     fun `OK on a game ESPN says ended in place opens its Game page, every other card as before`() {
         val event = final("a")
         val inPlace = row(item("a"), ScoreboardGroup.LIVE, status = GameStatus.Final(event))

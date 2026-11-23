@@ -419,6 +419,8 @@ class SportsLiveGuideTableTest {
         assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_DOWN, 1_001L))
         assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_CENTER, 900L))
         assertFalse(guard.swallows(KeyEvent.KEYCODE_BACK, 900L))
+        // Gemini review #9: an event with no down time (some remotes and injected keys) is never held back.
+        assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_DOWN, 0L))
     }
 
     @Test

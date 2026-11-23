@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,15 +33,18 @@ import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
 import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.ScoreboardGroup
 import com.nuvio.tv.ui.screens.sportslive.ScoreboardRow
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCompute
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreboardRow
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveSectionHeader
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private const val FOCUS_ATTEMPTS = 5
 private const val FOCUS_RETRY_MS = 50L
@@ -70,7 +74,8 @@ internal fun SportsLiveDualPickerDialog(
     val list = remember(candidates, anchor, channelPicks) { dualPickerList(candidates, anchor, scores, channelPicks).also { ShownGamesLog.noteItems(ShownGamesLog.DUAL_PICKER, it.rows.map { row -> row.item }, scores) } }
     val firstFocusRequester = remember { FocusRequester() }
     var firstFocused by remember { mutableStateOf(false) }
-    var endedNotice by remember { mutableStateOf(false) }
+    // The card key of the ended row OK was pressed on: its notice shows until focus moves to another row.
+    var endedNotice by remember { mutableStateOf<String?>(null) }
     // No row is focused once the picker closes: a dwell started on one never reveals it later.
     DisposableEffect(Unit) { onDispose { onFocus(null) } }
     // As in SportsLiveStreamPickerDialog: the first row may not be attached yet when the dialog opens.
@@ -87,10 +92,15 @@ internal fun SportsLiveDualPickerDialog(
     NuvioDialog(onDismiss = onDismiss, title = stringResource(R.string.sports_live_dual_pick), width = 640.dp) {
         // The entry is not offered with no other live game (principle 8); this only covers a list emptied meanwhile.
         if (list.rows.isEmpty()) {
+            // Focusable (gemini review #11): the dialog keeps a focus stop, so focus never falls behind it.
             Text(
                 text = stringResource(R.string.sports_live_dual_no_pair),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName),
-                color = Colors.TextSecondary
+                color = Colors.TextSecondary,
+                modifier = Modifier
+                    .focusRequester(firstFocusRequester)
+                    .onFocusChanged { firstFocused = it.isFocused }
+                    .focusable()
             )
             return@NuvioDialog
         }
@@ -119,13 +129,16 @@ internal fun SportsLiveDualPickerDialog(
                         selected = false,
                         onClick = {
                             if (dualPickerRowEnded(board)) {
-                                endedNotice = true
+                                endedNotice = item.streamKey
                             } else {
                                 onPick(item)
                             }
                         },
                         onLongClick = null,
-                        onFocus = { onFocus(item.streamKey) },
+                        onFocus = {
+                            endedNotice = dualPickerEndedNotice(endedNotice, item.streamKey)
+                            onFocus(item.streamKey)
+                        },
                         modifier = if (index == 0) {
                             Modifier
                                 .focusRequester(firstFocusRequester)
@@ -148,7 +161,7 @@ internal fun SportsLiveDualPickerDialog(
                 }
             }
         }
-        if (endedNotice) {
+        if (endedNotice != null) {
             Text(
                 text = stringResource(R.string.sports_live_dual_picker_ended),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName),
@@ -160,6 +173,41 @@ internal fun SportsLiveDualPickerDialog(
         }
     }
 }
+
+/** The ended notice ([notice]: the card key it is about) once [focused] has focus: it goes when another row does. */
+internal fun dualPickerEndedNotice(notice: String?, focused: String): String? = notice?.takeIf { it == focused }
+
+/** The picker's clock, to the minute as Live now's boards ([dualPickerBoards] is built again at most once a minute). */
+internal fun dualPickerClockMs(nowMs: Long): Long = nowMs / DUAL_PICKER_MINUTE_MS * DUAL_PICKER_MINUTE_MS
+
+private const val DUAL_PICKER_MINUTE_MS = 60_000L
+
+/**
+ * The picker's rows ([dualPickerBoards]) for the dialog: built once as it opens, so it opens drawn; a later score, reveal
+ * or minute builds them again off the main thread (gemini review #11, the weak box), the rows shown staying until then.
+ */
+@Composable
+internal fun rememberDualPickerBoards(
+    candidates: List<SportsLiveItem>,
+    scores: Map<String, ScoreSnapshot>,
+    mode: ScoresMode?,
+    revealed: Set<String>,
+    nowMs: Long
+): Map<String, ScoreboardRow> {
+    val clockMs = dualPickerClockMs(nowMs)
+    val built = remember(candidates) {
+        mutableStateOf(DualPickerBoardsKey(scores, mode, revealed, clockMs) to dualPickerBoards(candidates, scores, mode, revealed, clockMs))
+    }
+    val key = DualPickerBoardsKey(scores, mode, revealed, clockMs)
+    LaunchedEffect(candidates, key) {
+        if (built.value.first == key) return@LaunchedEffect
+        val boards = withContext(SportsLiveCompute.dispatcher) { dualPickerBoards(candidates, scores, mode, revealed, clockMs) }
+        built.value = key to boards
+    }
+    return built.value.second
+}
+
+private data class DualPickerBoardsKey(val scores: Map<String, ScoreSnapshot>, val mode: ScoresMode?, val revealed: Set<String>, val clockMs: Long)
 
 /** A row whose game is over (it ended while the picker was open): kept in place, and OK on it starts nothing. */
 internal fun dualPickerRowEnded(board: ScoreboardRow): Boolean =

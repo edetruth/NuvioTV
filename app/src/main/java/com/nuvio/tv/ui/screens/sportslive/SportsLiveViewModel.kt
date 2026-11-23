@@ -394,6 +394,13 @@ class SportsLiveViewModel internal constructor(
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
 
+    // Live now's layout epoch ([SportsLiveUiState.liveNowEpoch]): bumped by each build laid out afresh.
+    private var liveNowEpoch = 0
+
+    // [SportsLiveCalmOpen.HOLD_MS] has passed since opening ([Selection.holdOver] is set only while Live now still waits).
+    @Volatile
+    private var holdPassed = false
+
     // The profile's answers to "Add ‹sport› to My sports?", as last read.
     @Volatile
     private var addSportMemoryNow = SportsLiveAddSportPrompt.Memory()
@@ -1100,7 +1107,9 @@ class SportsLiveViewModel internal constructor(
             // Only while Live now still waits: a state build costs 1-2 s on the onn.
             if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(readyOver = true) }
             delay(SportsLiveCalmOpen.HOLD_MS - SportsLiveCalmOpen.READY_MS)
-            selectionState.update { it.copy(holdOver = true) }
+            // Read by every later build; a build of its own only while Live now still waits (gemini review #10).
+            holdPassed = true
+            if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(holdOver = true) }
         }
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
         viewModelScope.launch {
@@ -1198,7 +1207,8 @@ class SportsLiveViewModel internal constructor(
         noteUpcomingFilter(selectionState.value.tab, value)
         selectionState.update {
             val remembered = if (value == null) it.filterByTab - it.tab else it.filterByTab + (it.tab to value)
-            it.copy(filter = value, filterByTab = remembered)
+            // My sports or My teams picked in My sports ▾ leaves More live's or All sports' view (gemini review #4).
+            it.copy(filter = value, filterByTab = remembered, moreLiveOpen = false, moreLiveAll = false)
         }
     }
 
@@ -1265,12 +1275,13 @@ class SportsLiveViewModel internal constructor(
 
     /** OK on Live now's "More live" row: its view, the games My sports leaves out by sport. */
     fun openMoreLive() {
-        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = false, itemId = null) }
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = false, itemId = null, filter = null, filterByTab = it.filterByTab - it.tab) }
     }
 
     /** OK on "All sports" in My sports ▾ (live.26 decision): the same view, with EVERY live game by sport. */
     fun openAllSports() {
-        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = true, itemId = null) }
+        // ★ My teams gives way (gemini review #4): the view lists every live game, never only the followed ones.
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = true, itemId = null, filter = null, filterByTab = it.filterByTab - it.tab) }
     }
 
     /** Back from the "More live" view: Live now's own list again. */
@@ -1660,7 +1671,7 @@ class SportsLiveViewModel internal constructor(
         val holdLiveNow = SportsLiveCalmOpen.holdsLiveNow(
             hasVisitLoad = bucketed.fromLoad,
             readyOver = selection.readyOver,
-            holdOver = selection.holdOver,
+            holdOver = selection.holdOver || holdPassed,
             savedAgeMs = bucketed.listAtMs?.let { now - it }
         ) || freshHolding
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
@@ -1743,6 +1754,7 @@ class SportsLiveViewModel internal constructor(
                 lastListAtMs = bucketed.listAtMs
                 val thawed = selection.thaw != thawApplied || reranked || fresh
                 thawApplied = selection.thaw
+                if (thawed) liveNowEpoch++
                 // live.26 settled screens: kept as shown (not thawed, shown this visit) and past its landing window.
                 liveNowSettled = !thawed && liveNowShown && SportsLiveSettledRows.settles(liveNowShownAtMs, now)
                 // O: the games ESPN confirms over leave at once, even focused (kept, a dropped one would read as live); and a
@@ -1894,13 +1906,15 @@ class SportsLiveViewModel internal constructor(
             allSports = allSportsGroups,
             moreLiveViewGroups = moreLiveViewGroups,
             moreLiveOpen = moreLiveOpen,
+            moreLiveAll = moreLiveOpen && selection.moreLiveAll,
             moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
             // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
             addSportPrompt = selection.addSport?.takeIf {
                 selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
             },
             upcomingPendingDates = bucketed.upcomingPending,
-            liveNowSettled = liveNowSettled
+            liveNowSettled = liveNowSettled,
+            liveNowEpoch = liveNowEpoch
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

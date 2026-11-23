@@ -265,7 +265,12 @@ fun SportsLiveFilterDropdown(
     /** The pill's text in place of the selected option's (Results' "Jump to"). */
     faceLabel: String? = null,
     /** A menu of its own in place of [options] and [actions] (Results' Jump to); it gets the close callback. */
-    menu: (@Composable (close: () -> Unit) -> Unit)? = null
+    menu: (@Composable (close: () -> Unit) -> Unit)? = null,
+    /**
+     * A view open in place of the options (Live now's More live or All sports, gemini review #4): the pill names it, the
+     * action of that name is the one marked and focused, and picking any option leaves the view (even the selected one).
+     */
+    viewLabel: String? = null
 ) {
     var open by remember { mutableStateOf(false) }
     val currentOnOpenChange by rememberUpdatedState(onOpenChange)
@@ -298,9 +303,9 @@ fun SportsLiveFilterDropdown(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = faceLabel ?: face?.label.orEmpty(),
+                text = faceLabel ?: viewLabel ?: face?.label.orEmpty(),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
-                color = if (faceLabel == null && face?.gold == true) Colors.FollowedGold else Colors.TextPrimary,
+                color = if (faceLabel == null && viewLabel == null && face?.gold == true) Colors.FollowedGold else Colors.TextPrimary,
                 maxLines = 1,
                 softWrap = false
             )
@@ -324,26 +329,30 @@ fun SportsLiveFilterDropdown(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val focusValue = face?.value
+                // A view open: its action is marked and focused; with none listed, All (My sports: the way back).
+                val viewAction = viewLabel?.takeIf { label -> menuActions.any { it.first == label } }
+                val focusValue = if (viewLabel != null) (options.firstOrNull { it.value == null } ?: options.firstOrNull())?.value else face?.value
                 options.forEach { option ->
-                    val isSelected = option.value == face?.value
+                    val isSelected = viewLabel == null && option.value == face?.value
                     SportsLiveMenuButton(
                         text = if (isSelected) stringResource(R.string.sports_live_dropdown_selected, option.label) else option.label,
                         onClick = {
                             open = false
-                            if (option.value != selected) onSelect(option.value)
+                            if (viewLabel != null || option.value != selected) onSelect(option.value)
                         },
                         followed = option.gold,
-                        modifier = if (option.value == focusValue) Modifier.focusRequester(firstFocus) else Modifier
+                        modifier = if (viewAction == null && option.value == focusValue) Modifier.focusRequester(firstFocus) else Modifier
                     )
                 }
                 menuActions.forEach { (label, action) ->
+                    val isView = label == viewAction
                     SportsLiveMenuButton(
-                        text = label,
+                        text = if (isView) stringResource(R.string.sports_live_dropdown_selected, label) else label,
                         onClick = {
                             open = false
                             action()
-                        }
+                        },
+                        modifier = if (isView) Modifier.focusRequester(firstFocus) else Modifier
                     )
                 }
             }

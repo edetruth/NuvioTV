@@ -94,4 +94,17 @@ class DualPickerDualScreenTest {
             dualDecoderFallback(DualState(DualPane(a, dualStream("a"), PaneStatus.Playing), DualPane(b, dualStream("b"), PaneStatus.Playing)))
         )
     }
+
+    @Test
+    fun `the decoder fallback frees the playing pane's decoder before the full player starts`() {
+        val playing = DualPane(a, dualStream("a"), PaneStatus.Playing)
+        val limit = DualPane(b, dualStream("b"), PaneStatus.DeviceLimit)
+        val fallback = DualState(playing, limit)
+        assertEquals(Side.LEFT, fallback.audibleSide)
+        assertFalse(fallback.keepsPlayerOnHandOver(Side.LEFT))
+        // Both play: the audible pane plays on until the full player's first frame, as before.
+        val both = DualState(playing, DualPane(b, dualStream("b"), PaneStatus.Playing))
+        assertTrue(both.keepsPlayerOnHandOver(both.audibleSide))
+        assertFalse(both.keepsPlayerOnHandOver(both.audibleSide.other))
+    }
 }

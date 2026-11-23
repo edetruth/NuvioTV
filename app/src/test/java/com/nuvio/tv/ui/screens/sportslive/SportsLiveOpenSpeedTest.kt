@@ -194,12 +194,17 @@ class SportsLiveOpenSpeedTest {
         assertEquals(1, viewModel.uiState.value.newLiveRows)
 
         // "N new" is the user's own: that build is as built, the next one settled again.
+        val epochBefore = viewModel.uiState.value.liveNowEpoch
         viewModel.showNewRows()
         runCurrent()
         assertFalse(viewModel.uiState.value.liveNowSettled)
+        // Gemini review #7: a new epoch, so a later settled build never settles on a board from before the thaw.
+        val thawEpoch = viewModel.uiState.value.liveNowEpoch
+        assertTrue(thawEpoch > epochBefore)
         latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = true)))
         runCurrent()
         assertTrue(viewModel.uiState.value.liveNowSettled)
+        assertEquals(thawEpoch, viewModel.uiState.value.liveNowEpoch)
         assertEquals(1, viewModel.uiState.value.newLiveRows)
     }
 
@@ -570,6 +575,23 @@ class SportsLiveOpenSpeedTest {
         cache.put(inputs(SportsLiveTab.CHANNELS), board(SportsLiveTab.CHANNELS))
         assertTrue(cache.has(SportsLiveTab.UPCOMING, null))
         assertFalse(cache.has(SportsLiveTab.LIVE_NOW, null))
+    }
+
+    @Test
+    fun `More live and All sports are views of their own, never sharing a kept board`() {
+        // Gemini review #4: All sports opened after More live was served More live's board, which leaves My sports out.
+        val cache = SportsLiveBoardCache()
+        fun inputs(all: Boolean) = SportsLiveBoardInputs(
+            tab = SportsLiveTab.LIVE_NOW, filter = null, items = listOf(item("a", isLive = true, startMs = NOW)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = NOW, logoRevision = 0, moreLive = mapOf("a|x" to "CRICKET"), moreLiveAll = all
+        )
+        val moreLive = SportsLiveBoard(SportsLiveTab.LIVE_NOW, null, emptyList(), emptyList(), emptyMap(), moreLive = true)
+        cache.put(inputs(all = false), moreLive)
+        assertNull(cache.shownFor(inputs(all = true)))
+        assertSame(moreLive, cache.shownFor(inputs(all = false)))
+        assertTrue(SportsLiveBoard.build(inputs(all = true)).moreLiveAll)
+        assertFalse(SportsLiveBoard.build(inputs(all = false)).moreLiveAll)
     }
 
     @Test

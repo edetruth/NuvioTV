@@ -247,4 +247,21 @@ class DualPickerListTest {
         assertFalse(dualPickerRowEnded(board(ScoreboardGroup.LIVE)))
         assertFalse(dualPickerRowEnded(board(ScoreboardGroup.CHANNELS)))
     }
+
+    @Test
+    fun `the ended notice goes once focus moves to another row`() {
+        // Gemini review #11: "This game has ended" stayed under every live row focused after it.
+        assertEquals("a", dualPickerEndedNotice(notice = "a", focused = "a"))
+        assertNull(dualPickerEndedNotice(notice = "a", focused = "b"))
+        assertNull(dualPickerEndedNotice(notice = null, focused = "b"))
+    }
+
+    @Test
+    fun `the picker's boards are built again at most once a minute for the clock`() {
+        // Gemini review #11: as Live now's boards (to the minute), not on every clock tick.
+        val minute = 60_000L
+        assertEquals(10 * minute, dualPickerClockMs(10 * minute))
+        assertEquals(10 * minute, dualPickerClockMs(10 * minute + 30_000L))
+        assertEquals(11 * minute, dualPickerClockMs(11 * minute + 1L))
+    }
 }

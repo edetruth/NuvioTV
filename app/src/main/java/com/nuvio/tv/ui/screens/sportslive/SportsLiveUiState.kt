@@ -89,6 +89,8 @@ data class SportsLiveUiState(
     val moreLiveViewGroups: List<SportsLiveMoreLive.Group>? = null,
     /** Its view is open: [visibleItems] are [moreLiveViewGroups]' games, group by group. */
     val moreLiveOpen: Boolean = false,
+    /** That open view is All sports (My sports ▾), every live game; false: More live's, the games My sports leaves out. */
+    val moreLiveAll: Boolean = false,
     /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
     val moreLiveOther: Set<String> = emptySet(),
     /** "You watched ‹sport› · Add to My sports?": the sport its card at the top of Live now offers; null for none. */
@@ -99,7 +101,12 @@ data class SportsLiveUiState(
      */
     val upcomingPendingDates: List<LocalDate> = emptyList(),
     /** live.26 settled screens: Live now was kept as shown this build, past its landing ([SportsLiveSettledRows.settles]). */
-    val liveNowSettled: Boolean = false
+    val liveNowSettled: Boolean = false,
+    /**
+     * Bumped by each Live now build laid out afresh ("N new", a follow, My sports, a fresh open): a settled board settles
+     * only on a board of the same epoch, so a thaw is never undone by a later build (gemini review #7).
+     */
+    val liveNowEpoch: Int = 0
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {

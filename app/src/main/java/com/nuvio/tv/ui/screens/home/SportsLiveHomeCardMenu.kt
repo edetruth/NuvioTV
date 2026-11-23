@@ -31,7 +31,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
-import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerBoards
+import com.nuvio.tv.ui.screens.sportslive.dual.rememberDualPickerBoards
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualAvailable
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveGameHomeFirst
 import com.nuvio.tv.ui.screens.sportslive.toggleFollowTarget
@@ -113,7 +113,7 @@ internal fun SportsLiveHomeCardMenu(
         val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
-            boards = remember(pick, scores, mode, revealed) { dualPickerBoards(pick.candidates, scores, mode, revealed, System.currentTimeMillis()) },
+            boards = rememberDualPickerBoards(pick.candidates, scores, mode, revealed, System.currentTimeMillis()),
             onPick = { second ->
                 onDismiss()
                 SportsLiveDualSessions.start(pick.session(second))

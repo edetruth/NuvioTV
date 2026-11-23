@@ -119,7 +119,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
-import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerBoards
+import com.nuvio.tv.ui.screens.sportslive.dual.rememberDualPickerBoards
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
@@ -355,9 +355,7 @@ fun SportsLiveScreen(
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
             // Each row as Live Now draws it, under the one spoiler gate (live.26, #222).
-            boards = remember(pick, scores, scoresMode, revealed, uiState.nowMs) {
-                dualPickerBoards(pick.candidates, scores, scoresMode, revealed, uiState.nowMs)
-            },
+            boards = rememberDualPickerBoards(pick.candidates, scores, scoresMode, revealed, uiState.nowMs),
             onFocus = scoresViewModel::onCardFocus,
             anchor = pick.chosen,
             scores = scores,
@@ -729,7 +727,8 @@ private fun SportsLiveContent(
     val channelViewKey = SportsLiveChannelSummary.viewKey(channelBrowse).takeIf { uiState.selectedTab == SportsLiveTab.CHANNELS }
     val shownBoard = board?.takeIf {
         it.shows(uiState.selectedTab, uiState.selectedFilter) && (channelViewKey == null || it.channels?.view == channelViewKey) &&
-            it.moreLive == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen)
+            it.moreLive == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) &&
+            it.moreLiveAll == (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveAll)
     }
     // More live's view (user 2026-11-21) is its own list: it opens at its top, and Back returns to Live now's.
     val moreLiveShown = shownBoard?.moreLive == true
@@ -744,7 +743,8 @@ private fun SportsLiveContent(
     // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.
     val agenda = shownBoard?.agenda
     val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}" + channelViewKey?.let { "|$it" }.orEmpty() +
-        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) "|more" else "")
+        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveOpen) "|more" else "") +
+        (if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLiveAll) "|all" else "")
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val liveLabel = stringResource(R.string.sports_live_live_pill)
@@ -1169,6 +1169,14 @@ private fun SportsLiveContent(
     // More live's view takes focus once drawn (its first row, or [moreLiveFocusGroup]'s first game).
     var moreLiveFocusPending by remember { mutableStateOf(false) }
     var moreLiveFocusGroup by remember { mutableStateOf<String?>(null) }
+    // The view that focus waits for (gemini review #5): on a slow box the old list's board stays a while.
+    var moreLiveFocusOpen by remember { mutableStateOf(false) }
+    var moreLiveFocusAll by remember { mutableStateOf(false) }
+    fun focusMoreLiveView(open: Boolean, all: Boolean = false) {
+        moreLiveFocusOpen = open
+        moreLiveFocusAll = all
+        moreLiveFocusPending = true
+    }
     // live.26 (#223, A5): My sports ▾ keeps My sports and adds All sports, then each other sport with its game count
     // (the More live row's own groups); OK opens More live's view on that sport.
     val allSportsEntries = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) sportsLiveAllSportsEntries(uiState.allSports) else emptyList()
@@ -1176,12 +1184,21 @@ private fun SportsLiveContent(
         val label = entry.group?.let { stringResource(R.string.sports_live_all_sports_entry, moreLiveGroupLabel(it), entry.count ?: 0) } ?: allSportsLabel
         label to {
             moreLiveFocusGroup = entry.group
-            moreLiveFocusPending = true
+            focusMoreLiveView(open = true, all = true)
             onOpenAllSports()
         }
     }
     val filterDropdown = when (uiState.selectedTab) {
-        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport), actions = allSportsActions)
+        // The pill and menu say which view shows (gemini review #4): All sports, More live, else the picked option.
+        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(
+            stringResource(R.string.sports_live_filter_title_sport),
+            actions = allSportsActions,
+            viewLabel = when {
+                !uiState.moreLiveOpen -> null
+                uiState.moreLiveAll -> allSportsLabel
+                else -> stringResource(R.string.sports_live_more_live_title)
+            }
+        )
         // F16: Upcoming's sports as one dropdown too; the inline strip clipped its last option ("G…").
         SportsLiveTab.UPCOMING -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
@@ -1533,11 +1550,13 @@ private fun SportsLiveContent(
     }
     // More live: Back from its view goes back to Live now's list (composed later, so it wins over the list's own Back).
     BackHandler(enabled = uiState.moreLiveOpen && uiState.selectedTab == SportsLiveTab.LIVE_NOW && listHasFocus) {
-        moreLiveFocusPending = true
+        focusMoreLiveView(open = false)
         onCloseMoreLive()
     }
     LaunchedEffect(moreLiveFocusPending, shownBoard) {
         if (!moreLiveFocusPending || shownBoard == null) return@LaunchedEffect
+        // The view asked for, not the list still shown while its board is built (runs again as it comes).
+        if (moreLiveShown != moreLiveFocusOpen || shownBoard.moreLiveAll != moreLiveFocusAll) return@LaunchedEffect
         repeat(2) { withFrameNanos { } }
         // live.26 (#223): a sport picked in My sports ▾ lands on its first game in More live's view, once that view shows
         // (this runs again as its board comes).
@@ -1732,12 +1751,12 @@ private fun SportsLiveContent(
     }
     listActions.onDeclineSport = onDeclineSport
     listActions.onOpenMoreLive = {
-        moreLiveFocusPending = true
+        focusMoreLiveView(open = true)
         onOpenMoreLive()
     }
     // "N new" (live.25 M): OK adds the games that waited; focus goes to the list's first row, as the line leaves.
     listActions.onShowNewRows = {
-        moreLiveFocusPending = true
+        focusMoreLiveView(open = false)
         onShowNewRows()
     }
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
@@ -1937,7 +1956,7 @@ private fun SportsLiveContent(
                 onShowAll = {
                     // Live now has no All sports (user 2026-11-21): its More live view instead.
                     if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLive.isNotEmpty()) {
-                        moreLiveFocusPending = true
+                        focusMoreLiveView(open = true)
                         onOpenMoreLive()
                     } else {
                         onSelectFilter(if (uiState.selectedFilter == null && uiState.mySportsScoped) SportsLiveUiState.ALL_SPORTS_FILTER else null)
