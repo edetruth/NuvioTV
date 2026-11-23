@@ -893,7 +893,7 @@ private fun SportsLiveContent(
     // later today, then catch-up replays (#58). Up from the first game goes back to it.
     val liveNowShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW
     val liveBoardRows = if (liveNowShown) shownBoard?.rows.orEmpty() else emptyList()
-    val yourTeams = remember(liveNowShown, liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs, followedTeams, keptReplays) {
+    val builtYourTeams = remember(liveNowShown, liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs, followedTeams, keptReplays) {
         if (liveNowShown) {
             YourTeams.strip(
                 liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
@@ -903,6 +903,13 @@ private fun SportsLiveContent(
         } else {
             emptyList()
         }
+    }
+    // Settled screens (live.26 TV): a strip that arrives after Live now's rows settled (its later-today games came ~15 s
+    // after opening) is held back instead of pushing every row down; it shows at the next fresh layout ([YourTeamsStripHold]).
+    val stripHold = remember { YourTeamsStripHold() }
+    val listRowsShown = liveBoardRows.isNotEmpty()
+    val yourTeams = remember(builtYourTeams, listRowsShown, uiState.liveNowEpoch) {
+        stripHold.shown(builtYourTeams, listShown = listRowsShown, epoch = uiState.liveNowEpoch, nowMs = SystemClock.uptimeMillis())
     }
     val catchUpShown = yourTeams.isNotEmpty()
     val catchUpFocusRequester = remember { FocusRequester() }

@@ -269,6 +269,32 @@ internal object YourTeams {
 }
 
 /**
+ * Settled screens (live.26 TV: "Your teams · 1 today" landed above Live now's list 15 s after opening, and every row
+ * moved down): once Live now's rows have been on screen for the landing window ([SportsLiveSettledRows.READY_MS]), a strip
+ * that was not showing is held back until the list is laid out afresh ("N new", a follow, My sports: a new layout epoch),
+ * the tab is left, or the next open. A strip already showing keeps following its games; one that empties goes.
+ */
+internal class YourTeamsStripHold(private val readyMs: Long = SportsLiveSettledRows.READY_MS) {
+    private var epoch: Int? = null
+    private var listShownAtMs: Long? = null
+    private var stripShown = false
+
+    /** The strip to draw for [fresh] at [nowMs]: [listShown] while Live now's rows are on screen, in layout [epoch]. */
+    fun <E> shown(fresh: List<E>, listShown: Boolean, epoch: Int, nowMs: Long): List<E> {
+        if (epoch != this.epoch) {
+            this.epoch = epoch
+            listShownAtMs = null
+        }
+        if (!listShown) listShownAtMs = null else if (listShownAtMs == null) listShownAtMs = nowMs
+        val since = listShownAtMs
+        val held = since != null && !stripShown && nowMs - since >= readyMs
+        val out = if (held) emptyList() else fresh
+        stripShown = out.isNotEmpty()
+        return out
+    }
+}
+
+/**
  * Live Now's "Your teams" strip (#155, live.20 1c): live games, games starting soon, catch-up replays, then later
  * today, under "Your teams · 1 live · 2 replays · 3 tonight". Slim cards (logos, short names, the time) so four fit
  * across the list column; "▶ Ready" on a game holding a verified link (1b); with more cards than fit, the next one

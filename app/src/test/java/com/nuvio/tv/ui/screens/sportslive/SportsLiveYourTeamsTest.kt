@@ -294,5 +294,36 @@ class SportsLiveYourTeamsTest {
         teams = SportsLiveTeams.parse("Celtics vs Knicks"), followed = followed
     )
 
+    @Test
+    fun `a strip arriving after Live now's rows settled is held back, never inserted above them`() {
+        // live.26 TV: "Your teams 1 today" landed 15 s after opening and pushed every row down.
+        val hold = YourTeamsStripHold()
+        val strip = listOf("tonight")
+        assertEquals(emptyList<String>(), hold.shown(emptyList<String>(), listShown = true, epoch = 0, nowMs = 0L))
+        assertEquals("held", emptyList<String>(), hold.shown(strip, listShown = true, epoch = 0, nowMs = 15_000L))
+        assertEquals("still held", emptyList<String>(), hold.shown(strip, listShown = true, epoch = 0, nowMs = 30_000L))
+        // A fresh layout ("N new", a follow, My sports) shows it.
+        assertEquals(strip, hold.shown(strip, listShown = true, epoch = 1, nowMs = 31_000L))
+    }
+
+    @Test
+    fun `a strip in the landing window or already showing keeps following its games`() {
+        val hold = YourTeamsStripHold()
+        assertEquals(emptyList<String>(), hold.shown(emptyList<String>(), listShown = true, epoch = 0, nowMs = 0L))
+        // Within the landing window, as the list's first scores and logos land.
+        assertEquals(listOf("live"), hold.shown(listOf("live"), listShown = true, epoch = 0, nowMs = 500L))
+        // Already showing: a game more is a card more inside the strip, which moves no row.
+        assertEquals(listOf("live", "tonight"), hold.shown(listOf("live", "tonight"), listShown = true, epoch = 0, nowMs = 15_000L))
+        // Before any row shows (loading rows, another tab), nothing is held.
+        val loading = YourTeamsStripHold()
+        assertEquals(listOf("tonight"), loading.shown(listOf("tonight"), listShown = false, epoch = 0, nowMs = 15_000L))
+        // Back on Live now after another tab: a new landing window.
+        val other = YourTeamsStripHold()
+        other.shown(emptyList<String>(), listShown = true, epoch = 0, nowMs = 0L)
+        other.shown(emptyList<String>(), listShown = false, epoch = 0, nowMs = 20_000L)
+        other.shown(emptyList<String>(), listShown = true, epoch = 0, nowMs = 21_000L)
+        assertEquals(listOf("tonight"), other.shown(listOf("tonight"), listShown = true, epoch = 0, nowMs = 21_200L))
+    }
+
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 }
