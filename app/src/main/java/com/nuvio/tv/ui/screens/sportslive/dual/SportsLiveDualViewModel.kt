@@ -361,7 +361,7 @@ class SportsLiveDualViewModel internal constructor(
     /** The profile's channel picks now, for the picker's Channels (live.26). */
     val channelPicksNow: StateFlow<SportsLiveChannelPicks> = channelPicks
         .catch { emit(SportsLiveChannelPicks.NONE) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveChannelPicks.NONE)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SportsLiveChannelPicks.NONE)
 
     // MENU was held this session: the saved layout read late does not undo it.
     private var layoutChosen = false
