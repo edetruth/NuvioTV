@@ -120,7 +120,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
-import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerBoards
+import com.nuvio.tv.ui.screens.sportslive.dual.rememberDualPickerBoards
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
@@ -356,9 +356,7 @@ fun SportsLiveScreen(
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
             // Each row as Live Now draws it, under the one spoiler gate (live.26, #222).
-            boards = remember(pick, scores, scoresMode, revealed, uiState.nowMs) {
-                dualPickerBoards(pick.candidates, scores, scoresMode, revealed, uiState.nowMs)
-            },
+            boards = rememberDualPickerBoards(pick.candidates, scores, scoresMode, revealed, uiState.nowMs),
             onFocus = scoresViewModel::onCardFocus,
             anchor = pick.chosen,
             scores = scores,
