@@ -15,7 +15,7 @@ import java.util.WeakHashMap
  * Debug-only "test mute" for automated TV tests: the HDMI output has fixed volume, so adb cannot lower it.
  * Active only when this is a debuggable build AND the file [FILE_NAME] exists in the app's external files dir
  * (adb shell touch /sdcard/Android/data/com.nuviodebug.com/files/test-mute). Checked each time a player is built
- * or prepared, so no polling. Release builds: BuildConfig.DEBUG is a constant false, so nothing here ever runs.
+ * or prepared, so no polling. Release builds: BuildConfig.IS_DEBUG_BUILD is false, so nothing here ever runs.
  */
 object TestMute {
     const val FILE_NAME = "test-mute"
@@ -24,9 +24,9 @@ object TestMute {
     internal fun shouldMute(debugBuild: Boolean, flagFileExists: Boolean): Boolean = debugBuild && flagFileExists
 
     fun isActive(context: Context): Boolean {
-        if (!BuildConfig.DEBUG) return false
+        if (!BuildConfig.IS_DEBUG_BUILD) return false
         val exists = runCatching { File(context.getExternalFilesDir(null), FILE_NAME).exists() }.getOrDefault(false)
-        return shouldMute(BuildConfig.DEBUG, exists)
+        return shouldMute(BuildConfig.IS_DEBUG_BUILD, exists)
     }
 
     private val guarded: MutableSet<Player> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap<Player, Boolean>()))
