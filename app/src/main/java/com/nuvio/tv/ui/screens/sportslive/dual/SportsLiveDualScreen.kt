@@ -183,12 +183,12 @@ fun SportsLiveDualScreen(
     }
 
     // Full screen for [item] (#39): its pane, playing with sound, plays on (held) until the full player's first
-    // frame; the other pane stops. Otherwise both stop, as before.
+    // frame; the other pane stops. Otherwise both stop, as before (also when this TV ran out of decoders).
     fun handOverPlayers(item: SportsLiveItem) {
         val current = players ?: return
         val state = viewModel.state.value
         val side = state?.sideOf(item)
-        val audible = state != null && side != null && side == state.audibleSide && state.pane(side).status == PaneStatus.Playing
+        val audible = state != null && side != null && state.keepsPlayerOnHandOver(side)
         // The kept pane's frame is copied before its view lets the player go (live.23 TV test): it shows full screen
         // at once, never the panes; it is kept only once that player is held.
         if (audible && side != null) current.player(side)?.let { SportsLiveFullScreenHold.captureStill(it, views[side]?.videoSurfaceView) }

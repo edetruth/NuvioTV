@@ -191,6 +191,14 @@ internal fun dualDecoderFallback(state: DualState): DualPane? {
 }
 
 /**
+ * Whether full screen for [side]'s game keeps that pane's player playing until the full player's first frame (#39):
+ * only the pane with sound that plays, and never once this TV ran out of decoders ([dualDecoderFallback]): its
+ * decoder is then freed before the full player starts its own.
+ */
+internal fun DualState.keepsPlayerOnHandOver(side: Side): Boolean =
+    side == audibleSide && pane(side).status == PaneStatus.Playing && dualDecoderFallback(this) == null
+
+/**
  * The pane the game info overlay is about in dual (#139): the one with sound, never both games. It
  * follows [DualState.audibleSide], so a failed highlighted pane leaves it on the game still heard.
  */
