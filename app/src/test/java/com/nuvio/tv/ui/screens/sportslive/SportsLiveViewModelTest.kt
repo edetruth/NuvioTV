@@ -1811,6 +1811,8 @@ class SportsLiveViewModelTest {
             // Gemini final review #9: a My sports game and a game outside it both zap through the view's whole list.
             viewModel.startZapSession(nba)
             assertEquals(shown, SportsLiveZapSessions.current()!!.items.map { it.streamKey })
+            // Marked so the player's My sports panel list never replaces the view's games (TV F4).
+            assertEquals(SportsLiveUiState.ALL_SPORTS_FILTER, SportsLiveZapSessions.current()!!.filter)
             viewModel.startZapSession(cricket)
             assertEquals(shown, SportsLiveZapSessions.current()!!.items.map { it.streamKey })
             // More live's own view still zaps among its games only.

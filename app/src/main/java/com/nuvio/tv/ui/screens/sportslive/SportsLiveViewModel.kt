@@ -1357,7 +1357,8 @@ class SportsLiveViewModel internal constructor(
             items = items,
             itemKey = item.streamKey,
             tab = tab,
-            filter = state.selectedFilter.takeIf { tab == state.selectedTab },
+            // The All sports and More live views walk their own games (TV F4): the panel's list does not replace them.
+            filter = if (allSports != null || playedFromMoreLive) SportsLiveUiState.ALL_SPORTS_FILTER else state.selectedFilter.takeIf { tab == state.selectedTab },
             returnToHomeOnBack = false
         )?.copy(seed = seed)
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
