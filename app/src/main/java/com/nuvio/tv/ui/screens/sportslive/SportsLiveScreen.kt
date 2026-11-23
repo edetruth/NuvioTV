@@ -1208,7 +1208,7 @@ private fun SportsLiveContent(
     // OK on a card: an ESPN-ended game in Just ended opens its Game page; every other card (an estimate
     // too: its stream may still work) opens as usual. Hold OK keeps Choose stream.
     val openCard: (SportsLiveItem) -> Unit = { item ->
-        when (val ok = sportsLiveCardOk(uiState.endedOf(item))) {
+        when (val ok = sportsLiveSettledOk(shownBoard?.rowOf?.get(item.streamKey), uiState.endedOf(item))) {
             is SportsLiveCardOk.OpenGame -> onOpenGame(item, ok.event)
             SportsLiveCardOk.Play -> open(item)
         }
@@ -2246,7 +2246,7 @@ private fun SportsLiveContent(
                             items = items,
                             rowOf = boardRowOf,
                             channelsTab = channelsTab,
-                            groupCounts = rows.groupingBy { it.group }.eachCount(),
+                            groupCounts = sportsLiveGroupCounts(rows),
                             sectionCounts = sectionCounts,
                             // Phase 1: on the tab's own view with no favorite listed, the Favorites heading and its hint lead.
                             favoritesHint = channelBrowse == null && uiState.selectedFilter == null &&

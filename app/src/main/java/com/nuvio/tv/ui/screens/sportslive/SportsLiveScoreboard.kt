@@ -399,6 +399,9 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
     val sport = GameStatusText.sportOf(row.status)
     return when {
         row.probablyEnded -> ScoreboardStatusLines(strings.probablyEnded)
+        // Settled screens (live.26): a game that ended in its shown place says so there; under Hide its score stays hidden.
+        row.endedInPlace && chip !is ScoreChip.Final ->
+            ScoreboardStatusLines(GameStatusText.finalWord(sport, strings), strings.chip.hidden.takeIf { chip is ScoreChip.Hidden })
         // Spoilers unchanged: "Score hidden", no clock and no dot, whatever the game's state.
         chip is ScoreChip.Hidden -> ScoreboardStatusLines(strings.chip.hidden)
         chip is ScoreChip.Live -> {

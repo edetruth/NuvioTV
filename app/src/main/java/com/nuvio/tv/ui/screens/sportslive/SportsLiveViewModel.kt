@@ -319,6 +319,8 @@ class SportsLiveViewModel internal constructor(
         val moreLiveOpen: Boolean = false,
         /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
         val holdOver: Boolean = false,
+        /** live.26: [SportsLiveCalmOpen.READY_MS] has passed since opening: a recent saved list may show. */
+        val readyOver: Boolean = false,
         /** O (live.25): back after a long absence, at most [SportsLiveCalmOpen.HOLD_MS] ago: Live now may still wait. */
         val freshHold: Boolean = false,
         /** The sport of a More live game just played, to offer adding to My sports ([SportsLiveAddSportPrompt]). */
@@ -400,6 +402,14 @@ class SportsLiveViewModel internal constructor(
     // J1: Live now has been shown this visit of the screen (reset when the screen is left): it stays calm, also across tabs.
     @Volatile
     private var liveNowShown = false
+
+    // live.26 settled screens: when Live now was first shown this visit (null: not yet); its board settles READY_MS later.
+    @Volatile
+    private var liveNowShownAtMs: Long? = null
+
+    // live.26 settled screens: the board last published; a new Live now board settles only on the view shown.
+    @Volatile
+    private var lastShownBoard: SportsLiveBoard? = null
 
     // O (live.25): when the section stopped being watched (hidden, or ambient up); null while watched.
     private var unwatchedSinceMs: Long? = null
@@ -969,7 +979,9 @@ class SportsLiveViewModel internal constructor(
                     if (inputs.tab != SportsLiveTab.CHANNELS) boardCache.reusable(inputs)?.let { return@withContext it }
                     val startedAt = System.nanoTime()
                     // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
-                    buildBoard(knownMatches.fill(inputs)).reusingRows(boardCache.shownFor(inputs)).also {
+                    // live.26 settled screens: once Live now is settled, rows stay where the shown board had them.
+                    buildBoard(knownMatches.fill(inputs)).let { built -> if (inputs.settled) built.settledOn(settleBaseFor(inputs)) else built }
+                        .reusingRows(boardCache.shownFor(inputs)).also {
                         boardCache.putIfCurrent(generation, inputs, it)
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
@@ -988,6 +1000,7 @@ class SportsLiveViewModel internal constructor(
     /** Each board as it is published: the tab-open timing line, and Upcoming built ahead from Live now. */
     private fun onBoardShown(shown: SportsLiveBoard) {
         shownTab = shown.tab
+        lastShownBoard = shown
         // #26: Report a problem says how many channels each source loaded and how many the countries list.
         shown.channels?.let { SportsLiveReportTrail.onChannels(it.report) }
         val opening = tabOpening
@@ -998,6 +1011,16 @@ class SportsLiveViewModel internal constructor(
             }
         }
         if (shown.tab == SportsLiveTab.LIVE_NOW) prewarmUpcoming()
+    }
+
+    /**
+     * live.26 settled screens: the board a settled Live now board keeps its rows from: the last one built for [inputs]' view
+     * (profile-scoped, [SportsLiveBoardCache.scopeTo]), only while that view is the one on screen.
+     */
+    private fun settleBaseFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? {
+        val shown = lastShownBoard ?: return null
+        if (!shown.shows(inputs.tab, inputs.filter) || shown.moreLive) return null
+        return boardCache.shownFor(inputs)
     }
 
     /**
@@ -1064,7 +1087,11 @@ class SportsLiveViewModel internal constructor(
         fullLoadJob = launchFullLoad(force = false)
         // J1: Live now waits behind its loading rows for this visit's load, at most HOLD_MS.
         viewModelScope.launch {
-            delay(SportsLiveCalmOpen.HOLD_MS)
+            // live.26 (amendment 2): a recent saved list shows after READY_MS; an older one waits up to HOLD_MS.
+            delay(SportsLiveCalmOpen.READY_MS)
+            // Only while Live now still waits: a state build costs 1-2 s on the onn.
+            if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(readyOver = true) }
+            delay(SportsLiveCalmOpen.HOLD_MS - SportsLiveCalmOpen.READY_MS)
             selectionState.update { it.copy(holdOver = true) }
         }
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
@@ -1340,6 +1367,7 @@ class SportsLiveViewModel internal constructor(
         // Leaving the screen ends browsing (TV QA BUG7): Live now is as built when it comes back.
         if (!visible) {
             liveNowShown = false
+            liveNowShownAtMs = null
             setBrowsing(false)
             leaveAddSportCard()
         } else {
@@ -1610,12 +1638,18 @@ class SportsLiveViewModel internal constructor(
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         var otherEvents = emptyList<SportsLiveItem>()
+        var liveNowSettled = false
         // J1 (live.23): Live now shows its loading rows, not the saved list of an earlier visit, until this visit's load
         // (most addons answered) lands or HOLD_MS passed; then the whole list at once.
         // O (live.25, review M1): back after a long absence, the same way the list the absence left waits for the newer load,
         // at most HOLD_MS from the return; then that load's board shows once, as built.
         val freshHolding = selection.freshHold && freshAfterAbsence && bucketed.listAtMs == absentListAtMs
-        val holdLiveNow = (!bucketed.fromLoad && !selection.holdOver) || freshHolding
+        val holdLiveNow = SportsLiveCalmOpen.holdsLiveNow(
+            hasVisitLoad = bucketed.fromLoad,
+            readyOver = selection.readyOver,
+            holdOver = selection.holdOver,
+            savedAgeMs = bucketed.listAtMs?.let { now - it }
+        ) || freshHolding
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
             if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
                 emptyList<SportsLiveItem>()
@@ -1696,6 +1730,8 @@ class SportsLiveViewModel internal constructor(
                 lastListAtMs = bucketed.listAtMs
                 val thawed = selection.thaw != thawApplied || reranked || fresh
                 thawApplied = selection.thaw
+                // live.26 settled screens: kept as shown (not thawed, shown this visit) and past its landing window.
+                liveNowSettled = !thawed && liveNowShown && SportsLiveSettledRows.settles(liveNowShownAtMs, now)
                 // O: the games ESPN confirms over leave at once, even focused (kept, a dropped one would read as live); and a
                 // fresh open after a long absence keeps no card of the list the absence left.
                 val overIds = endedGames.confirmedEndedKeys(tabItems, scores, now)
@@ -1709,7 +1745,10 @@ class SportsLiveViewModel internal constructor(
                 SportsLiveHiddenTitles.filter(kept, hiddenNow).also {
                     shownLiveNow = it
                     // J1: shown once this visit, Live now keeps its rows in place from now on; new ones wait for "N new".
-                    if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) liveNowShown = true
+                    if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) {
+                        if (liveNowShownAtMs == null) liveNowShownAtMs = now
+                        liveNowShown = true
+                    }
                 }
             } else if (tab == SportsLiveTab.UPCOMING) {
                 // Report #25: a started game leaves at every build (each clock tick too), not only at the next sorting.
@@ -1835,7 +1874,8 @@ class SportsLiveViewModel internal constructor(
             addSportPrompt = selection.addSport?.takeIf {
                 selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
             },
-            upcomingPendingDates = bucketed.upcomingPending
+            upcomingPendingDates = bucketed.upcomingPending,
+            liveNowSettled = liveNowSettled
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

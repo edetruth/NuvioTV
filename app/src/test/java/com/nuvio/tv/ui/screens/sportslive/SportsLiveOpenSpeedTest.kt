@@ -160,6 +160,50 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `a saved list under one refresh old shows after the ready second, not the whole hold (live26)`() = runTest {
+        val saved = SportsLiveListSnapshot(NOW - MINUTE, mapOf(SportsLiveTab.LIVE_NOW to listOf(item("a", isLive = true).copy(addonBaseUrl = ""))))
+        loadGate = CompletableDeferred()
+        val viewModel = newViewModel(MemoryCache(saved))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.visibleItems.isEmpty())
+
+        advanceTimeBy(SportsLiveCalmOpen.READY_MS + 1)
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        // The fresh load that follows keeps the shown row; its new one waits behind "N new".
+        loadGate!!.complete(load(listOf(item("b", isLive = true), item("a", isLive = true))))
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+    }
+
+    @Test
+    fun `Live now settles a second after its first frame and N new lays it out afresh once (live26)`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true)))
+        val viewModel = newViewModel(MemoryCache())
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+        // The landing: the first frame and what lands within the second lay out as built.
+        assertFalse(viewModel.uiState.value.liveNowSettled)
+
+        advanceTimeBy(SportsLiveSettledRows.READY_MS + 1)
+        latestFlow.value = load(listOf(item("b", isLive = true), item("a", isLive = true)))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.liveNowSettled)
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+
+        // "N new" is the user's own: that build is as built, the next one settled again.
+        viewModel.showNewRows()
+        runCurrent()
+        assertFalse(viewModel.uiState.value.liveNowSettled)
+        latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = true)))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.liveNowSettled)
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+    }
+
+    @Test
     fun `back on Live now from another tab its rows keep their place and new ones wait for N new`() = runTest {
         // J1 + #143 (l23-rc): the tab's kept board shows at once on return, so the fresh build must not reshuffle it.
         loadGate = CompletableDeferred()

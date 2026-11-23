@@ -89,7 +89,9 @@ data class SportsLiveUiState(
      * live.24: Upcoming's later dates whose games are not sorted yet ([SportsLiveUpcomingWindow]): their day tabs show,
      * and going to one sorts it ([SportsLiveViewModel.showUpcomingDay]).
      */
-    val upcomingPendingDates: List<LocalDate> = emptyList()
+    val upcomingPendingDates: List<LocalDate> = emptyList(),
+    /** live.26 settled screens: Live now was kept as shown this build, past its landing ([SportsLiveSettledRows.settles]). */
+    val liveNowSettled: Boolean = false
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {

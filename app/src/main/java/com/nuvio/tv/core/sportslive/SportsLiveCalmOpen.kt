@@ -39,6 +39,24 @@ object SportsLiveCalmOpen {
     fun holding(hasVisitLoad: Boolean, openedAtMs: Long, nowMs: Long): Boolean =
         !hasVisitLoad && nowMs - openedAtMs < HOLD_MS
 
+    /** Settled screens (live.26, amendment 2 "show ready in 1 s"): a recent saved list shows this long after opening. */
+    const val READY_MS = 1_000L
+
+    /** A saved list this recent (one Live now refresh, as a kept list may be: brief question 1) counts as ready. */
+    const val RECENT_LIST_MS = 3 * 60_000L
+
+    /**
+     * Whether Live now still shows its loading rows rather than the list it has: no load of this visit yet
+     * ([hasVisitLoad] false) and [HOLD_MS] not passed ([holdOver] false), unless [READY_MS] passed ([readyOver]) and the
+     * saved list is at most [RECENT_LIST_MS] old ([savedAgeMs]; null: none). An older saved list still waits for this
+     * visit's load, at most [HOLD_MS], as J1.
+     */
+    fun holdsLiveNow(hasVisitLoad: Boolean, readyOver: Boolean, holdOver: Boolean, savedAgeMs: Long?): Boolean {
+        if (hasVisitLoad || holdOver) return false
+        val recent = savedAgeMs != null && savedAgeMs in 0..RECENT_LIST_MS
+        return !(readyOver && recent)
+    }
+
     /** O (live.25): Live now unwatched this long comes back as a fresh open ([longAbsence]). */
     const val LONG_ABSENCE_MS = 10 * 60_000L
 

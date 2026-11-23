@@ -82,7 +82,9 @@ data class SportsLiveBoardInputs(
     /** Live now's More live view is open: [items] are its games, each by its group key (the list's sections). */
     val moreLive: Map<String, String> = emptyMap(),
     /** live.24: Upcoming's later dates not sorted yet: their day tabs show ahead of their games. Empty on other tabs. */
-    val pendingDates: List<LocalDate> = emptyList()
+    val pendingDates: List<LocalDate> = emptyList(),
+    /** Live now's list is settled (live.26, [SportsLiveSettledRows]): the board keeps the shown board's rows in place. */
+    val settled: Boolean = false
 )
 
 /**
@@ -120,7 +122,8 @@ internal fun sportsLiveBoardInputsOf(
         // Upcoming's big games (#137) read them.
         standings = if (tab == SportsLiveTab.UPCOMING) standings else emptyMap(),
         pendingDates = if (tab == SportsLiveTab.UPCOMING) state.upcomingPendingDates else emptyList(),
-        channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE
+        channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE,
+        settled = live && state.liveNowSettled && !state.moreLiveOpen
     )
 }
 
