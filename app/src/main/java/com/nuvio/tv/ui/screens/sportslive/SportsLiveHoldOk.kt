@@ -23,11 +23,16 @@ import kotlinx.coroutines.flow.asStateFlow
  *   so the rest of the press; or a new screen), or an element that takes every OK event and does nothing with a hold
  *   (tv-material buttons and cards: most of Settings). The sheet opens only when the press is still held here, on the
  *   same screen with the window focused, [graceMs] after that first repeat.
- * - Never in the full player or dual screen ([EXCLUDED]): they have their own Hold OK.
+ * - Never in the full player or dual screen ([EXCLUDED]): they have their own Hold OK. A sports replay's player has
+ *   none (no zap session), so the sheet opens there too (live.26, G-C10).
  * A release before the first repeat is a normal click: nothing here changes it. Once the sheet opened, the press's
  * remaining repeats and its release are eaten, so the focused element never takes the release for a click.
  */
-internal class SportsLiveHoldOkKey(private val graceMs: Long = GRACE_MS) {
+internal class SportsLiveHoldOkKey(
+    private val graceMs: Long = GRACE_MS,
+    /** Whether the full player has its Hold OK now; false for a sports replay (no zap session: G-C10), which has none. */
+    private val playerHasOwnHold: () -> Boolean = { true }
+) {
     private var pressDown = NO_PRESS
     private var pressRoute: String? = null
     private var mine = false
@@ -55,7 +60,8 @@ internal class SportsLiveHoldOkKey(private val graceMs: Long = GRACE_MS) {
             pressRoute = route
             mine = false
             takenAt = NO_PRESS
-            skip = holdOkScreen(route) in EXCLUDED
+            val screen = holdOkScreen(route)
+            skip = screen in EXCLUDED && !(screen == PLAYER && !playerHasOwnHold())
             return screens()
         }
         // A repeat or a release of a press this never saw (another hook took its press): not ours.
@@ -94,7 +100,8 @@ internal class SportsLiveHoldOkKey(private val graceMs: Long = GRACE_MS) {
         const val GRACE_MS = 500L
 
         /** Screens with a Hold OK of their own: the full player (#218) and dual screen. */
-        val EXCLUDED = setOf("player", "sports_live_dual")
+        const val PLAYER = "player"
+        val EXCLUDED = setOf(PLAYER, "sports_live_dual")
 
         private const val NO_PRESS = Long.MIN_VALUE
 
@@ -137,7 +144,11 @@ object SportsLiveHoldOk {
     /** The open sheet: its [title] and [save], which saves the report snapshot taken as the hold began. */
     internal class Sheet(val title: String, val save: () -> Unit)
 
-    private val key = SportsLiveHoldOkKey()
+    /** The full player now open plays a sports replay, which has no zap session and so no Hold OK menu of its own (G-C10). */
+    @Volatile
+    internal var replayPlayerOpen = false
+
+    private val key = SportsLiveHoldOkKey(playerHasOwnHold = { !replayPlayerOpen })
     private val _sheet = MutableStateFlow<Sheet?>(null)
     internal val sheet: StateFlow<Sheet?> = _sheet.asStateFlow()
 

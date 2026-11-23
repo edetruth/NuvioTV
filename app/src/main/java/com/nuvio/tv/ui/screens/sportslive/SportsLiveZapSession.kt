@@ -42,6 +42,13 @@ data class SportsLiveZapSession(
 
     val current: SportsLiveItem get() = items[index]
 
+    /**
+     * Started from the All sports or More live view (filter All sports) and no panel chip picked yet: CH± walk [items] (the
+     * view's games), never the panel's My sports list, which would leave out the games the view shows (TV F4).
+     */
+    private val walksOwnItems: Boolean
+        get() = panelChip == null && filter == SportsLiveUiState.ALL_SPORTS_FILTER && tab == SportsLiveTab.LIVE_NOW
+
     /** Indices of [items] in the order Up/Down zap through them. */
     internal val zapOrder: List<Int> by lazy {
         val chip = panelChip
@@ -106,7 +113,7 @@ data class SportsLiveZapSession(
      * lists Live now's games); with no rows, unchanged.
      */
     internal fun withLineup(rows: List<ZapPanelRow>): SportsLiveZapSession {
-        if (tab != SportsLiveTab.LIVE_NOW || rows.isEmpty()) return this
+        if (tab != SportsLiveTab.LIVE_NOW || rows.isEmpty() || walksOwnItems) return this
         val listed = rows.map { it.item }
         val here = listed.indexOfFirst { it.streamKey == current.streamKey }
         return copy(
@@ -125,6 +132,7 @@ data class SportsLiveZapSession(
      */
     internal fun withFrozenLineup(rows: List<ZapPanelRow>): SportsLiveZapSession {
         val frozen = lineup
+        if (walksOwnItems) return this
         if (frozen == null || tab != SportsLiveTab.LIVE_NOW || rows.isEmpty()) return withLineup(rows)
         val freshByKey = rows.associateBy { it.item.streamKey }
         val listed = frozen.toHashSet()
