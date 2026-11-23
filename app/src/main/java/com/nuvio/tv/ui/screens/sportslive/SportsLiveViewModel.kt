@@ -317,6 +317,8 @@ class SportsLiveViewModel internal constructor(
         val thaw: Int = 0,
         /** Live now's "More live" view is open (user 2026-11-21): the games My sports leaves out, by sport. */
         val moreLiveOpen: Boolean = false,
+        /** That view lists every live game, My sports' own too (the menu's All sports), not only the ones it leaves out. */
+        val moreLiveAll: Boolean = false,
         /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
         val holdOver: Boolean = false,
         /** live.26: [SportsLiveCalmOpen.READY_MS] has passed since opening: a recent saved list may show. */
@@ -1261,12 +1263,17 @@ class SportsLiveViewModel internal constructor(
 
     /** OK on Live now's "More live" row: its view, the games My sports leaves out by sport. */
     fun openMoreLive() {
-        selectionState.update { it.copy(moreLiveOpen = true, itemId = null) }
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = false, itemId = null) }
+    }
+
+    /** OK on "All sports" in My sports ▾ (live.26 decision): the same view, with EVERY live game by sport. */
+    fun openAllSports() {
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = true, itemId = null) }
     }
 
     /** Back from the "More live" view: Live now's own list again. */
     fun closeMoreLive() {
-        selectionState.update { it.copy(moreLiveOpen = false, itemId = null) }
+        selectionState.update { it.copy(moreLiveOpen = false, moreLiveAll = false, itemId = null) }
     }
 
     /** "N new" on Refresh (TV QA Q5): Live now as it is now, the waiting rows in their places; then frozen again. */
@@ -1818,9 +1825,19 @@ class SportsLiveViewModel internal constructor(
         } else {
             emptyList()
         }
+        // All sports (live.26 decision): every live game by sport, so its counts match the games listed; offered only
+        // while More live is (My sports hides something).
+        val allSportsGroups = if (moreLiveGroups.isEmpty()) {
+            emptyList()
+        } else {
+            val live = counted(fullItems)
+            val liveKeys = live.mapTo(HashSet()) { it.streamKey }
+            SportsLiveMoreLive.groups(live, otherEvents.filter { it.streamKey !in liveKeys })
+        }
         val moreLiveOpen = selection.moreLiveOpen && moreLiveGroups.isNotEmpty()
+        val moreLiveViewGroups = if (selection.moreLiveAll) allSportsGroups else moreLiveGroups
         val visible = when (filter) {
-            null, SportsLiveUiState.ALL_SPORTS_FILTER -> if (moreLiveOpen) moreLiveGroups.flatMap { it.items } else tabItems
+            null, SportsLiveUiState.ALL_SPORTS_FILTER -> if (moreLiveOpen) moreLiveViewGroups.flatMap { it.items } else tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
             else -> tabItems.filter { filterOf(it) == filter }
         }
@@ -1872,6 +1889,8 @@ class SportsLiveViewModel internal constructor(
             newLiveRows = newRows,
             newLiveFollowedTeam = newFollowedTeam,
             moreLive = moreLiveGroups,
+            allSports = allSportsGroups,
+            moreLiveViewGroups = moreLiveViewGroups,
             moreLiveOpen = moreLiveOpen,
             moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
             // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.

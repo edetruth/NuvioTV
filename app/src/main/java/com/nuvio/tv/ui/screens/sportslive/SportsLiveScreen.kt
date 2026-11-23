@@ -544,6 +544,7 @@ fun SportsLiveScreen(
             onBrowsing = viewModel::setBrowsing,
             onShowNewRows = viewModel::showNewRows,
             onOpenMoreLive = viewModel::openMoreLive,
+            onOpenAllSports = viewModel::openAllSports,
             onAddSport = viewModel::acceptAddSport,
             onDeclineSport = viewModel::declineAddSport,
             onCloseMoreLive = viewModel::closeMoreLive,
@@ -691,6 +692,7 @@ private fun SportsLiveContent(
     onShowNewRows: () -> Unit = {},
     /** OK on Live now's "More live" row, and Back from its view (user 2026-11-21). */
     onOpenMoreLive: () -> Unit = {},
+    onOpenAllSports: () -> Unit = {},
     onCloseMoreLive: () -> Unit = {},
     /** The add-sport card's Add and Not now (after a More live game was played). */
     onAddSport: () -> Unit = {},
@@ -1170,13 +1172,13 @@ private fun SportsLiveContent(
     var moreLiveFocusGroup by remember { mutableStateOf<String?>(null) }
     // live.26 (#223, A5): My sports ▾ keeps My sports and adds All sports, then each other sport with its game count
     // (the More live row's own groups); OK opens More live's view on that sport.
-    val allSportsEntries = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) sportsLiveAllSportsEntries(uiState.moreLive) else emptyList()
+    val allSportsEntries = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) sportsLiveAllSportsEntries(uiState.allSports) else emptyList()
     val allSportsActions = allSportsEntries.map { entry ->
         val label = entry.group?.let { stringResource(R.string.sports_live_all_sports_entry, moreLiveGroupLabel(it), entry.count ?: 0) } ?: allSportsLabel
         label to {
             moreLiveFocusGroup = entry.group
             moreLiveFocusPending = true
-            onOpenMoreLive()
+            onOpenAllSports()
         }
     }
     val filterDropdown = when (uiState.selectedTab) {

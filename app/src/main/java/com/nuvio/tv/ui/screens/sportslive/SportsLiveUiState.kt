@@ -80,7 +80,14 @@ data class SportsLiveUiState(
      * (H), by sport, largest first, Other last ([SportsLiveMoreLive]); empty with nothing picked, or on a chip.
      */
     val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
-    /** Its view is open: [visibleItems] are [moreLive]'s games, group by group. */
+    /**
+     * All sports (live.26 decision, the My sports ▾ menu): every live game by sport, My sports' own too, in the same
+     * groups; empty when [moreLive] is.
+     */
+    val allSports: List<SportsLiveMoreLive.Group> = emptyList(),
+    /** The groups the open view lists: [allSports] when opened from the menu, else [moreLive]; null: [moreLive]. */
+    val moreLiveViewGroups: List<SportsLiveMoreLive.Group>? = null,
+    /** Its view is open: [visibleItems] are [moreLiveViewGroups]' games, group by group. */
     val moreLiveOpen: Boolean = false,
     /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
     val moreLiveOther: Set<String> = emptySet(),
@@ -96,7 +103,7 @@ data class SportsLiveUiState(
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {
-        moreLive.flatMap { group -> group.items.map { it.streamKey to group.key } }.toMap()
+        (moreLiveViewGroups ?: moreLive).flatMap { group -> group.items.map { it.streamKey to group.key } }.toMap()
     }
 
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */

@@ -11,8 +11,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 internal data class SportsLiveAllSportsEntry(val group: String?, val count: Int?)
 
 /**
- * The menu's All sports entries from [groups] (Live now's [SportsLiveUiState.moreLive], the very groups the "More live:
- * 7 Cricket · 5 Rugby" row counts, so the two always agree): All sports first, then each group with games, largest
+ * The menu's All sports entries from [groups] (Live now's [SportsLiveUiState.allSports]: EVERY live game by sport, My sports' own
+ * too, the very games the opened view lists, so counts and rows always agree): All sports first, then each group with games, largest
  * first, Other last, as the groups come. A sport with 0 games is not offered; with nothing outside My sports, no entry.
  */
 internal fun sportsLiveAllSportsEntries(groups: List<SportsLiveMoreLive.Group>): List<SportsLiveAllSportsEntry> {

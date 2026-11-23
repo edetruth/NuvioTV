@@ -1836,6 +1836,24 @@ class SportsLiveViewModelTest {
         runCurrent()
         assertEquals(setOf("nba", "fc"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
 
+        // All sports (the menu's entry, live.26 decision): EVERY live game, My sports' own included, counts matching.
+        viewModel.openAllSports()
+        runCurrent()
+        val all = viewModel.uiState.value
+        assertTrue(all.moreLiveOpen)
+        assertEquals(setOf("nba", "fc", "cri", "unk"), all.visibleItems.map { it.id }.toSet())
+        assertEquals(4, all.allSports.sumOf { it.items.size })
+        assertEquals(all.visibleItems.size, all.moreLiveGroupOf.size)
+        // The row's own groups stay the games My sports leaves out.
+        assertEquals(listOf("CRICKET" to 1, SportsLiveMoreLive.OTHER to 1), SportsLiveMoreLive.summary(all.moreLive))
+        viewModel.closeMoreLive()
+        runCurrent()
+        viewModel.openMoreLive()
+        runCurrent()
+        assertEquals(listOf("cri", "unk"), viewModel.uiState.value.visibleItems.map { it.id })
+        viewModel.closeMoreLive()
+        runCurrent()
+
         viewModel.selectTab(SportsLiveTab.UPCOMING)
         runCurrent()
         assertEquals(listOf("unba"), viewModel.uiState.value.visibleItems.map { it.id })

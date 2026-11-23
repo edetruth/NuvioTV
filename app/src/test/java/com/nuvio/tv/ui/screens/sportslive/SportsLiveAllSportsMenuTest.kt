@@ -42,7 +42,7 @@ class SportsLiveAllSportsMenuTest {
     }
 
     @Test
-    fun `the counts are the More live row's own counts, so the menu and the row always agree`() {
+    fun `the menu's counts are the games its groups hold, so All sports and its sports always agree`() {
         val groups = SportsLiveMoreLive.groups(
             listOf(game("India vs Australia", "Cricket"), game("Pakistan vs England", "Cricket"), game("Saracens vs Harlequins", "Rugby")),
             emptyList(),
