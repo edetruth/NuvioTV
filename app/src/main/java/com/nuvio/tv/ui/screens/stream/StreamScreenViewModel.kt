@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveLocalStamps
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveSpoilerSafePlayback
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveStreamScreenMeta
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -1288,7 +1289,7 @@ class StreamScreenViewModel @Inject constructor(
 
             if (result !is NetworkResult.Success) return@launch
 
-            val meta = result.data
+            val meta = sportsLiveStreamScreenMeta(videoId, result.data)
             playbackMetaVideos = meta.videos
             if (!requiresMetadataLookup) return@launch
             val metaGenres = meta.genres.takeIf { it.isNotEmpty() }

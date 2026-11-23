@@ -4,6 +4,7 @@ import android.content.Context
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveLocalTime
 import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.navigation.Screen
 import java.time.ZoneId
@@ -40,3 +41,12 @@ internal fun sportsLiveLocalStamps(context: Context, text: String?): String? {
         locale = Locale.getDefault()
     ) { time -> String.format(tomorrow, time) }
 }
+
+/**
+ * [meta], the addon's meta the Stream screen fills its missing artwork and year from, as it may use it for [videoId]: a
+ * spoiler-safe replay's (#223) without its artwork or release info, either of which may show the result (as
+ * [spoilerSafeReplay] plays it); any other title's as is.
+ */
+internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta =
+    if (!SportsLiveExtraSources.isSpoilerSafe(videoId)) meta
+    else meta.copy(poster = null, background = null, landscapePoster = null, logo = null, rawPosterUrl = null, releaseInfo = null)

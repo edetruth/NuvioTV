@@ -1,10 +1,14 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.Meta
+import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -75,6 +79,28 @@ class SportsLiveSourceNoticesTest {
         assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info.copy(videoId = "game-id")).streamName)
         SportsLiveExtraSources.markSpoilerSafe("replay-id", false)
         assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info).streamName)
+    }
+
+    @Test
+    fun `a spoiler-safe replay's Stream screen takes no artwork or date from the addon's meta, another title does`() {
+        val meta = Meta(
+            id = "replay-id", type = ContentType.UNKNOWN, rawType = "sport", name = "Team A 2-1 Team B",
+            poster = "https://img.example.invalid/final-score.jpg", posterShape = PosterShape.LANDSCAPE,
+            background = "https://img.example.invalid/celebration.jpg", logo = "https://img.example.invalid/logo.png",
+            description = null, releaseInfo = "Final 2-1", imdbRating = null, genres = listOf("Soccer"), runtime = null,
+            director = emptyList(), cast = emptyList(), videos = emptyList(), country = null, awards = null, language = null,
+            links = emptyList(), landscapePoster = "https://img.example.invalid/landscape.jpg"
+        )
+        assertSame(meta, sportsLiveStreamScreenMeta("replay-id", meta))
+
+        SportsLiveExtraSources.markSpoilerSafe("replay-id", true)
+        val safe = sportsLiveStreamScreenMeta("replay-id", meta)
+        assertNull(safe.poster)
+        assertNull(safe.backdropUrl)
+        assertNull(safe.logo)
+        assertNull(safe.releaseInfo)
+        assertEquals(listOf("Soccer"), safe.genres)
+        assertEquals(meta.poster, sportsLiveStreamScreenMeta("game-id", meta).poster)
     }
 
     private fun stream(name: String, url: String) = Stream(
