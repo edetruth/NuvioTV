@@ -397,6 +397,10 @@ class SportsLiveViewModel internal constructor(
     // Live now's layout epoch ([SportsLiveUiState.liveNowEpoch]): bumped by each build laid out afresh.
     private var liveNowEpoch = 0
 
+    // [SportsLiveCalmOpen.HOLD_MS] has passed since opening ([Selection.holdOver] is set only while Live now still waits).
+    @Volatile
+    private var holdPassed = false
+
     // The profile's answers to "Add ‹sport› to My sports?", as last read.
     @Volatile
     private var addSportMemoryNow = SportsLiveAddSportPrompt.Memory()
@@ -1103,7 +1107,9 @@ class SportsLiveViewModel internal constructor(
             // Only while Live now still waits: a state build costs 1-2 s on the onn.
             if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(readyOver = true) }
             delay(SportsLiveCalmOpen.HOLD_MS - SportsLiveCalmOpen.READY_MS)
-            selectionState.update { it.copy(holdOver = true) }
+            // Read by every later build; a build of its own only while Live now still waits (gemini review #10).
+            holdPassed = true
+            if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(holdOver = true) }
         }
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
         viewModelScope.launch {
@@ -1665,7 +1671,7 @@ class SportsLiveViewModel internal constructor(
         val holdLiveNow = SportsLiveCalmOpen.holdsLiveNow(
             hasVisitLoad = bucketed.fromLoad,
             readyOver = selection.readyOver,
-            holdOver = selection.holdOver,
+            holdOver = selection.holdOver || holdPassed,
             savedAgeMs = bucketed.listAtMs?.let { now - it }
         ) || freshHolding
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
