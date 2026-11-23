@@ -329,6 +329,12 @@ class SportsLiveZapViewModel internal constructor(
     /** True when this player was opened with a zap session for its content; only then is the overlay shown. */
     val hasSession: Boolean = SportsLiveZapSessions.activeFor(contentId) != null
 
+    // G-C10: a sports replay plays with no session (so no player menu); the app-wide Hold OK sheet serves it.
+    private val replayPlayer = !hasSession && SportsLiveExtraSources.isSportsPlayback(contentId)
+    init {
+        if (replayPlayer) SportsLiveHoldOk.replayPlayerOpen = true
+    }
+
     // live.20 B2: streams resolved before OK or CH± asks (a panel row rested on, the games ▲ and ▼ go to).
     private val prefetcher = prefetchHooks?.takeIf { hasSession }?.let { SportsLiveStreamPrefetcher(viewModelScope, it) }
     private var neighbourJob: Job? = null
@@ -1473,6 +1479,7 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     override fun onCleared() {
+        if (replayPlayer) SportsLiveHoldOk.replayPlayerOpen = false
         scoreTracker.onStop()
         nowTracker.onStop()
         WatchingNow.shared.stop(watchOwner)
