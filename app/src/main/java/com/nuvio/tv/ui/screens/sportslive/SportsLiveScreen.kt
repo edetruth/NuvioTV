@@ -95,7 +95,6 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamPages
-import com.nuvio.tv.core.sportslive.scores.TeamRef
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -503,8 +502,8 @@ fun SportsLiveScreen(
                 SportsLiveGameRequests.open(sportsLiveReplayGameRequest(event, replay))
                 onOpenGame()
             },
-            onOpenTeam = { ref ->
-                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+            onOpenTeam = { request ->
+                SportsLiveTeamRequests.open(request)
                 onOpenTeam()
             },
             reminders = reminders,
@@ -654,7 +653,7 @@ private fun SportsLiveContent(
     /** Replays' More… → Game stats: the replay's game, spoiler-safe. */
     onOpenReplayGame: (SportsLiveItem, ScoreSnapshot) -> Unit,
     /** Hold OK → Team page ‹team› (#62) on a card or Results row with a strict ESPN match. */
-    onOpenTeam: (TeamRef) -> Unit = {},
+    onOpenTeam: (SportsLiveTeamRequest) -> Unit = {},
     /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
     reminders: RemindersState = RemindersState(),
     onToggleReminder: (SportsLiveItem) -> Unit = {},
@@ -1432,7 +1431,7 @@ private fun SportsLiveContent(
                 ).map { ref ->
                     (ref.team.shortDisplayName ?: ref.name) to {
                         menuCardKey = null
-                        onOpenTeam(ref)
+                        onOpenTeam(sportsLiveCardTeamRequest(ref, uiState.selectedTab))
                     }
                 },
             onHide = if (SportsLiveMoreEntry.HIDE in entries) {
@@ -1881,7 +1880,7 @@ private fun SportsLiveContent(
                     TeamFollows.followersOf(followedTeams, row.event, if (side == ScoreSide.HOME) row.event.home else row.event.away).isNotEmpty()
                 },
                 onToggleFollow = onToggleResultFollow,
-                onOpenTeam = onOpenTeam,
+                onOpenTeam = { ref -> onOpenTeam(SportsLiveTeamRequest(ref)) },
                 liveGames = uiState.liveGameCount,
                 onEditMySports = onEditMySports,
                 onSaveForLater = onSaveForLater,

@@ -20,6 +20,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
+import com.nuvio.tv.domain.model.SportsLiveTab
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -234,5 +235,11 @@ class SportsLiveTeamViewModelTest {
         // Nothing protected: the card inherits the page's shown results (BUG19).
         val open = SportsLiveTeamUiState(team = sixers, data = page, status = GameLoadStatus.READY, mode = ScoresMode.SHOW)
         assertEquals(SportsLivePlayerCardRequest(target, spoilerSafe = false, revealed = true), teamPlayerCardRequest(target, open))
+    }
+
+    @Test
+    fun `a Team page from a Replays card menu is spoiler-safe, from Live now as before`() {
+        assertEquals(SportsLiveTeamRequest(sixers, spoilerSafe = true), sportsLiveCardTeamRequest(sixers, SportsLiveTab.REPLAYS))
+        assertEquals(SportsLiveTeamRequest(sixers, spoilerSafe = false), sportsLiveCardTeamRequest(sixers, SportsLiveTab.LIVE_NOW))
     }
 }

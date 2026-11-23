@@ -50,6 +50,13 @@ import kotlin.coroutines.EmptyCoroutineContext
  */
 data class SportsLiveTeamRequest(val team: TeamRef, val spoilerSafe: Boolean = false)
 
+/**
+ * Hold OK → Team page on a card of [tab]: spoiler-safe from Replays, as its Game stats is ([sportsLiveReplayGameRequest]):
+ * the team's last results and record would tell the replay's result.
+ */
+internal fun sportsLiveCardTeamRequest(team: TeamRef, tab: SportsLiveTab): SportsLiveTeamRequest =
+    SportsLiveTeamRequest(team, spoilerSafe = tab == SportsLiveTab.REPLAYS)
+
 /** Hands the request to the Team page's ViewModel, once (like [SportsLiveGameRequests]). */
 internal object SportsLiveTeamRequests {
     @Volatile
