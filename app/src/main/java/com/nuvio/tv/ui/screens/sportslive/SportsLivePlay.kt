@@ -177,6 +177,22 @@ internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiv
     )
 )
 
+/** A score in a link's words: "2-1", "102 - 99", "3–2", "1:0". */
+private val SCORE_IN_LINK_TEXT = Regex("""\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b""")
+
+/**
+ * [text] with any score in it masked ("Arsenal 2-1 Chelsea highlights" → "Arsenal – Chelsea highlights"): live.26 shorter
+ * paths (#223, review gap 1), a replay's link names often carry its result.
+ */
+internal fun spoilerSafeLinkText(text: String?): String? = text?.replace(SCORE_IN_LINK_TEXT, "–")
+
+/** [stream] of a replay as the player names it: its name, title and description with any score masked. */
+internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(
+    name = spoilerSafeLinkText(stream.name),
+    title = spoilerSafeLinkText(stream.title),
+    description = spoilerSafeLinkText(stream.description)
+)
+
 sealed interface SportsLivePlayEvent {
     /**
      * [item]'s Stream screen. [manualSelection]: the user picks there (no autoplay), as asked or as
@@ -449,7 +465,8 @@ class SportsLivePlayViewModel @Inject constructor(
     ) {
         val target = sportsLiveZapTarget(
             item = item,
-            stream = stream,
+            // A replay's link names may carry its score (#223): the player names it with the score masked.
+            stream = if (zapSession) stream else spoilerSafeReplayStream(stream),
             profileId = profileManager.activeProfileId.value,
             returnToHomeOnBack = returnToHomeOnBack,
             directDebridResolver = directDebridResolver,

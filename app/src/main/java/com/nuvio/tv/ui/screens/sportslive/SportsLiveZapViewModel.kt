@@ -203,7 +203,10 @@ class SportsLiveZapViewModel internal constructor(
     // Channels phase 1: the profile's favorite channels, first and starred in the panel and the guide.
     channelPicks: Flow<SportsLiveChannelPicks> = flowOf(SportsLiveChannelPicks.NONE),
     // Saves a change of the profile's channel picks (Hold OK on a channel row: Add to / Remove from favorites).
-    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {}
+    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {},
+    // live.26 (#223): the clock key events' down times count in, for the held-key guard ([SportsLiveHeldKeyGuard]).
+    private val uptimeMs: () -> Long = { android.os.SystemClock.uptimeMillis() },
+    private val heldKeys: SportsLiveHeldKeyGuard = SportsLiveHeldKeyGuard.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -1125,6 +1128,8 @@ class SportsLiveZapViewModel internal constructor(
             if (_playerMenu.value || !guideTable.value) return false
             return guideKeyHandler?.invoke(event) ?: false
         }
+        // The rest of a ▲ ▼ / CH± press held as the table closed: taken, never a zap (#223, A4).
+        if (heldKeys.swallows(event.keyCode, event.downTime)) return true
         val idle = playerIdle && !partyActive && controller.session(contentId) != null
         val menu = idle && playerOkOffered()
         // Audit G9 (live.24): in every other player state (a replay, OK = Pause, the end card, the controls) the press
@@ -1204,6 +1209,7 @@ class SportsLiveZapViewModel internal constructor(
     fun closePanel(): Boolean {
         if (!_panelOpen.value) return false
         _panelOpen.value = false
+        heldKeys.onClosed(uptimeMs())
         guideIdle.stop()
         panelSession.value = null
         // #164: the next open (and CH± meanwhile) takes the fresh order.

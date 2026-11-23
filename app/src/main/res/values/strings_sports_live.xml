@@ -18,7 +18,8 @@
     <string name="sports_live_guide_footer">OK Watch  ·  ◂ ▸ Sport  ·  Back Close</string>
     <!-- TV report #14: every score is held back while a stream plays; %1$s is the hold, m:ss. -->
     <string name="sports_live_scores_held">Scores held %1$s to match your stream</string>
-    <string name="sports_live_guide_more_below">▼ %1$d more</string>
+    <!-- live.26 (#223): the table's position while its games fill more than one page: "6–10 of 56". -->
+    <string name="sports_live_guide_position">%1$d–%2$d of %3$d</string>
     <string name="sports_live_guide_legend_hold_ok">Hold OK More</string>
     <string name="sports_live_guide_legend_close">Close, late</string>
     <string name="sports_live_guide_legend_my_team">Your team</string>
@@ -130,6 +131,8 @@
         <item quantity="other">%d games live now →</item>
     </plurals>
     <string name="sports_live_results_score_hidden">Score hidden</string>
+    <!-- live.26 (#223): a hidden result of the last 36 h with a replay: the row's only words, OK plays the replay. -->
+    <string name="sports_live_results_watch_replay_row">▶ Watch replay</string>
     <!-- Score chip on game cards: clock · score, e.g. "Q3 4:12 · 88–80"; final "FT 3–1". -->
     <string name="sports_live_chip_score">%1$d–%2$d</string>
     <string name="sports_live_chip_live">%1$s · %2$s</string>
@@ -457,6 +460,8 @@
     <string name="sports_live_more_live_row">More live: %1$s ›</string>
     <!-- One sport's count in the More live row: "4 Racing". -->
     <string name="sports_live_more_live_count">%1$d %2$s</string>
+    <!-- live.26 (#223): Live now's My sports ▾ menu, one other sport and its live games (game counts, never scores): "Cricket · 7". -->
+    <string name="sports_live_all_sports_entry">%1$s · %2$d</string>
     <string name="sports_live_more_live_fights">Fights</string>
     <string name="sports_live_more_live_other">Other</string>
     <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->

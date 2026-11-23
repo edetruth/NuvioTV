@@ -1141,8 +1141,22 @@ private fun SportsLiveContent(
             else -> sportsLiveFilterOptions(headerFilters, myTeamsLabel, allLabel) { filterLabels[it] ?: it }
         }
     }
+    // More live's view takes focus once drawn (its first row, or [moreLiveFocusGroup]'s first game).
+    var moreLiveFocusPending by remember { mutableStateOf(false) }
+    var moreLiveFocusGroup by remember { mutableStateOf<String?>(null) }
+    // live.26 (#223, A5): My sports ▾ keeps My sports and adds All sports, then each other sport with its game count
+    // (the More live row's own groups); OK opens More live's view on that sport.
+    val allSportsEntries = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) sportsLiveAllSportsEntries(uiState.moreLive) else emptyList()
+    val allSportsActions = allSportsEntries.map { entry ->
+        val label = entry.group?.let { stringResource(R.string.sports_live_all_sports_entry, moreLiveGroupLabel(it), entry.count ?: 0) } ?: allSportsLabel
+        label to {
+            moreLiveFocusGroup = entry.group
+            moreLiveFocusPending = true
+            onOpenMoreLive()
+        }
+    }
     val filterDropdown = when (uiState.selectedTab) {
-        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
+        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport), actions = allSportsActions)
         // F16: Upcoming's sports as one dropdown too; the inline strip clipped its last option ("G…").
         SportsLiveTab.UPCOMING -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
@@ -1481,7 +1495,6 @@ private fun SportsLiveContent(
         runCatching { activeTabFocusRequester.requestFocus() }
     }
     // More live: Back from its view goes back to Live now's list (composed later, so it wins over the list's own Back).
-    var moreLiveFocusPending by remember { mutableStateOf(false) }
     BackHandler(enabled = uiState.moreLiveOpen && uiState.selectedTab == SportsLiveTab.LIVE_NOW && listHasFocus) {
         moreLiveFocusPending = true
         onCloseMoreLive()
@@ -1489,7 +1502,16 @@ private fun SportsLiveContent(
     LaunchedEffect(moreLiveFocusPending, shownBoard) {
         if (!moreLiveFocusPending || shownBoard == null) return@LaunchedEffect
         repeat(2) { withFrameNanos { } }
-        val first = items.firstOrNull()
+        // live.26 (#223): a sport picked in My sports ▾ lands on its first game in More live's view, once that view shows
+        // (this runs again as its board comes).
+        if (moreLiveFocusGroup != null && !moreLiveShown) return@LaunchedEffect
+        val group = moreLiveFocusGroup
+        moreLiveFocusGroup = null
+        val first = sportsLiveMoreLiveFocusTarget(items, uiState.moreLiveGroupOf, group)
+        if (first != null && group != null) {
+            scrollToCard(first.listKey, items.indexOf(first))
+            withFrameNanos { }
+        }
         runCatching { (if (first != null) cardFocusRequester(first) else activeTabFocusRequester).requestFocus() }
         moreLiveFocusPending = false
     }

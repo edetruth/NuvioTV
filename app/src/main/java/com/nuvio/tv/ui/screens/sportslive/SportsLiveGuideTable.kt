@@ -292,6 +292,25 @@ internal fun guideWindowStart(start: Int, selected: Int, size: Int, visible: Int
     return moved.coerceIn(0, last)
 }
 
+/** Where the table's window sits among its games, for the footer's "6–10 of 56" (live.26, #223). */
+internal data class GuidePosition(val first: Int, val last: Int, val total: Int)
+
+/**
+ * The footer's position for the window from [start] of [visible] lines, [isGame] telling each line a game (the More
+ * live line at the end is no game, so it is never counted): only while the games fill more than one page, null
+ * otherwise (few games need no position), or when the window shows no game.
+ */
+internal fun guidePosition(isGame: List<Boolean>, start: Int, visible: Int = GUIDE_VISIBLE_ROWS): GuidePosition? {
+    val total = isGame.count { it }
+    if (total <= visible) return null
+    val from = start.coerceIn(0, isGame.size)
+    val end = minOf(from + visible, isGame.size)
+    val before = isGame.subList(0, from).count { it }
+    val shown = isGame.subList(from, end).count { it }
+    if (shown == 0) return null
+    return GuidePosition(first = before + 1, last = before + shown, total = total)
+}
+
 /** The chip index ◂ (−1) or ▸ (+1) moves to from [selected] among [chips]; null at either end (no wrap). */
 internal fun guideChipStep(chips: List<String?>, selected: String?, delta: Int): Int? {
     if (chips.isEmpty()) return null
@@ -367,18 +386,23 @@ internal enum class SportsLiveGuideKey {
 }
 
 /**
- * The open guide's keys (B2, decided defaults): ▲ ▼ move the selection (held: at a steady pace), CH+ CH− a page;
+ * The open guide's keys (B2, decided defaults): ▲ ▼ move the selection (held: at a steady pace, then faster, live.26), CH+ CH− a page;
  * ◂ ▸ change the sport chip; OK watches the selected game on its release, Hold OK (or Menu) opens its actions. Every
  * D-pad event is taken, so nothing reaches the player behind; Back and the rest pass.
  */
 internal class SportsLiveGuideKeys(
     private val longPressMs: Long = GUIDE_LONG_PRESS_MS,
-    private val repeatGateMs: Long = GUIDE_REPEAT_GATE_MS
+    private val repeatGateMs: Long = GUIDE_REPEAT_GATE_MS,
+    /** live.26 (#223): a held ▲ ▼ speeds up to this pace after [fastAfterMoves] steps (game 20 of 50 in about 2 s). */
+    private val fastGateMs: Long = GUIDE_FAST_GATE_MS,
+    private val fastAfterMoves: Int = GUIDE_FAST_AFTER_MOVES
 ) {
     // OK's press seen by the guide (its event time), -1 when none; and whether its hold already opened the actions.
     private var okDownAt = -1L
     private var okHeld = false
     private var lastMoveAt = Long.MIN_VALUE / 2
+    // The steps the key held now has made by its repeats.
+    private var heldMoves = 0
 
     fun onKey(keyCode: Int, action: Int, repeatCount: Int, eventTime: Long): SportsLiveGuideKey {
         val down = action == KeyEvent.ACTION_DOWN
@@ -397,7 +421,10 @@ internal class SportsLiveGuideKeys(
 
     private fun move(down: Boolean, repeatCount: Int, eventTime: Long, key: SportsLiveGuideKey): SportsLiveGuideKey {
         if (!down) return CONSUMED
-        if (repeatCount > 0 && eventTime - lastMoveAt < repeatGateMs) return CONSUMED
+        if (repeatCount == 0) heldMoves = 0
+        val gate = if (heldMoves >= fastAfterMoves) fastGateMs else repeatGateMs
+        if (repeatCount > 0 && eventTime - lastMoveAt < gate) return CONSUMED
+        if (repeatCount > 0) heldMoves++
         lastMoveAt = eventTime
         return key
     }
@@ -433,6 +460,13 @@ internal class SportsLiveGuideKeys(
 
 internal const val GUIDE_LONG_PRESS_MS = 500L
 internal const val GUIDE_REPEAT_GATE_MS = 112L
+
+/**
+ * live.26 (#223): a held ▲ ▼ takes every key repeat (Android's ~50 ms) after its first [GUIDE_FAST_AFTER_MOVES] steps at
+ * the steady pace, so a long table scrolls fast while one tap stays one row. Tune on the onn (jank measured there).
+ */
+internal const val GUIDE_FAST_GATE_MS = 40L
+internal const val GUIDE_FAST_AFTER_MOVES = 4
 
 // OK with the guide closed (B2): [SportsLivePlayerOkKey] (#218: a short OK opens it, a held one the player menu).
 

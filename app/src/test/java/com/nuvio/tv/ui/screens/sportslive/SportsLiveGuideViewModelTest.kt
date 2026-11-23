@@ -135,6 +135,28 @@ class SportsLiveGuideViewModelTest {
         }
 
     @Test
+    fun `a Down held in the table as it closes never zaps, and a new press after it is the player's again`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            var clock = 0L
+            val viewModel = guideViewModel(guide = true, uptimeMs = { clock })
+            runCurrent()
+            viewModel.openPanel()
+            viewModel.guideKeyHandler = { true }
+            // Held Down scrolls the table.
+            assertTrue(viewModel.onGuidePreviewKey(keyEvent(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 100L), playerIdle = false, partyActive = false))
+            clock = 400L
+            viewModel.closePanel()
+            viewModel.guideKeyHandler = null
+            // The rest of that press, its repeats and its release, is taken: never a zap.
+            assertTrue(viewModel.onGuidePreviewKey(keyEvent(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 100L, repeat = 6), playerIdle = true, partyActive = false))
+            assertTrue(viewModel.onGuidePreviewKey(keyEvent(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_UP, 100L), playerIdle = true, partyActive = false))
+            // CH- held across the close too.
+            assertTrue(viewModel.onGuidePreviewKey(keyEvent(KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.ACTION_DOWN, 300L, repeat = 2), playerIdle = true, partyActive = false))
+            // A new press is the player's (Down zaps there).
+            assertFalse(viewModel.onGuidePreviewKey(keyEvent(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 500L), playerIdle = true, partyActive = false))
+        }
+
+    @Test
     fun `a game picked in the guide closes it, the switch going ahead`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = guideViewModel(guide = true)
         runCurrent()
@@ -228,7 +250,9 @@ class SportsLiveGuideViewModelTest {
     private fun TestScope.guideViewModel(
         guide: Boolean,
         okOnLive: SportsLiveOkOnLive = SportsLiveOkOnLive.DEFAULT,
-        captureReport: (String) -> (() -> Unit) = { { } }
+        captureReport: (String) -> (() -> Unit) = { { } },
+        uptimeMs: () -> Long = { 0L },
+        heldKeys: SportsLiveHeldKeyGuard = SportsLiveHeldKeyGuard()
     ): SportsLiveZapViewModel {
         val latest = MutableStateFlow(SportsLiveLoad(listOf(playing, other), emptyList(), 0L, setOf(CATALOG)))
         SportsLiveZapSessions.start(
@@ -258,7 +282,9 @@ class SportsLiveGuideViewModelTest {
             profiles, repo, scores, mainDispatcherRule.dispatcher,
             okOnLive = flowOf(okOnLive),
             guideStyleSetting = flowOf(if (guide) SportsLiveGuideStyle.TABLE_SMOOTH else SportsLiveGuideStyle.PANEL),
-            captureReport = captureReport
+            captureReport = captureReport,
+            uptimeMs = uptimeMs,
+            heldKeys = heldKeys
         )
     }
 

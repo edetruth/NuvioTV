@@ -271,6 +271,8 @@ fun SportsLiveFilterDropdown(
     val currentOnOpenChange by rememberUpdatedState(onOpenChange)
     LaunchedEffect(open) { currentOnOpenChange(open) }
     val face = sportsLiveDropdownFace(options, selected)
+    // Settled screens (live.26): the actions (Live now's "Cricket · 7") hold still while the menu is open.
+    val menuActions = remember(open) { actions }
     val shape = SportsLiveTokens.Radius.PillShape
     Surface(
         onClick = { open = true },
@@ -335,7 +337,7 @@ fun SportsLiveFilterDropdown(
                         modifier = if (option.value == focusValue) Modifier.focusRequester(firstFocus) else Modifier
                     )
                 }
-                actions.forEach { (label, action) ->
+                menuActions.forEach { (label, action) ->
                     SportsLiveMenuButton(
                         text = label,
                         onClick = {
