@@ -325,19 +325,19 @@ object TeamPages {
  */
 object TeamPageSpoilers {
     /** The page's rule ([SpoilerPolicy]); a [spoilerProtected] row hides its result. */
-    fun visibility(mode: ScoresMode, revealed: Boolean, spoilerProtected: Boolean = false): SpoilerVisibility =
-        SpoilerPolicy.visibility(mode, revealed, SpoilerContext(SpoilerSurface.TEAM, spoilerProtected = spoilerProtected))
+    fun visibility(mode: ScoresMode, revealed: Boolean, spoilerProtected: Boolean = false, spoilerSafe: Boolean = false): SpoilerVisibility =
+        SpoilerPolicy.visibility(mode, revealed, SpoilerContext(SpoilerSurface.TEAM, spoilerSafe = spoilerSafe, spoilerProtected = spoilerProtected))
 
-    fun mayLoad(mode: ScoresMode, revealed: Boolean): Boolean = visibility(mode, revealed).mayLoad
+    fun mayLoad(mode: ScoresMode, revealed: Boolean, spoilerSafe: Boolean = false): Boolean = visibility(mode, revealed, spoilerSafe = spoilerSafe).mayLoad
 
-    fun showsRecord(mode: ScoresMode, revealed: Boolean): Boolean = visibility(mode, revealed).showsRecord
+    fun showsRecord(mode: ScoresMode, revealed: Boolean, spoilerSafe: Boolean = false): Boolean = visibility(mode, revealed, spoilerSafe = spoilerSafe).showsRecord
 
-    fun showsResults(mode: ScoresMode, revealed: Boolean): Boolean = visibility(mode, revealed).showsScore
+    fun showsResults(mode: ScoresMode, revealed: Boolean, spoilerSafe: Boolean = false): Boolean = visibility(mode, revealed, spoilerSafe = spoilerSafe).showsScore
 
     /**
      * One of the last results (#134): as [showsResults], and under Hide until focused while its row has focus.
      * Never a [spoilerProtected] game's (#151), whatever the page's Reveal.
      */
-    fun showsResult(mode: ScoresMode, revealed: Boolean, focused: Boolean, spoilerProtected: Boolean = false): Boolean =
-        visibility(mode, revealed, spoilerProtected).showsRow(focused)
+    fun showsResult(mode: ScoresMode, revealed: Boolean, focused: Boolean, spoilerProtected: Boolean = false, spoilerSafe: Boolean = false): Boolean =
+        visibility(mode, revealed, spoilerProtected, spoilerSafe).showsRow(focused)
 }

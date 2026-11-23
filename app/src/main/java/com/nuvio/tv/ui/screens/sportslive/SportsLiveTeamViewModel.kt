@@ -44,8 +44,11 @@ import javax.inject.Inject
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
-/** What opens a Team page (#62): the team and the game it was opened from. */
-data class SportsLiveTeamRequest(val team: TeamRef)
+/**
+ * What opens a Team page (#62): the team and the game it was opened from. [spoilerSafe]: that Game page was
+ * spoiler-safe (Catch up), so the page keeps results and record behind Reveal, whatever the Scores setting.
+ */
+data class SportsLiveTeamRequest(val team: TeamRef, val spoilerSafe: Boolean = false)
 
 /** Hands the request to the Team page's ViewModel, once (like [SportsLiveGameRequests]). */
 internal object SportsLiveTeamRequests {
@@ -68,6 +71,8 @@ data class SportsLiveTeamUiState(
     val stale: Boolean = false,
     val mode: ScoresMode = ScoresMode.SHOW,
     val revealed: Boolean = false,
+    /** Opened from a spoiler-safe Game page: hidden until revealed, even under Show. */
+    val spoilerSafe: Boolean = false,
     val followed: Boolean = false,
     /** The strict replay match of each of the last results, by event id (the Replay pill). */
     val replays: Map<String, SportsLiveItem> = emptyMap(),
@@ -77,10 +82,10 @@ data class SportsLiveTeamUiState(
     val protection: SpoilerProtection = SpoilerProtection()
 ) {
     /** Record, standing, upcoming games and leaders (decision 5: shown under Hide until focused). */
-    val showsRecord: Boolean get() = TeamPageSpoilers.showsRecord(mode, revealed)
+    val showsRecord: Boolean get() = TeamPageSpoilers.showsRecord(mode, revealed, spoilerSafe)
 
     /** The last results' W/L and scores: Show, or once revealed. */
-    val showsResults: Boolean get() = TeamPageSpoilers.showsResults(mode, revealed)
+    val showsResults: Boolean get() = TeamPageSpoilers.showsResults(mode, revealed, spoilerSafe)
 
     /** One of the last results is spoiler-protected (#151): whatever sums it up would give it away. */
     val hasProtectedResult: Boolean get() = data?.recent.orEmpty().any { protection.protects(it) }
@@ -160,12 +165,13 @@ class SportsLiveTeamViewModel internal constructor(
             stale = page.stale,
             mode = page.mode,
             revealed = page.revealed,
+            spoilerSafe = request?.spoilerSafe == true,
             followed = isFollowed,
             replays = data?.let { TeamPages.replaysFor(it.recent, SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.REPLAYS, nowMs), nowMs) }.orEmpty(),
             cards = data?.let { teamPageCards(it.upcoming, items, isFollowed, nowMs) }.orEmpty(),
             protection = protection
         )
-    }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team))
+    }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team, spoilerSafe = request?.spoilerSafe == true))
 
     init {
         val team = request?.team
@@ -176,7 +182,7 @@ class SportsLiveTeamViewModel internal constructor(
                     revealed = revealRequested,
                     visible = visible,
                     mode = { it },
-                    context = SpoilerContext(SpoilerSurface.TEAM),
+                    context = SpoilerContext(SpoilerSurface.TEAM, spoilerSafe = request.spoilerSafe),
                     onChange = { mode, revealed, mayLoad ->
                         page.update { it.copy(mode = mode, revealed = revealed) }
                         if (!mayLoad) {

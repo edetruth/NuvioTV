@@ -246,7 +246,7 @@ fun SportsLiveGameScreen(
         // A team with a page (#62): its header name and logo take focus, OK opens it (BUG12, Q9).
         fun teamOpener(side: ScoreSide): (() -> Unit)? = TeamPages.refOf(event, side)?.let { ref ->
             {
-                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                 onOpenTeam()
             }
         }
@@ -329,7 +329,7 @@ fun SportsLiveGameScreen(
                     onOpenPlayerCard()
                 },
                 onOpenTeam = { ref ->
-                    SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                    SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                     onOpenTeam()
                 },
                 standingRanks = standingRanks
@@ -383,7 +383,7 @@ fun SportsLiveGameScreen(
                 TeamPages.refOf(event, side)?.let { ref ->
                     sideOf(side).name to {
                         menuOpen = false
-                        SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                        SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                         onOpenTeam()
                     }
                 }

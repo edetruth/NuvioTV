@@ -11,12 +11,15 @@ package com.nuvio.tv.core.sportslive.scores
  *   under Hide until I reveal too (decision 5); false: they hide with the score.
  * @param focusReveals under Hide until I reveal a focused row shows its result with no Reveal (the surface reads its
  *   own focus); Results rows and the section's cards reveal after a dwell instead, through `revealed`.
+ * @param safeHidesRecord spoiler-safe (opened from a spoiler-safe Game page): the record and standing hide with the
+ *   score until revealed, as a record would give the game's result away (the Team page).
  */
 enum class SpoilerSurface(
     internal val revealable: Boolean,
     internal val revealsUnderOff: Boolean,
     internal val recordWithLoad: Boolean,
-    internal val focusReveals: Boolean
+    internal val focusReveals: Boolean,
+    internal val safeHidesRecord: Boolean = false
 ) {
     /** The Game page: score, records and stats together. */
     GAME(revealable = true, revealsUnderOff = true, recordWithLoad = false, focusReveals = false),
@@ -25,7 +28,7 @@ enum class SpoilerSurface(
     PLAYER_CARD(revealable = true, revealsUnderOff = true, recordWithLoad = true, focusReveals = true),
 
     /** The Team page: record, standing, upcoming games and leaders; the last results like a score. */
-    TEAM(revealable = true, revealsUnderOff = true, recordWithLoad = true, focusReveals = true),
+    TEAM(revealable = true, revealsUnderOff = true, recordWithLoad = true, focusReveals = true, safeHidesRecord = true),
 
     /** A Results row. */
     RESULTS(revealable = true, revealsUnderOff = false, recordWithLoad = false, focusReveals = false),
@@ -95,7 +98,7 @@ object SpoilerPolicy {
         return SpoilerVisibility(
             mayLoad = mayLoad,
             showsScore = showsScore,
-            showsRecord = if (surface.recordWithLoad) mayLoad else showsScore,
+            showsRecord = if (surface.recordWithLoad && !(surface.safeHidesRecord && context.spoilerSafe)) mayLoad else showsScore,
             showsStats = showsScore,
             revealsOnFocus = revealsOnFocus
         )

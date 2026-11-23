@@ -162,6 +162,7 @@ fun SportsLiveTeamScreen(
                 replay = state.replays[event.eventId],
                 revealed = revealed,
                 homeFirst = false,
+                spoilerSafe = state.spoilerSafe,
                 card = card
             )
         )
@@ -235,10 +236,11 @@ fun SportsLiveTeamScreen(
                                     mode = state.mode,
                                     revealed = state.revealed,
                                     spoilerProtected = state.protection.protects(event),
+                                    spoilerSafe = state.spoilerSafe,
                                     hasReplay = event.eventId in state.replays,
                                     modifier = modifier,
                                     // Under Hide until focused the row's result is showing as OK is pressed.
-                                    onClick = { openGame(event, revealed = TeamPageSpoilers.showsResult(state.mode, state.revealed, focused = true, spoilerProtected = state.protection.protects(event))) }
+                                    onClick = { openGame(event, revealed = TeamPageSpoilers.showsResult(state.mode, state.revealed, focused = true, spoilerProtected = state.protection.protects(event), spoilerSafe = state.spoilerSafe)) }
                                 )
                             }
                         }
@@ -275,7 +277,7 @@ fun SportsLiveTeamScreen(
  */
 internal fun teamPlayerCardRequest(target: PlayerCardTarget, state: SportsLiveTeamUiState): SportsLivePlayerCardRequest {
     val anyProtected = state.hasProtectedResult
-    return SportsLivePlayerCardRequest(target, spoilerSafe = anyProtected, revealed = state.showsResults && !anyProtected)
+    return SportsLivePlayerCardRequest(target, spoilerSafe = anyProtected || state.spoilerSafe, revealed = state.showsResults && !anyProtected)
 }
 
 private fun teamGameKey(eventId: String) = "g|$eventId"
@@ -345,7 +347,7 @@ private fun TeamHeader(
         }
         Spacer(Modifier.width(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap), verticalAlignment = Alignment.CenterVertically) {
-            val offReveal = state.mode == ScoresMode.OFF && !state.revealed
+            val offReveal = (state.mode == ScoresMode.OFF || state.spoilerSafe) && !state.revealed
             val leaves = Modifier.focusProperties { down = downFocus ?: FocusRequester.Cancel }
             if (offReveal) {
                 SportsLiveButton(onClick = onReveal, role = SportsLiveButtonRole.PRIMARY, modifier = Modifier.focusRequester(firstFocus).then(leaves)) {
@@ -475,7 +477,8 @@ private fun RecentRow(
     hasReplay: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
-    spoilerProtected: Boolean = false
+    spoilerProtected: Boolean = false,
+    spoilerSafe: Boolean = false
 ) {
     var focused by remember { mutableStateOf(false) }
     SportsLivePageRow(
@@ -492,7 +495,7 @@ private fun RecentRow(
         )
         OpponentName(event, teamId, Modifier.weight(1f))
         val result = TeamPages.resultOf(event, teamId)
-        val shown = TeamPageSpoilers.showsResult(mode, revealed, focused, spoilerProtected) && result != null
+        val shown = TeamPageSpoilers.showsResult(mode, revealed, focused, spoilerProtected, spoilerSafe) && result != null
         val win = shown && result?.outcome == TeamOutcome.WIN
         Text(
             text = if (shown && result != null) {
