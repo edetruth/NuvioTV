@@ -442,6 +442,18 @@ object EspnLeagueMap {
         return sports
     }
 
+    /**
+     * The one competition [text] names ("EPL", "Premier League" and "English Premier League" are all `soccer/eng.1`),
+     * or null: a name no rule or league index entry knows, one that names several feeds, and any sport word alone
+     * ("Football") are none. For comparing league names; never routes a card.
+     */
+    fun competitionOf(text: String): EspnLeague? {
+        val folded = fold(text)
+        if (folded.isEmpty()) return null
+        val named = firstCompetition(listOf(folded)) ?: EspnLeagueIndex.find(folded)?.let { listOf(it) }
+        return named?.singleOrNull()
+    }
+
     // Text by text (sport, title, genres, catalog): the first text naming a competition decides.
     private fun firstCompetition(texts: List<String>): List<EspnLeague>? {
         for (text in texts) {

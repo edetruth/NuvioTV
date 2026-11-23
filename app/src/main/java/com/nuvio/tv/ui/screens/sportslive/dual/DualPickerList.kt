@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -63,11 +64,11 @@ internal fun dualPickerList(
     channelPicks: SportsLiveChannelPicks
 ): DualPickerList {
     val (channels, games) = candidates.partition { it.isChannel }
-    val league = anchor?.takeUnless { it.isChannel }?.let { dualPickerLeagueOf(it, scores[it.streamKey]) }
+    val league = anchor?.takeUnless { it.isChannel }?.let { dualPickerLeagueOf(it, scores[it.streamKey]) }?.let(::dualPickerLeagueKey)
     val gameRows = games.map { item ->
         val section = when {
             item.followed -> DualPickerSection.YOUR_TEAMS
-            league != null && dualPickerLeagueOf(item, scores[item.streamKey]) == league -> DualPickerSection.SAME_LEAGUE
+            league != null && dualPickerLeagueOf(item, scores[item.streamKey])?.let(::dualPickerLeagueKey) == league -> DualPickerSection.SAME_LEAGUE
             else -> DualPickerSection.MORE_LIVE
         }
         DualPickerRow(item, section, item.sourceKeys().size)
@@ -88,6 +89,12 @@ internal fun dualPickerList(
  * game (approved scope item 3): channels alone never open the picker, and it never opens empty (principle 8).
  */
 internal fun dualPickerOffers(candidates: List<SportsLiveItem>): Boolean = candidates.any { !it.isChannel }
+
+/**
+ * A league name as "Same league" compares it (live.26 decision): the competition it names when ESPN's maps know one
+ * ("EPL" and "Premier League" are both `soccer/eng.1`), else the name itself. Strict matching stays for game merges.
+ */
+internal fun dualPickerLeagueKey(league: String): String = EspnLeagueMap.competitionOf(league)?.path ?: league
 
 /**
  * [item]'s league for "Same league", lower case: its strictly matched ESPN event's competition ([ScoreSnapshot.leagueName],

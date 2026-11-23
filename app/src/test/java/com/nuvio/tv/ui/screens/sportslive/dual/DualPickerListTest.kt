@@ -137,6 +137,26 @@ class DualPickerListTest {
     }
 
     @Test
+    fun `league aliases are one league for Same league, EPL and Premier League together`() {
+        val epl = item("epl", sport = "EPL")
+        val premier = item("prem", sport = "Premier League")
+        val english = item("eng", sport = "English Premier League")
+        val picked = list(listOf(premier, english), from = epl)
+        assertEquals(listOf(DualPickerSection.SAME_LEAGUE, DualPickerSection.SAME_LEAGUE), picked.rows.map { it.section })
+        // Another league of the same words stays apart, and so does the women's league of the NBA.
+        val indian = list(listOf(item("ipl", sport = "Indian Premier League"), item("w", sport = "WNBA")), from = premier)
+        assertEquals(listOf(DualPickerSection.MORE_LIVE, DualPickerSection.MORE_LIVE), indian.rows.map { it.section })
+        val nba = list(listOf(item("w2", sport = "WNBA")), from = item("n", sport = "NBA"))
+        assertEquals(DualPickerSection.MORE_LIVE, nba.rows.single().section)
+    }
+
+    @Test
+    fun `an unknown league name still groups with the same name written another way`() {
+        val picked = list(listOf(item("b", sport = "Liga Foo")), from = item("a", sport = "liga foo"))
+        assertEquals(DualPickerSection.SAME_LEAGUE, picked.rows.single().section)
+    }
+
+    @Test
     fun `from a channel there is no Same league`() {
         val picked = list(listOf(item("x", sport = "NBA")), from = item("ch", sport = "NBA", channel = true))
         assertEquals(DualPickerSection.MORE_LIVE, picked.rows.single().section)
