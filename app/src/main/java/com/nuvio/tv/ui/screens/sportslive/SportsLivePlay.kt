@@ -186,10 +186,11 @@ internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiv
 /**
  * [item] as Choose stream or OK on its card hands it on (#223): a replay whose result is [hidden]
  * ([sportsLiveHidesReplayLinks]) as Watch replay plays it ([spoilerSafeReplay]), named [title] (ESPN's matchup), so the
- * Stream screen's header and the player show no addon title or artwork; with its result shown, as is.
+ * Stream screen's header and the player show no addon title or artwork; with its result shown, as is. A fallback title
+ * (the card's own, when no ESPN game matches) has any score in it masked too.
  */
 internal fun sportsLiveCardToPlay(item: SportsLiveItem, hidden: Boolean, title: () -> String): SportsLiveItem =
-    if (hidden) spoilerSafeReplay(item, title()) else item
+    if (hidden) spoilerSafeReplay(item, spoilerSafeLinkText(title()).orEmpty()) else item
 
 /**
  * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0"; not part of a date ("2026-11-22", "22-11-2026") or a

@@ -617,6 +617,9 @@ class SportsLivePlayViewModelTest {
             val shown = sportsLiveCardToPlay(scored, hidden = false) { "Away at Home" }
             assertEquals(scored, shown)
             assertTrue(streamRouteFor(shown, returnToHomeOnBack = false).contains("final-score"))
+
+            // No ESPN game: the card's own title stands in, with its score masked.
+            assertEquals("A – B", sportsLiveCardToPlay(scored, hidden = true) { "A 2-1 B" }.meta.name)
             SportsLiveExtraSources.reset()
         }
 
