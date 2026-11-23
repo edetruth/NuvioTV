@@ -17,8 +17,11 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -135,7 +138,10 @@ data class SportsLiveGameUiState(
     val settled: Boolean = true
 ) {
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
-    val showsScore: Boolean get() = settled && !spoilerProtected && ((mode == ScoresMode.SHOW && !spoilerSafe) || revealed)
+    val showsScore: Boolean
+        get() = SpoilerPolicy.visibility(
+            mode.takeIf { settled }, revealed, SpoilerContext(SpoilerSurface.GAME, spoilerSafe = spoilerSafe, spoilerProtected = spoilerProtected)
+        ).showsScore
 
     /**
      * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), which is
