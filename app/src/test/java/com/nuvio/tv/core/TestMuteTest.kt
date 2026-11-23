@@ -3,7 +3,6 @@ package com.nuvio.tv.core
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
-import com.google.common.collect.ImmutableSet
 import com.nuvio.tv.core.debug.MuteGuard
 import com.nuvio.tv.core.debug.TestMute
 import io.mockk.every
@@ -58,24 +57,18 @@ class TestMuteTest {
         verify(exactly = 0) { player.volume = any() }
     }
 
-    private fun params(disabled: Set<Int>, rebuilt: TrackSelectionParameters? = null): TrackSelectionParameters {
-        val params = mockk<TrackSelectionParameters>()
-        every { params.disabledTrackTypes } returns ImmutableSet.copyOf(disabled)
-        if (rebuilt != null) {
-            val builder = mockk<TrackSelectionParameters.Builder>()
-            every { builder.setTrackTypeDisabled(any(), any()) } returns builder
-            every { builder.build() } returns rebuilt
-            every { params.buildUpon() } returns builder
-        }
-        return params
+    // TrackSelectionParameters.disabledTrackTypes is a final field, so real parameters are used, not mocks.
+    private fun params(disabled: Set<Int>): TrackSelectionParameters {
+        val builder = TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT.buildUpon()
+        disabled.forEach { builder.setTrackTypeDisabled(it, true) }
+        return builder.build()
     }
 
     @Test
     fun `audio re-enabled by a track selection change is disabled again`() {
         val player = mockk<Player>(relaxed = true)
-        val fixed = mockk<TrackSelectionParameters>()
-        MuteGuard(player) { true }.onTrackSelectionParametersChanged(params(emptySet(), fixed))
-        verify(exactly = 1) { player.trackSelectionParameters = fixed }
+        MuteGuard(player) { true }.onTrackSelectionParametersChanged(params(emptySet()))
+        verify(exactly = 1) { player.trackSelectionParameters = match { C.TRACK_TYPE_AUDIO in it.disabledTrackTypes } }
     }
 
     @Test
