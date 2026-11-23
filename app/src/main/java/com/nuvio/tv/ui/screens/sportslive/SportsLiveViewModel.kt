@@ -1341,15 +1341,18 @@ class SportsLiveViewModel internal constructor(
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
         }
-        val playedFromMoreLive = moreLive.any { it.streamKey == item.streamKey }
+        // All sports' view (gemini final review #9): a game played there zaps through every game it lists, in its order.
+        val allSports = state.moreLiveViewGroups?.flatMap { it.items }
+            ?.takeIf { shown -> state.moreLiveOpen && state.moreLiveAll && shown.any { it.streamKey == item.streamKey } }
+        val playedFromMoreLive = allSports == null && moreLive.any { it.streamKey == item.streamKey }
         playerLaunchAtMs = nowMs()
-        val (items, tab) = if (playedFromMoreLive) {
-            moreLive to state.selectedTab
-        } else {
-            sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
+        val (items, tab) = when {
+            allSports != null -> allSports to state.selectedTab
+            playedFromMoreLive -> moreLive to state.selectedTab
+            else -> sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
         }
         // live.25 (#225): started from Live now's list, the panel, the guide and CH± follow it as shown (calm order kept).
-        val seed = if (!playedFromMoreLive && state.selectedTab == SportsLiveTab.LIVE_NOW) items.map { it.streamKey } else null
+        val seed = if (allSports == null && !playedFromMoreLive && state.selectedTab == SportsLiveTab.LIVE_NOW) items.map { it.streamKey } else null
         val session = SportsLiveZapSession.of(
             items = items,
             itemKey = item.streamKey,
@@ -1833,15 +1836,17 @@ class SportsLiveViewModel internal constructor(
             .let { shown -> if ((mySportsScoped || allSports) && !onLiveNow) withAllSports(shown) else shown }
         // More live (user 2026-11-21): under My sports, Live now ends with one row holding the live games it leaves out
         // (other sports, J3's unplaced games) and the listings that are no game (H), by sport; OK opens them.
-        val moreLiveGroups = if (onLiveNow && filter == null && !mySports.isDefault) {
+        val hiddenLiveGroups = if (onLiveNow && !mySports.isDefault) {
             val scopedKeys = scopedItems.mapTo(HashSet()) { it.streamKey }
             SportsLiveMoreLive.groups(counted(fullItems).filter { it.streamKey !in scopedKeys }, otherEvents)
         } else {
             emptyList()
         }
-        // All sports (live.26 decision): every live game by sport, so its counts match the games listed; offered only
-        // while More live is (My sports hides something).
-        val allSportsGroups = if (moreLiveGroups.isEmpty()) {
+        // The row itself only under My sports with no filter picked.
+        val moreLiveGroups = if (filter == null) hiddenLiveGroups else emptyList()
+        // All sports (live.26 decision): every live game by sport, so its counts match the games listed; offered while
+        // My sports hides something, whatever the filter (gemini final review #5: also from ★ My teams).
+        val allSportsGroups = if (hiddenLiveGroups.isEmpty()) {
             emptyList()
         } else {
             val live = counted(fullItems)

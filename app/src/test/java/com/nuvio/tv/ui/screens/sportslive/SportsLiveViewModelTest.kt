@@ -1791,6 +1791,41 @@ class SportsLiveViewModelTest {
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
 
     @Test
+    fun `a game played from the All sports view zaps through every game that view lists`() = runTest {
+        val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
+        val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
+        nextLoad = load(listOf(nba, cricket))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        try {
+            viewModel.openAllSports()
+            runCurrent()
+            val shown = viewModel.uiState.value.visibleItems.map { it.streamKey }
+            assertEquals(setOf("nba", "cri"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+            // Gemini final review #9: a My sports game and a game outside it both zap through the view's whole list.
+            viewModel.startZapSession(nba)
+            assertEquals(shown, SportsLiveZapSessions.current()!!.items.map { it.streamKey })
+            viewModel.startZapSession(cricket)
+            assertEquals(shown, SportsLiveZapSessions.current()!!.items.map { it.streamKey })
+            // More live's own view still zaps among its games only.
+            viewModel.closeMoreLive()
+            runCurrent()
+            viewModel.openMoreLive()
+            runCurrent()
+            viewModel.startZapSession(cricket)
+            assertEquals(listOf("cri"), SportsLiveZapSessions.current()!!.items.map { it.id })
+        } finally {
+            SportsLiveZapSessions.clear()
+        }
+    }
+
+    @Test
     fun `My sports scopes Live now and Upcoming, keeps followed games, and More live holds the rest`() = runTest {
         val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
         val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
@@ -1870,6 +1905,10 @@ class SportsLiveViewModelTest {
         // All sports opened from ★ My teams lists every live game, not only the followed ones.
         viewModel.selectFilter(SportsLiveUiState.MY_TEAMS_FILTER)
         runCurrent()
+        // Gemini final review #5: My sports ▾ still offers All sports and its sports under ★ My teams; the row at the
+        // list's end (More live) stays off while a filter is picked.
+        assertEquals(4, viewModel.uiState.value.allSports.sumOf { it.items.size })
+        assertTrue(viewModel.uiState.value.moreLive.isEmpty())
         viewModel.openAllSports()
         runCurrent()
         assertEquals(null, viewModel.uiState.value.selectedFilter)
