@@ -364,6 +364,16 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
             if (isUsingMpvEngine()) {
                 val view = mpvView
                 if (view != null) {
+                    val failure = view.consumePlaybackFailure()
+                    if (failure != null && streamFallbackSession?.ownsPlayback(currentStreamUrl) == true) {
+                        if (!maybeAutoSwitchInternalPlayerOnStartupError(failure, allowEngineFailover = true) &&
+                            !tryNextStream(failure)
+                        ) {
+                            cancelNextEpisodeAutoPlayOnFatalError()
+                            _uiState.update { it.copy(error = failure, isBuffering = false, showLoadingOverlay = false) }
+                        }
+                        return@launch
+                    }
                     val pos = view.currentPositionMs().coerceAtLeast(0L)
                     val playerDuration = view.durationMs().coerceAtLeast(0L)
                     applyPendingMpvSeekIfNeeded(
@@ -382,6 +392,7 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                                 hasRenderedFirstFrame = true
                                 // Sports & Live: a link that plays ends the failover run (#153), as with ExoPlayer.
                                 recordSportsSourceFirstFrame()
+                                recordPlayedRelease()
                                 resetMpvStartupWatchdog()
                                 scheduleMpvStableProgressReset()
                                 val clickToFirstFrameMs = launchStartedAtElapsedMs
@@ -907,6 +918,7 @@ private fun PlayerRuntimeController.isShortPlaceholderStream(): Boolean {
  * watched or trigger auto-play next.
  */
 internal fun PlayerRuntimeController.handleNaturalPlaybackEnded() {
+    if (returnToFeatureAfterExtraEnded()) return
     val position = currentPlaybackPositionMs() ?: 0L
     val duration = getEffectiveDuration(position)
     val hasFatalError = !_uiState.value.error.isNullOrBlank()
@@ -974,6 +986,8 @@ internal fun PlayerRuntimeController.currentWatchProgress(
 )
 
 internal fun PlayerRuntimeController.saveWatchProgressInternal(position: Long, duration: Long, syncRemote: Boolean = true) {
+    // Another title of the disc, an extra, is not the item's progress.
+    if (isPlayingDiscExtra()) return
     if (contentType.equals("cloud", ignoreCase = true)) {
         saveCloudLibraryProgress(position, duration, completed = false)
         return
@@ -1124,6 +1138,10 @@ internal fun PlayerRuntimeController.emitScrobbleStart() {
         logScrobbleDiagnostic("start_skipped", "reason=short_placeholder")
         return
     }
+    if (isPlayingDiscExtra()) {
+        logScrobbleDiagnostic("start_skipped", "reason=disc_extra")
+        return
+    }
     if (hasRequestedScrobbleStartForCurrentItem) {
         logScrobbleDiagnostic("start_skipped", "reason=already_requested")
         return
@@ -1181,6 +1199,10 @@ internal fun PlayerRuntimeController.emitScrobbleStop(progressPercent: Float? = 
         logScrobbleDiagnostic("stop_skipped", "reason=short_placeholder")
         return
     }
+    if (isPlayingDiscExtra()) {
+        logScrobbleDiagnostic("stop_skipped", "reason=disc_extra")
+        return
+    }
     val item = currentScrobbleItem
     if (item == null) {
         logScrobbleDiagnostic("stop_skipped", "reason=no_scrobble_item")
@@ -1213,6 +1235,10 @@ internal fun PlayerRuntimeController.emitScrobblePause(progressPercent: Float? =
     logScrobbleDiagnostic("pause_evaluated", "providedProgress=${progressPercent ?: "none"}")
     if (isShortPlaceholderStream()) {
         logScrobbleDiagnostic("pause_skipped", "reason=short_placeholder")
+        return
+    }
+    if (isPlayingDiscExtra()) {
+        logScrobbleDiagnostic("pause_skipped", "reason=disc_extra")
         return
     }
     val item = currentScrobbleItem
@@ -1329,6 +1355,7 @@ fun PlayerRuntimeController.scheduleHideControls() {
         if (_uiState.value.isPlaying && !_uiState.value.showAudioOverlay &&
             !_uiState.value.showSubtitleOverlay && !_uiState.value.showSubtitleStylePanel &&
             !_uiState.value.showSpeedDialog && !_uiState.value.showMoreDialog &&
+            !_uiState.value.showDiscTitlesDialog &&
             !_uiState.value.showSubtitleDelayOverlay &&
             !_uiState.value.showSubtitleTimingDialog &&
             !_uiState.value.showEpisodesPanel && !_uiState.value.showSourcesPanel &&
@@ -1441,7 +1468,7 @@ internal fun PlayerRuntimeController.schedulePauseOverlay() {
         delay(pauseOverlayDelayMs)
         val s = _uiState.value
         val anyPanelOpen = s.showSubtitleOverlay || s.showSubtitleStylePanel ||
-            s.showSpeedDialog || s.showMoreDialog || s.showEpisodesPanel ||
+            s.showSpeedDialog || s.showMoreDialog || s.showDiscTitlesDialog || s.showEpisodesPanel ||
             s.showSourcesPanel || s.showChaptersPanel || s.showAudioOverlay || s.showStreamInfoOverlay ||
             s.showSubtitleTimingDialog || s.showSubtitleDelayOverlay || s.showPartyPanel
         if (!s.isPlaying && s.pauseOverlayEnabled && s.error == null && !anyPanelOpen) {
@@ -1983,6 +2010,7 @@ fun PlayerRuntimeController.onEvent(
             filterSourceStreamsByAddon(event.addonName)
         }
         is PlayerEvent.OnSourceStreamSelected -> {
+            beginStreamFallbackSession(event.stream, _uiState.value.sourceFilteredStreams.ifEmpty { _uiState.value.sourceAllStreams })
             switchToSourceStream(event.stream)
         }
         PlayerEvent.OnDismissTransientOverlay -> {
@@ -1993,13 +2021,26 @@ fun PlayerRuntimeController.onEvent(
                     showSubtitleStylePanel = false,
                     showSubtitleTimingDialog = false,
                     showSpeedDialog = false,
+                    showDiscTitlesDialog = false,
                     showSubtitleDelayOverlay = false,
                     showMoreDialog = false
                 )
             }
             scheduleHideControls()
         }
+        PlayerEvent.OnShowDiscTitles -> {
+            _uiState.update {
+                it.copy(
+                    showDiscTitlesDialog = true,
+                    showMoreDialog = false,
+                    showControls = true
+                )
+            }
+            loadDiscTitleLanguages()
+        }
+        is PlayerEvent.OnSelectDiscTitle -> selectDiscTitle(event.name)
         PlayerEvent.OnRetry -> {
+            cancelStreamFallback()
             hasRenderedFirstFrame = false
             endDetectionArmed = false
             mpvEofSeenClear = false
@@ -2137,6 +2178,9 @@ fun PlayerRuntimeController.onEvent(
         }
         is PlayerEvent.OnSetSubtitleShadowSize -> {
             scope.launch { playerSettingsDataStore.setSubtitleShadowSize(event.size) }
+        }
+        is PlayerEvent.OnSetSubtitleCustomizeAss -> {
+            scope.launch { playerSettingsDataStore.setSubtitleCustomizeAss(event.enabled) }
         }
         PlayerEvent.OnResetSubtitleDefaults -> {
             val editingHdr = _uiState.value.isEditingHdrSubtitleStyle

@@ -14,6 +14,7 @@ internal fun PlayerRuntimeController.releasePlayer(
     flushPlaybackState: Boolean,
     keepTorrentStream: Boolean = false
 ) {
+    if (flushPlaybackState) cancelStreamFallback()
     logScrobbleDiagnostic("release_player", "flushPlaybackState=$flushPlaybackState")
 
     // Stop the sports stall watchdog so it cannot fire against a torn-down or switching player; the
