@@ -35,6 +35,7 @@ internal fun sportsLiveUpcomingShown(
         val event = stateOf(item)
         if (event?.state == ScoreState.POST) return true
         if (event?.state == ScoreState.IN && event.eventId in liveNowEvents) return true
+        if (event?.state == ScoreState.PRE) return false
         val start = item.startMs
         return item.startHasTimeOfDay && start != null && start <= nowMs
     }

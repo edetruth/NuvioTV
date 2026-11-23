@@ -50,6 +50,14 @@ class SportsLiveUpcomingShownTest {
     }
 
     @Test
+    fun `a timed game past its own start that ESPN still has before the game stays, a late start`() {
+        val late = item("p", "Indiana Pacers at Philadelphia 76ers", startMs = NOW - MINUTE)
+        val scores = mapOf(late.streamKey to espn(ScoreState.PRE, startMs = NOW + HOUR))
+        val result = sportsLiveUpcomingShown(emptyList(), listOf(late, next), scores, NOW, null, emptySet())
+        assertEquals(listOf("p", "n"), result.items.map { it.id })
+    }
+
+    @Test
     fun `a final leaves even with focus, an in-play game with focus is held where it was`() {
         assertEquals(listOf("n"), shown(mapOf(game.streamKey to espn(ScoreState.POST)), focusedId = "p").items.map { it.id })
         val held = shown(mapOf(game.streamKey to espn(ScoreState.IN)), liveNowEvents = setOf(pacers.eventId), focusedId = "p")
