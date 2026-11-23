@@ -1172,6 +1172,14 @@ private fun SportsLiveContent(
     // More live's view takes focus once drawn (its first row, or [moreLiveFocusGroup]'s first game).
     var moreLiveFocusPending by remember { mutableStateOf(false) }
     var moreLiveFocusGroup by remember { mutableStateOf<String?>(null) }
+    // The view that focus waits for (gemini review #5): on a slow box the old list's board stays a while.
+    var moreLiveFocusOpen by remember { mutableStateOf(false) }
+    var moreLiveFocusAll by remember { mutableStateOf(false) }
+    fun focusMoreLiveView(open: Boolean, all: Boolean = false) {
+        moreLiveFocusOpen = open
+        moreLiveFocusAll = all
+        moreLiveFocusPending = true
+    }
     // live.26 (#223, A5): My sports ▾ keeps My sports and adds All sports, then each other sport with its game count
     // (the More live row's own groups); OK opens More live's view on that sport.
     val allSportsEntries = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) sportsLiveAllSportsEntries(uiState.allSports) else emptyList()
@@ -1179,7 +1187,7 @@ private fun SportsLiveContent(
         val label = entry.group?.let { stringResource(R.string.sports_live_all_sports_entry, moreLiveGroupLabel(it), entry.count ?: 0) } ?: allSportsLabel
         label to {
             moreLiveFocusGroup = entry.group
-            moreLiveFocusPending = true
+            focusMoreLiveView(open = true, all = true)
             onOpenAllSports()
         }
     }
@@ -1545,11 +1553,13 @@ private fun SportsLiveContent(
     }
     // More live: Back from its view goes back to Live now's list (composed later, so it wins over the list's own Back).
     BackHandler(enabled = uiState.moreLiveOpen && uiState.selectedTab == SportsLiveTab.LIVE_NOW && listHasFocus) {
-        moreLiveFocusPending = true
+        focusMoreLiveView(open = false)
         onCloseMoreLive()
     }
     LaunchedEffect(moreLiveFocusPending, shownBoard) {
         if (!moreLiveFocusPending || shownBoard == null) return@LaunchedEffect
+        // The view asked for, not the list still shown while its board is built (runs again as it comes).
+        if (moreLiveShown != moreLiveFocusOpen || shownBoard.moreLiveAll != moreLiveFocusAll) return@LaunchedEffect
         repeat(2) { withFrameNanos { } }
         // live.26 (#223): a sport picked in My sports ▾ lands on its first game in More live's view, once that view shows
         // (this runs again as its board comes).
@@ -1744,12 +1754,12 @@ private fun SportsLiveContent(
     }
     listActions.onDeclineSport = onDeclineSport
     listActions.onOpenMoreLive = {
-        moreLiveFocusPending = true
+        focusMoreLiveView(open = true)
         onOpenMoreLive()
     }
     // "N new" (live.25 M): OK adds the games that waited; focus goes to the list's first row, as the line leaves.
     listActions.onShowNewRows = {
-        moreLiveFocusPending = true
+        focusMoreLiveView(open = false)
         onShowNewRows()
     }
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
@@ -1949,7 +1959,7 @@ private fun SportsLiveContent(
                 onShowAll = {
                     // Live now has no All sports (user 2026-11-21): its More live view instead.
                     if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.moreLive.isNotEmpty()) {
-                        moreLiveFocusPending = true
+                        focusMoreLiveView(open = true)
                         onOpenMoreLive()
                     } else {
                         onSelectFilter(if (uiState.selectedFilter == null && uiState.mySportsScoped) SportsLiveUiState.ALL_SPORTS_FILTER else null)
