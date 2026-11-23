@@ -19,7 +19,6 @@ import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
-import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -134,7 +133,7 @@ internal fun SportsLiveHomeCardMenu(
             {
                 onDismiss()
                 SportsLiveGameRequests.open(
-                    SportsLiveGameRequest(event, revealed = mode == ScoresMode.SHOW, homeFirst = homeFirst, card = item)
+                    SportsLiveGameRequest(event, revealed = SportsLiveHomeRow.showsScores(mode), homeFirst = homeFirst, card = item)
                 )
                 nav.onOpenSportsLiveGame()
             }
