@@ -649,7 +649,7 @@ fun SportsLiveDualScreen(
         SportsLiveDualPickerDialog(
             candidates = candidates,
             // Each row as Live now draws it, under the one spoiler gate (live.26, #222).
-            boards = rememberDualPickerBoards(candidates, scores, scoresMode, revealed, nowMs),
+            boards = rememberDualPickerBoards(candidates, scores, scoresMode, revealed, nowMs, channelPicks),
             onPick = viewModel::pickPair,
             onDismiss = viewModel::closePairPicker,
             onFocus = scoresViewModel::onCardFocus,

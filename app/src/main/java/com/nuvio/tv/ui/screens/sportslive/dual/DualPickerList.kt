@@ -73,15 +73,23 @@ internal fun dualPickerList(
         }
         DualPickerRow(item, section, item.sourceKeys().size)
     }.sortedBy { it.section.ordinal }
-    // Only a channel the viewer chose or played: with no picks, no channels at all (gap 8: never 8,000 channels).
-    val picked = if (channels.isEmpty()) {
-        emptyList()
-    } else {
-        SportsLiveChannelFavorites.sections(channels, channelPicks).let { it.favorites + it.recent }
-    }
+    val picked = pickedChannels(channels, channelPicks)
     val rows = gameRows + picked.map { DualPickerRow(it, DualPickerSection.CHANNELS, it.sourceKeys().size) }
     val headed = rows.size >= DUAL_PICKER_HEADERS_FROM && rows.mapTo(HashSet()) { it.section }.size > 1
     return DualPickerList(rows, headed)
+}
+
+/** Only a channel the viewer chose or played: with no picks, no channels at all (gap 8: never 8,000 channels). */
+private fun pickedChannels(channels: List<SportsLiveItem>, channelPicks: SportsLiveChannelPicks): List<SportsLiveItem> =
+    if (channels.isEmpty()) emptyList() else SportsLiveChannelFavorites.sections(channels, channelPicks).let { it.favorites + it.recent }
+
+/**
+ * The [candidates] the picker lists ([dualPickerList]): every game and the picked channels. Its rows are drawn for these
+ * only (gemini final review #4: on Channels the candidates hold every channel, thousands on the weak box).
+ */
+internal fun dualPickerShownItems(candidates: List<SportsLiveItem>, channelPicks: SportsLiveChannelPicks): List<SportsLiveItem> {
+    val (channels, games) = candidates.partition { it.isChannel }
+    return games + pickedChannels(channels, channelPicks)
 }
 
 /**

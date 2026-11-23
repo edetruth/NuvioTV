@@ -89,6 +89,20 @@ class DualPickerListTest {
     }
 
     @Test
+    fun `the rows are drawn only for what the picker lists, never for every channel`() {
+        val game = item("g1")
+        val favourite = item("ch1", channel = true)
+        val others = (2..50).map { item("ch$it", channel = true) }
+        val candidates = listOf(game, favourite) + others
+        val picks = SportsLiveChannelPicks(favorites = listOf(ref(favourite)))
+        // Gemini final review #4: the boards are built for the games and the picked channels only.
+        val shown = dualPickerShownItems(candidates, picks)
+        assertEquals(listOf("g1", "ch1"), shown.map { it.id })
+        assertEquals(list(candidates, picks = picks).rows.map { it.item.id }.toSet(), shown.map { it.id }.toSet())
+        assertEquals(listOf("g1"), dualPickerShownItems(candidates, SportsLiveChannelPicks.NONE).map { it.id })
+    }
+
+    @Test
     fun `with no favourite or recent channel no channel is listed at all`() {
         val picked = list(listOf(item("g1"), item("ch1", channel = true), item("ch2", channel = true)))
         assertEquals(listOf("g1"), picked.rows.map { it.item.id })

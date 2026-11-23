@@ -192,16 +192,19 @@ internal fun rememberDualPickerBoards(
     scores: Map<String, ScoreSnapshot>,
     mode: ScoresMode?,
     revealed: Set<String>,
-    nowMs: Long
+    nowMs: Long,
+    /** As the dialog's: only what it lists is drawn ([dualPickerShownItems]), never every channel. */
+    channelPicks: SportsLiveChannelPicks = SportsLiveChannelPicks.NONE
 ): Map<String, ScoreboardRow> {
     val clockMs = dualPickerClockMs(nowMs)
-    val built = remember(candidates) {
-        mutableStateOf(DualPickerBoardsKey(scores, mode, revealed, clockMs) to dualPickerBoards(candidates, scores, mode, revealed, clockMs))
+    val shown = remember(candidates, channelPicks) { dualPickerShownItems(candidates, channelPicks) }
+    val built = remember(shown) {
+        mutableStateOf(DualPickerBoardsKey(scores, mode, revealed, clockMs) to dualPickerBoards(shown, scores, mode, revealed, clockMs))
     }
     val key = DualPickerBoardsKey(scores, mode, revealed, clockMs)
-    LaunchedEffect(candidates, key) {
+    LaunchedEffect(shown, key) {
         if (built.value.first == key) return@LaunchedEffect
-        val boards = withContext(SportsLiveCompute.dispatcher) { dualPickerBoards(candidates, scores, mode, revealed, clockMs) }
+        val boards = withContext(SportsLiveCompute.dispatcher) { dualPickerBoards(shown, scores, mode, revealed, clockMs) }
         built.value = key to boards
     }
     return built.value.second
