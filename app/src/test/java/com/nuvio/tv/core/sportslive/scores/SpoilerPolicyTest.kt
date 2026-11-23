@@ -36,7 +36,7 @@ class SpoilerPolicyTest {
             }
             SpoilerSurface.TEAM -> {
                 val score = !protected && ((show && !safe) || revealed)
-                Expected(!off || revealed, score, record = !off || revealed, stats = score, onFocus = hide && !safe && !protected && !revealed)
+                Expected(!off || revealed, score, record = if (safe) score else (!off || revealed), stats = score, onFocus = hide && !safe && !protected && !revealed)
             }
             SpoilerSurface.RESULTS -> {
                 val score = !protected && !off && ((show && !safe) || revealed)

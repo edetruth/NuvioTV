@@ -192,6 +192,7 @@ class SpoilerCallSitesTest {
 
     @Test
     fun `Team page - record shows unless Never show, results under Show or revealed, a row on focus under Hide, never protected`() {
+        // A normal entry (not spoiler-safe): nothing changes.
         for (mode in modes) for (revealed in bools) for (focused in bools) for (protected in bools) {
             val label = "$mode revealed=$revealed focused=$focused protected=$protected"
             // Differs from the Game page: under Hide the record, standing and leaders show (decision 5).
@@ -205,6 +206,46 @@ class SpoilerCallSitesTest {
             val state = SportsLiveTeamUiState(mode = mode, revealed = revealed)
             assertEquals(label, record, state.showsRecord)
             assertEquals(label, results, state.showsResults)
+        }
+    }
+
+    @Test
+    fun `Team page opened from a spoiler-safe Game page hides results and record until revealed`() {
+        for (mode in modes) for (revealed in bools) for (focused in bools) for (protected in bools) {
+            val label = "$mode revealed=$revealed focused=$focused protected=$protected"
+            val mayLoad = mode != ScoresMode.OFF || revealed
+            // Whatever the setting, the last results and the record come back only with Reveal (never under Never show without it).
+            assertEquals(label, mayLoad, TeamPageSpoilers.mayLoad(mode, revealed, spoilerSafe = true))
+            assertEquals(label, revealed, TeamPageSpoilers.showsRecord(mode, revealed, spoilerSafe = true))
+            assertEquals(label, revealed, TeamPageSpoilers.showsResults(mode, revealed, spoilerSafe = true))
+            // No focus reveal on a spoiler-safe page.
+            assertEquals(label, revealed && !protected, TeamPageSpoilers.showsResult(mode, revealed, focused, protected, spoilerSafe = true))
+            val state = SportsLiveTeamUiState(mode = mode, revealed = revealed, spoilerSafe = true)
+            assertEquals(label, revealed, state.showsRecord)
+            assertEquals(label, revealed, state.showsResults)
+        }
+    }
+
+    @Test
+    fun `Team page - the Game page's spoiler-safe flag reaches the page and the Player card it opens`() = runTest(mainDispatcherRule.dispatcher) {
+        val sixers = TeamPages.refOf(pacers, ScoreSide.HOME)!!
+        for (safe in bools) {
+            val vm = SportsLiveTeamViewModel(
+                request = SportsLiveTeamRequest(sixers, spoilerSafe = safe),
+                loadTeam = { _: EspnLeague, _: String -> TeamPageLoad.Failed },
+                settings = MutableStateFlow(ScoreSettings(mode = ScoresMode.SHOW)),
+                followedTeams = MutableStateFlow<List<FollowedTeam>>(emptyList()),
+                follow = {},
+                unfollow = {},
+                items = MutableStateFlow<List<SportsLiveItem>>(emptyList()),
+                now = { now }
+            )
+            backgroundScope.launch { vm.uiState.collect {} }
+            runCurrent()
+            assertEquals("safe=$safe", safe, vm.uiState.value.spoilerSafe)
+            assertEquals("safe=$safe", !safe, vm.uiState.value.showsResults)
+            val target = PlayerCardTarget(sixers.league, "1", "Player", null)
+            assertEquals("safe=$safe", safe, teamPlayerCardRequest(target, vm.uiState.value).spoilerSafe)
         }
     }
 

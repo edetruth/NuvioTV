@@ -96,7 +96,12 @@ class SpoilerAuditTest {
             assertFalse("Player card $label", player.showsGame(focused = false))
             if (mode != ScoresMode.HIDE_UNTIL_FOCUSED || safe || protected) assertFalse("Player card focused $label", player.showsGame(focused = true))
 
-            // Team page (no spoiler-safe entry: its hidden rows are the protected ones and the mode's).
+            // Team page: opened from a spoiler-safe or protected Game page it is spoiler-safe too (no result, no record).
+            if (!revealed && (safe || protected)) {
+                assertFalse("Team safe $label", TeamPageSpoilers.showsResult(mode, revealed, focused = true, spoilerProtected = protected, spoilerSafe = true))
+                assertFalse("Team safe record $label", TeamPageSpoilers.showsRecord(mode, revealed, spoilerSafe = true))
+            }
+            // Its hidden rows are otherwise the protected ones and the mode's.
             if (protected || (!revealed && mode != ScoresMode.SHOW)) {
                 assertFalse("Team $label", TeamPageSpoilers.showsResult(mode, revealed, focused = false, spoilerProtected = protected))
                 if (protected || mode == ScoresMode.OFF) {
