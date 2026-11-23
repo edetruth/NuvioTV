@@ -1771,7 +1771,7 @@ private fun SportsLiveContent(
         // The stage's header with the mini player docked (#157): Selected, or merged on its own game, where Watch expands it.
         val stageHeader = sportsLiveStageHeader(nowPlaying?.listKey, selected?.listKey)
         val stageWatch: () -> Unit = {
-            if (stageHeader == SportsLiveStageHeader.MERGED) miniPlayer.requestExpand() else selected?.let(open)
+            if (stageHeader == SportsLiveStageHeader.MERGED) miniPlayer.requestExpand() else selected?.let(openCard)
         }
         val miniDock = rememberSportsLiveMiniDock()
         val miniDocked = nowPlaying != null && miniDock is SportsLiveMiniDock.Docked
