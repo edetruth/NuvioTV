@@ -152,6 +152,16 @@ class SportsLiveReportTest {
     }
 
     @Test
+    fun `the channels section says what Channels loaded and listed, only once it was opened`() {
+        val line = "loaded 1694, 50 from 2 sources · 1700 channels · 2 listed in US, UK, no country · left out: AF 120"
+        val text = SportsLiveReport.text(input().copy(channels = line), secrets)
+        assertTrue(text, text.contains("[Channels, loaded per source and listed]
+$line"))
+        assertFalse(text.substringBefore(SportsLiveReport.DETAILS).contains("loaded 1694"))
+        assertFalse(SportsLiveReport.text(input(), secrets).contains("[Channels"))
+    }
+
+    @Test
     fun `no secret survives anywhere in a report`() {
         val text = SportsLiveReport.text(input(), secrets)
         assertNoSecret(text)

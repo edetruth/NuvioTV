@@ -43,7 +43,9 @@ data class SportsLiveReportInput(
     /** The in-player panel's or guide's scope when it showed; null when it was closed (#218). */
     val panelScope: String? = null,
     /** Its rows, "‹tag› | ‹score shown / hidden / no score›" (#218: "no scores" and "wrong sports" reports explain themselves). */
-    val panelRows: List<String> = emptyList()
+    val panelRows: List<String> = emptyList(),
+    /** Channels' last board: loaded per source, merged and listed, no names (#26); null when Channels was not opened. */
+    val channels: String? = null
 ) {
     /** The game playing (or watched last). */
     data class Game(
@@ -147,6 +149,7 @@ object SportsLiveReport {
             section("Score feed data errors, newest first", input.feedDataErrors.map(::clean))
             // A row with no score names its game (live.25): its title, never anything shaped like a score.
             if (input.panelScope != null) section("Panel rows, tag | score", input.panelRows.map(::title))
+            input.channels?.let { section("Channels, loaded per source and listed", listOf(clean(it))) }
             appendLine("Links, hosts, IP addresses, tokens, addon names and ids, e-mail and account ids are removed. No scores.")
         }
     }

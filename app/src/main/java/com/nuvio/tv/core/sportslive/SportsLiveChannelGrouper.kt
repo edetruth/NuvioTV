@@ -21,7 +21,9 @@ object SportsLiveChannelGrouper {
                 ?.substringBefore('-')?.trim()?.takeIf { countryCode.matches(it) }
         },
         // Name prefix like "US : ESPN HD", "UK| SKY SPORTS 1" or "ASIA-IN| JIO"; "(HD) : ..." does not match.
-        { meta -> namePrefix(meta.name) }
+        { meta -> namePrefix(meta.name) },
+        // A genre group led by a country code ("📺 UK| ✪ BBC GENERAL", #26): its country; "📺 Sports" is none.
+        { meta -> genreCountry(meta.genres.firstOrNull()) }
     )
 
     /**
@@ -43,6 +45,13 @@ object SportsLiveChannelGrouper {
         SportsLiveKeywords.findKeyword(name, liveOrLiveTv) == "live" ||
             SportsLiveKeywords.containsKeyword(name, SportsLiveKeywords.EVENTS) ||
             SportsLiveKeywords.containsKeyword(name, SportsLiveKeywords.UPCOMING)
+
+    private fun genreCountry(genre: String?): String? {
+        if (genre == null) return null
+        val bar = genre.indexOf('|').takeIf { it > 0 } ?: return null
+        val code = genre.substring(0, bar).trim().trimStart { !it.isLetter() }
+        return code.uppercase(Locale.ROOT).takeIf { countryCode.matches(it) && SportsLiveChannelRegions.isCode(it) }
+    }
 
     private fun namePrefix(name: String): String? {
         val separator = prefixSeparator.find(name) ?: return null

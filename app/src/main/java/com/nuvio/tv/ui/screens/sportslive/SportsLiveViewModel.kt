@@ -35,6 +35,7 @@ import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
@@ -982,6 +983,8 @@ class SportsLiveViewModel internal constructor(
     /** Each board as it is published: the tab-open timing line, and Upcoming built ahead from Live now. */
     private fun onBoardShown(shown: SportsLiveBoard) {
         shownTab = shown.tab
+        // #26: Report a problem says how many channels each source loaded and how many the countries list.
+        shown.channels?.let { SportsLiveReportTrail.onChannels(it.report) }
         val opening = tabOpening
         if (opening != null && opening.first == shown.tab) {
             tabOpening = null

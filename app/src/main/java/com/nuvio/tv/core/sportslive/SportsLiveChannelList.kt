@@ -189,7 +189,8 @@ object SportsLiveChannelList {
 /**
  * What Channels shows besides its rows (phase 2): the [view] ([viewKey]); [fallback] when the tab had no favorite,
  * recent or popular channel and lists every channel A to Z instead; the counts its entry rows and browse title say;
- * the countries listed ([selected], null: every country) and the panel's lists ([yours] with counts, [countryCounts]).
+ * the countries listed ([selected], null: every country), the panel's lists ([yours] with counts, [countryCounts]) and
+ * what Report a problem says of them ([report]).
  */
 data class SportsLiveChannelSummary(
     val view: String = MAIN_VIEW,
@@ -200,7 +201,9 @@ data class SportsLiveChannelSummary(
     val all: Int = 0,
     val selected: Set<String>? = null,
     val yours: List<Pair<SportsLiveYourCountry, Int>> = emptyList(),
-    val countryCounts: List<Pair<String, Int>> = emptyList()
+    val countryCounts: List<Pair<String, Int>> = emptyList(),
+    /** Report a problem's Channels line ([SportsLiveChannelCountries.reportLine], #26). */
+    val report: String = ""
 ) {
     companion object {
         const val MAIN_VIEW = "main"
