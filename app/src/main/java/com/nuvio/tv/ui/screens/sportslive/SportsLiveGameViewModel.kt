@@ -26,6 +26,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -135,8 +136,21 @@ data class SportsLiveGameUiState(
      */
     val settled: Boolean = true,
     /** Try again was pressed and the load is running (#97): the failure card's button reads "Trying...". */
-    val retrying: Boolean = false
+    val retrying: Boolean = false,
+    /** A replay team folder opened from here is masked ([sportsLiveReplayFolderHides], F5); true until protection is read. */
+    val replayFoldersHidden: Boolean = true
 ) {
+    /**
+     * Whether [item]'s Detail page (Watch replay on a team folder, More… > Details) opens masked (#240, #243): a replay
+     * while this page hides the result, and a team folder also while any other game in it could be hidden (F5); a
+     * game's card as the addon gives it.
+     */
+    fun hidesDetailOf(item: SportsLiveItem): Boolean = when {
+        item != replay && item.kind != SportsLiveKind.REPLAY -> false
+        item.apiType == "series" -> !showsScore || replayFoldersHidden
+        else -> !showsScore
+    }
+
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
     val showsScore: Boolean
         get() = SpoilerPolicy.visibility(
@@ -277,7 +291,8 @@ class SportsLiveGameViewModel internal constructor(
             openedOnSection = request?.section != null,
             spoilerProtected = event != null && protection.protects(event),
             settled = page.mode != null,
-            retrying = page.retrying
+            retrying = page.retrying,
+            replayFoldersHidden = sportsLiveReplayFolderHides(page.mode, protection)
         )
     }.stateIn(
         viewModelScope,

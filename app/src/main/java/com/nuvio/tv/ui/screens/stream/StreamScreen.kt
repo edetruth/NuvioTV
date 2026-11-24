@@ -147,8 +147,8 @@ fun StreamScreen(
     // Sports & Live (N2): a source's notices go last and show as info rows, never as streams to play.
     // #156: links that failed for the game go last, under "Didn't work"; protected ones hidden when set (#166).
     val linkMarks = rememberSportsLiveLinkMarks(uiState.videoId)
-    val shownStreams = remember(uiState.videoId, uiState.filteredStreams, linkMarks) {
-        val ordered = sportsLiveStreamScreenOrder(uiState.videoId, uiState.filteredStreams)
+    val shownStreams = remember(uiState.videoId, uiState.contentId, uiState.filteredStreams, linkMarks) {
+        val ordered = sportsLiveStreamScreenOrder(uiState.videoId, uiState.filteredStreams, uiState.contentId)
         linkMarks?.group(ordered, SportsLiveZapResolver::isNoticeEntry)?.items ?: ordered
     }
     val isSportsNotice: (Stream) -> Boolean = remember(uiState.videoId) { { sportsLiveSourceNotice(uiState.videoId, it) } }

@@ -4,8 +4,9 @@ package com.nuvio.tv.core.sportslive.scores
  * Score delay (#41): IPTV streams run behind the broadcast, so a live score could show a goal before
  * it happens on screen. Every change to a game's score, clock or state is kept with the time it
  * arrived, and the version from the delay ago is shown. Everything else (names, logos, start time,
- * league) is always the newest. The game situation (down and distance, count, runners, last play)
- * is held back with the score.
+ * league) is always the newest. The game situation (down and distance, count, runners, last play),
+ * the teams' season records and soccer form (updated as a game ends, so they tell its result) and an
+ * individual sport's result (a tennis match's games and sets) are held back with the score (#281).
  *
  * A game first seen (app start, first visit, a re-track, the delay turned on) shows its score at once,
  * live or just ended: nothing on screen is ahead of it yet, and a blank card for a minute on every
@@ -35,11 +36,18 @@ internal class ScoreDelay {
         val homeLines: List<Int>,
         val awayLines: List<Int>,
         val scorers: List<ScoreScorer>,
-        val situation: GameSituation?
+        val situation: GameSituation?,
+        val homeRecord: String?,
+        val awayRecord: String?,
+        val homeForm: String?,
+        val awayForm: String?,
+        val individual: IndividualResult?
     )
 
-    private fun live(s: ScoreSnapshot) =
-        Live(s.state, s.clockText, s.isFinal, s.home.score, s.away.score, s.home.linescores, s.away.linescores, s.scorers, s.situation)
+    private fun live(s: ScoreSnapshot) = Live(
+        s.state, s.clockText, s.isFinal, s.home.score, s.away.score, s.home.linescores, s.away.linescores, s.scorers, s.situation,
+        s.home.record, s.away.record, s.home.form, s.away.form, s.individual
+    )
 
     private class History(val versions: ArrayDeque<Version> = ArrayDeque(), var lastSeen: Long = 0L)
 
@@ -101,13 +109,7 @@ internal class ScoreDelay {
         return raw.mapValues { (_, snapshot) -> shownByEvent.getValue(snapshot.eventId) }
     }
 
-    private fun withheld(s: ScoreSnapshot): ScoreSnapshot = s.copy(
-        clockText = null,
-        home = s.home.copy(score = null, linescores = emptyList()),
-        away = s.away.copy(score = null, linescores = emptyList()),
-        scorers = emptyList(),
-        situation = null
-    )
+    private fun withheld(s: ScoreSnapshot): ScoreSnapshot = s.withResultWithheld()
 
     companion object {
         private const val FORGET_AFTER_MS = 10 * 60_000L
@@ -141,10 +143,40 @@ internal class ScoreDelay {
                 state = shown.state,
                 clockText = shown.clockText,
                 isFinal = shown.isFinal,
-                home = newest.home.copy(score = shown.home.score, linescores = shown.home.linescores),
-                away = newest.away.copy(score = shown.away.score, linescores = shown.away.linescores),
+                home = newest.home.copy(
+                    score = shown.home.score, linescores = shown.home.linescores, record = shown.home.record, form = shown.home.form
+                ),
+                away = newest.away.copy(
+                    score = shown.away.score, linescores = shown.away.linescores, record = shown.away.record, form = shown.away.form
+                ),
                 scorers = shown.scorers,
-                situation = shown.situation
+                situation = shown.situation,
+                individual = shown.individual
             )
         }
 }
+
+/**
+ * This game with nothing of its result (F4): no score, clock, lines, scorers or situation; no season records or form
+ * (updated as it ends); a tennis match keeps its players, not its sets, winner, server or how it ended. Its state stays.
+ * The one mask of a game held back: the score delay's first-seen hold ([ScoreDelay]) and the game being watched
+ * ([ScoreWatch.masked]).
+ */
+internal fun ScoreSnapshot.withResultWithheld(): ScoreSnapshot = copy(
+    clockText = null,
+    home = home.copy(score = null, linescores = emptyList(), record = null, form = null),
+    away = away.copy(score = null, linescores = emptyList(), record = null, form = null),
+    scorers = emptyList(),
+    situation = null,
+    // Every individual sport (S8): today only a tennis match (#160) is matched to a card, the others may follow.
+    individual = when (val result = individual) {
+        is TennisMatch -> result.copy(
+            players = result.players.map { it.copy(winner = false, sets = emptyList(), setsWon = 0, serving = false) },
+            ending = TennisEnding.COMPLETED
+        )
+        is Fight -> result.copy(fighters = result.fighters.map { it.copy(winner = false) }, method = null, round = null, clock = null)
+        is RaceResult -> result.copy(podium = emptyList())
+        is GolfResult -> result.copy(leaders = emptyList())
+        null -> null
+    }
+)

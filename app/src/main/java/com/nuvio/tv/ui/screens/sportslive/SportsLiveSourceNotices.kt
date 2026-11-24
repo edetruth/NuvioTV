@@ -43,19 +43,25 @@ internal fun <T> sportsLiveNoticesLast(streams: List<T>, isNotice: (T) -> Boolea
 }
 
 /**
- * The full-screen Stream screen's list for [videoId] (N2): a Sports & Live game's notices last; any
- * other title's list as is.
+ * The full-screen Stream screen's list for [videoId] (N2): a Sports & Live game's notices last; a spoiler-safe replay's
+ * links score-masked, an episode of a hidden replay folder opened from its Detail page too (#240); any other title's
+ * list as is.
  */
-internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>): List<Stream> =
-    if (!SportsLiveExtraSources.isSportsPlayback(videoId)) streams
-    else sportsLiveNoticesLast(SportsLiveExtraSources.spoilerSafeStreams(videoId, streams), SportsLiveZapResolver::isNoticeEntry)
+internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>, contentId: String? = null): List<Stream> {
+    // By the video or its content (H-F1: an episode of a hidden folder not registered yet).
+    val id = listOf(videoId, contentId).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: videoId
+    val shown = SportsLiveExtraSources.spoilerSafeStreams(id, streams)
+    val sports = SportsLiveExtraSources.isSportsPlayback(videoId) || SportsLiveExtraSources.isSportsPlayback(contentId)
+    return if (!sports) shown else sportsLiveNoticesLast(shown, SportsLiveZapResolver::isNoticeEntry)
+}
 
 /**
  * [info], a link the Stream screen hands the player (picked there, auto-picked or the last link reused), as the player
  * names it: for a spoiler-safe replay (#223) its link name and description with any score masked; any other as is.
  */
 internal fun sportsLiveSpoilerSafePlayback(info: StreamPlaybackInfo): StreamPlaybackInfo =
-    if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId)) info
+    // By its video, or its content (S4: an episode of a hidden folder not registered yet).
+    if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId) && !SportsLiveExtraSources.isSpoilerSafe(info.contentId)) info
     else info.copy(
         streamName = spoilerSafeLinkText(info.streamName) ?: info.streamName,
         streamDescription = spoilerSafeLinkText(info.streamDescription)

@@ -9,11 +9,11 @@ import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
-import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
-import com.nuvio.tv.core.sportslive.scores.SpoilerContext
-import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
-import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
@@ -193,39 +193,106 @@ internal fun sportsLiveCardToPlay(item: SportsLiveItem, hidden: Boolean, title: 
     if (hidden) spoilerSafeReplay(item, spoilerSafeLinkText(title()).orEmpty()) else item
 
 /**
- * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0"; not part of a date ("2026-11-22", "22-11-2026") or a
- * picture's aspect ratio ("16:9").
+ * How a game that went past normal time is tagged in brackets: "AET", "a.e.t.", "pens", "on penalties", "p", "OT", "2OT",
+ * "SO".
  */
-private val SCORE_IN_LINK_TEXT =
-    Regex("""(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-–—:/.]\d)""")
+private const val EXTRA_TIME_TAG =
+    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|p|\d*\s?o\.?t\.?|s\.?o\.?)"""
+
+/** The same tags standing alone after a score ("1-1 aet", "3-2 OT", "2OT"): no single letter, OT and SO in capitals only. */
+private const val BARE_EXTRA_TIME_TAG =
+    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|(?-i:\d*OT|SO))"""
+
+/**
+ * Inside the brackets after a score: a shoot-out's score and tag either way round ("4-2 pens", "pens 4-2"), or tags
+ * before it ("AET, 4-2 pens", "aet, pens 4-2").
+ */
+private const val SCORE_ENDING_IN_BRACKETS =
+    """(?:\d{1,2}\s*[-–—:]\s*\d{1,2}\s*,?\s*$EXTRA_TIME_TAG?|$EXTRA_TIME_TAG(?:\s*,?\s*$EXTRA_TIME_TAG)*(?:\s*,?\s*\d{1,2}\s*[-–—:]\s*\d{1,2}(?:\s*$EXTRA_TIME_TAG)?)?)"""
+
+/**
+ * What follows a score and tells how it ended (#244, F6): a shoot-out's score and tag ("(4-2 pens)", "[AET]"), or a tag
+ * alone ("aet", "OT"). Masked with the score: "pens" or "AET" beside a hidden score still says it was a draw. A tag
+ * closing a bracket is left to [LOOSE_EXTRA_TIME_TAG] with its bracket (S2: "(4-2 pens)" after the team names must not
+ * leave "(–)").
+ */
+private const val SCORE_ENDING =
+    """(?:\s*[(\[]\s*$SCORE_ENDING_IN_BRACKETS\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w|\.?\s*[)\]]))*"""
+
+/** A shoot-out's goals in brackets beside a side's score: the "(4)" of "1 (4) - (2) 1" or "1 (4) - 1 (2)". */
+private const val PENALTY_GOALS = """[(\[]\s*\d{1,2}\s*[)\]]"""
+
+/**
+ * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0", "1 (4) - (2) 1", "1 (4) - 1 (2)", with how it ended
+ * ([SCORE_ENDING]); not part of a date ("2026-11-22", "22-11-2026") or a picture's aspect ratio ("16:9").
+ */
+private val SCORE_IN_LINK_TEXT = Regex(
+    """(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}(?:\s*$PENALTY_GOALS)?\s*[-–—:]\s*(?:$PENALTY_GOALS\s*)?\d{1,3}\b(?:\s*$PENALTY_GOALS)?(?![-–—:/.]\d)$SCORE_ENDING""",
+    RegexOption.IGNORE_CASE
+)
+
+/**
+ * An extra-time tag away from the score, once a score was masked (F6, F6-1): "Arsenal 1-1 Chelsea (AET)", "(pens 4-2)" after
+ * the team names (its score already masked to "–"), "Leafs 3-2 Bruins SO 1080p", "… on penalties". In brackets any tags
+ * with masked scores ("(AET, –)"), but at least one tag, so a masked series score "(–)" stays; bare, the same tags as
+ * beside a score (no single letter; OT and SO in capitals only), so words stay.
+ */
+private val LOOSE_EXTRA_TIME_TAG = Regex(
+    """\s*[(\[](?=[^)\]]*[a-z])\s*(?:–|$EXTRA_TIME_TAG)(?:\s*,?\s*(?:–|$EXTRA_TIME_TAG))*\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w)""",
+    RegexOption.IGNORE_CASE
+)
 
 /** A score split by "vs" between the team names: "Team A 2 vs 1 Team B", "2 v 1" (a "vs" alone stays). */
 private val SPLIT_SCORE_IN_LINK_TEXT =
-    Regex("""(?<![\d.])\b\d{1,3}\s+vs?\.?\s+\d{1,3}\b(?![-–—:/.]\d)""", RegexOption.IGNORE_CASE)
+    Regex("""(?<![\d.])\b\d{1,3}\s+vs?\.?\s+\d{1,3}\b(?![-–—:/.]\d)$SCORE_ENDING""", RegexOption.IGNORE_CASE)
 
 /**
  * [text] with any score in it masked ("Arsenal 2-1 Chelsea highlights" → "Arsenal – Chelsea highlights"): live.26 shorter
  * paths (#223, review gap 1), a replay's link names often carry its result.
  */
-internal fun spoilerSafeLinkText(text: String?): String? =
-    text?.replace(SPLIT_SCORE_IN_LINK_TEXT, "–")?.replace(SCORE_IN_LINK_TEXT, "–")
+internal fun spoilerSafeLinkText(text: String?): String? {
+    text ?: return null
+    val masked = text.replace(SPLIT_SCORE_IN_LINK_TEXT, "–").replace(SCORE_IN_LINK_TEXT, "–")
+    return if (masked == text) text else masked.replace(LOOSE_EXTRA_TIME_TAG, "")
+}
 
 /**
- * Whether a replay's links are named with any score masked where the user lists or plays them outside Watch replay
- * (Choose stream, a merged replay's picker, OK on a replay card; #223): when its result is hidden for the user as a
- * Results row hides it ([SpoilerPolicy]: the Scores setting [mode], [revealed], the game's protection
- * [spoilerProtected]; [eventState] null, no ESPN game, counts as a result). Under Show with nothing hidden, names stay
- * as the addon gives them; anything not a [replay] keeps them too.
+ * Whether [item]'s links are named with any score masked where the user lists or plays them outside Watch replay
+ * (Choose stream, a merged replay's picker, OK on a replay card; #223): when its result is hidden exactly as its Results
+ * row hides it ([resultHiddenReason], #241: the Scores setting [mode] (null: not read yet), Results' [revealed] event ids,
+ * [protection]), for [match], its strict ESPN game. With no ESPN game nothing can reveal it: hidden unless Show, and under
+ * Show when it is a saved game's replay (by its sides) or a followed team's under my teams' protection. Under Show with
+ * nothing hidden, names stay as the addon gives them; anything not a [replay] keeps them too.
  */
 internal fun sportsLiveHidesReplayLinks(
+    item: SportsLiveItem,
     replay: Boolean,
     mode: ScoresMode?,
-    eventState: ScoreState?,
-    revealed: Boolean,
-    spoilerProtected: Boolean
-): Boolean = replay && !SpoilerPolicy.visibility(
-    mode, revealed, SpoilerContext(SpoilerSurface.RESULTS, eventState = eventState, spoilerProtected = spoilerProtected)
-).showsScore
+    match: ScoreSnapshot?,
+    revealed: Set<String>,
+    protection: SpoilerProtection
+): Boolean {
+    if (!replay) return false
+    mode ?: return true
+    // A team folder holds many games: no one ESPN match or reveal speaks for the rest (F1).
+    if (item.apiType == "series") return sportsLiveReplayFolderHides(mode, protection)
+    if (protection.savedReplayKeys(listOf(item), match?.let { mapOf(item.streamKey to it) }.orEmpty()).isNotEmpty()) return true
+    if (match != null) {
+        val followed = protection.followed.any { SportsResults.follows(it, match) }
+        return resultHiddenReason(match, followed, mode, revealed, protection) != null
+    }
+    val followed = item.followed || protection.followed.any { SportsLiveTeams.follows(it, item) }
+    return mode != ScoresMode.SHOW || (followed && (protection.myTeams || protection.myTeamsResults))
+}
+
+/**
+ * Whether a replay team folder (a series of replays, F1) is shown masked: it holds many games, none matched to one ESPN
+ * game, so it is masked whenever any game in it could be hidden: the Scores setting [mode] other than Show (null: not
+ * read yet), a game saved for later, or a followed team under my teams' protection.
+ */
+internal fun sportsLiveReplayFolderHides(mode: ScoresMode?, protection: SpoilerProtection): Boolean =
+    mode != ScoresMode.SHOW || protection.saved.isNotEmpty() ||
+        (protection.followed.isNotEmpty() && (protection.myTeams || protection.myTeamsResults))
 
 /** [stream] of a replay as the player names it: its name, title and description with any score masked. */
 internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(

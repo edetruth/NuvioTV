@@ -76,6 +76,10 @@ object SportsLiveExtraSources {
     // Content ids of replays played spoiler-safe (#223): every list of their links masks scores. Bounded like [entries].
     private val spoilerSafeIds = LinkedHashSet<String>()
 
+    // Per spoiler-safe replay team folder (#240): its videos' ids, so an episode's Stream screen and player mask as the
+    // folder does. Guarded by [spoilerSafeIds], dropped with its folder.
+    private val spoilerSafeVideos = HashMap<String, Set<String>>()
+
     // Per played content id: each source's Sources-panel name (its label, and the primary's addon name)
     // to its reliability key, so the full player can credit the source it plays. Bounded like [entries].
     private val sourceNames = LinkedHashMap<String, SourceNames>()
@@ -265,13 +269,78 @@ object SportsLiveExtraSources {
         if (contentId == null) return
         synchronized(spoilerSafeIds) {
             spoilerSafeIds.remove(contentId)
+            spoilerSafeVideos.remove(contentId)
             if (safe) spoilerSafeIds.add(contentId)
-            while (spoilerSafeIds.size > MAX_ENTRIES) spoilerSafeIds.remove(spoilerSafeIds.first())
+            while (spoilerSafeIds.size > MAX_ENTRIES) {
+                val oldest = spoilerSafeIds.first()
+                spoilerSafeIds.remove(oldest)
+                spoilerSafeVideos.remove(oldest)
+            }
         }
     }
 
+    /**
+     * [videoIds], the videos of [contentId] (a replay team folder the Detail page lists, #240): while its folder is
+     * spoiler-safe, each of them is too, so the episode's Stream screen and player name its links with the score masked.
+     * [contentId] is the folder, or one of its videos (the addon's own id for it, read again by the player: F8-1). Each
+     * read adds to the folder's videos, never replaces them: another addon's answer with fewer videos must not unmask
+     * an episode already open. Blank ids are never registered.
+     */
+    fun markSpoilerSafeVideos(contentId: String, videoIds: Collection<String>) {
+        synchronized(spoilerSafeIds) {
+            val folder = contentId.takeIf { it in spoilerSafeIds }
+                ?: spoilerSafeVideos.entries.firstOrNull { contentId in it.value }?.key
+                ?: return
+            spoilerSafeVideos[folder] = spoilerSafeVideos[folder].orEmpty() + videoIds.filter { it.isNotBlank() }
+        }
+    }
+
+    /** Whether [contentId] (a replay, or a video of a spoiler-safe team folder) lists and plays its links score-masked. */
     fun isSpoilerSafe(contentId: String?): Boolean =
-        contentId != null && synchronized(spoilerSafeIds) { contentId in spoilerSafeIds }
+        contentId != null && synchronized(spoilerSafeIds) {
+            contentId in spoilerSafeIds || spoilerSafeVideos.values.any { contentId in it }
+        }
+
+    /**
+     * [stream] of [contentId] as the player names it, for a single link it shows or keeps (the next episode's, a redirect's
+     * target: F2-1, F2-2): a spoiler-safe replay's with any score masked.
+     */
+    fun spoilerSafeStream(contentId: String?, stream: Stream): Stream =
+        if (!isSpoilerSafe(contentId)) stream else spoilerSafeReplayStream(stream)
+
+    /**
+     * [text] about a link of [contentId] (its file name in Stream info, S7): a spoiler-safe replay's with any score masked.
+     * A file name is read as words (R4-F2): URL encoding decoded, dots and underscores as spaces, its extension kept; it
+     * shows that way only when something was masked, else as it is.
+     */
+    fun spoilerSafeText(contentId: String?, text: String?): String? {
+        if (text == null || !isSpoilerSafe(contentId)) return text
+        val extension = FILE_EXTENSION.find(text)?.value.orEmpty()
+        val words = percentDecoded(text.removeSuffix(extension)).replace('_', ' ').replace('.', ' ')
+        val masked = spoilerSafeLinkText(words) ?: words
+        return if (masked == words) text else masked + extension
+    }
+
+    private val FILE_EXTENSION = Regex("""\.[A-Za-z0-9]{2,4}$""")
+
+    /** [text] with its %XX escapes decoded as UTF-8 ("+" stays: "HDR10+"); as it is when it is not valid encoding. */
+    private fun percentDecoded(text: String): String {
+        if ('%' !in text) return text
+        val bytes = java.io.ByteArrayOutputStream()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '%' && i + 2 <= text.lastIndex) {
+                val byte = text.substring(i + 1, i + 3).toIntOrNull(16) ?: return text
+                bytes.write(byte)
+                i += 3
+            } else {
+                bytes.write(c.toString().toByteArray(Charsets.UTF_8))
+                i++
+            }
+        }
+        return bytes.toString(Charsets.UTF_8.name())
+    }
 
     /** [streams] of [contentId] as its lists name them: a spoiler-safe replay's with any score masked. */
     fun spoilerSafeStreams(contentId: String?, streams: List<Stream>): List<Stream> =
@@ -385,7 +454,10 @@ object SportsLiveExtraSources {
     internal fun reset() {
         synchronized(entries) { entries.clear() }
         synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
-        synchronized(spoilerSafeIds) { spoilerSafeIds.clear() }
+        synchronized(spoilerSafeIds) {
+            spoilerSafeIds.clear()
+            spoilerSafeVideos.clear()
+        }
         synchronized(sourceNames) { sourceNames.clear() }
         synchronized(streamSources) { streamSources.clear() }
         synchronized(seeds) { seeds.clear() }
@@ -539,3 +611,11 @@ internal fun honoursAutoPlayFilters(settings: PlayerSettings): Boolean =
  * MotoGP). Live streams have no duration, so they also saved a fake 5%. Sports has its own resume and replay places.
  */
 fun sportsLiveKeepsWatchProgress(contentId: String?): Boolean = !SportsLiveExtraSources.isSportsPlayback(contentId)
+
+/**
+ * Whether the player for [contentId] offers no post-play recommendations (S3): a Sports & Live game or replay, or any
+ * spoiler-safe replay. Their lookups (the addon's raw meta, More like this, trailers) may show the result, and a film
+ * after a match is no next step.
+ */
+fun sportsLiveSkipsPostPlayRecommendations(contentId: String?): Boolean =
+    SportsLiveExtraSources.isSportsPlayback(contentId) || SportsLiveExtraSources.isSpoilerSafe(contentId)

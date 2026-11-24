@@ -2323,7 +2323,7 @@ internal fun PlayerRuntimeController.buildStreamInfoData(): StreamInfoData {
         addonLogo = currentAddonLogo,
         streamName = state.currentStreamName,
         streamDescription = currentStreamDescription,
-        filename = currentFilename,
+        filename = com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.spoilerSafeText(contentId, currentFilename), // Sports & Live S7
         fileSize = currentVideoSize,
         videoCodec = videoCodec,
         videoWidth = videoWidth,

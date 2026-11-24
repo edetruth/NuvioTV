@@ -90,17 +90,11 @@ object ScoreWatch {
         playing.flatMap { it.cardKeys }.mapNotNullTo(HashSet()) { key -> scores[key]?.eventId }
 
     /**
-     * [event] as a game being watched shows it: no score, no clock, no scorers or situation (the broadcast's own
-     * scorebug is in step with the picture; ours runs ahead). Its state stays, so an end card still comes, delayed.
+     * [event] as a game being watched shows it: nothing of its result ([withResultWithheld]: no score, clock, scorers,
+     * situation, records, form or tennis sets; the broadcast's own scorebug is in step with the picture, ours runs
+     * ahead). Its state stays, so an end card still comes, delayed.
      */
-    fun masked(event: ScoreSnapshot): ScoreSnapshot = event.copy(
-        clockText = null,
-        home = event.home.copy(score = null, linescores = emptyList()),
-        away = event.away.copy(score = null, linescores = emptyList()),
-        scorers = emptyList(),
-        situation = null,
-        watched = true
-    )
+    fun masked(event: ScoreSnapshot): ScoreSnapshot = event.withResultWithheld().copy(watched = true)
 
     /** What the player's live label says (`LIVE`, `LIVE · −0:45`, and from 10 s behind a Go live action). */
     data class LiveLabel(val behindMs: Long?, val offersGoLive: Boolean)

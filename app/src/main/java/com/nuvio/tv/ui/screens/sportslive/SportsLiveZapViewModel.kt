@@ -333,7 +333,7 @@ class SportsLiveZapViewModel internal constructor(
     // G-C10: a sports replay plays with no session (so no player menu); the app-wide Hold OK sheet serves it.
     private val replayPlayer = !hasSession && SportsLiveExtraSources.isSportsPlayback(contentId)
     init {
-        if (replayPlayer) SportsLiveHoldOk.replayPlayerOpen = true
+        SportsLiveHoldOk.playerOpened(this, replayPlayer)
     }
 
     // live.20 B2: streams resolved before OK or CH± asks (a panel row rested on, the games ▲ and ▼ go to).
@@ -1483,7 +1483,7 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     override fun onCleared() {
-        if (replayPlayer) SportsLiveHoldOk.replayPlayerOpen = false
+        SportsLiveHoldOk.playerClosed(this)
         scoreTracker.onStop()
         nowTracker.onStop()
         WatchingNow.shared.stop(watchOwner)

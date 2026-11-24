@@ -887,6 +887,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private suspend fun tryApplyTmdbFallbackMeta(): Boolean {
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId)) return false // Sports & Live S1
         val tmdbId = itemId
             .takeIf { it.startsWith("tmdb:", ignoreCase = true) }
             ?.substringAfter(':')
@@ -1047,7 +1048,9 @@ class MetaDetailsViewModel @Inject constructor(
 
     private suspend fun applyMetaWithEnrichment(meta: Meta) {
         if (!isServerItem) loadMoreLikeThisAsync(meta)
-        val enriched = if (isServerItem) meta else enrichMeta(meta)
+        // Sports & Live S1: a hidden replay's meta is not enriched from TMDB (rating, collection, titles) before its mask.
+        val hidesExtras = com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)
+        val enriched = com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(itemId, if (isServerItem || hidesExtras) meta else enrichMeta(meta))
 
         syncEffectiveContentId(enriched)
         val cachedNextToWatch = metaDetailsSessionState.getNextToWatch(
@@ -1066,7 +1069,7 @@ class MetaDetailsViewModel @Inject constructor(
 
         // Ratings don't depend on watch progress, so start them before the remote
         // progress wait below, which can take long or never finish if the sync keeps failing.
-        if (!isServerItem) {
+        if (!isServerItem && !hidesExtras) {
             loadEpisodeRatingsAsync(enriched)
             viewModelScope.launch { loadMDBListRatings(enriched) }
         }
@@ -1109,6 +1112,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun loadComments(meta: Meta, forceRefresh: Boolean = false) {
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return // Sports & Live F2-3: comments discuss the result
         if (!traktCommentsEnabled || !traktAuthenticated || !supportsComments(meta)) {
             cancelCommentsRequests()
             _uiState.update { state ->
@@ -1201,6 +1205,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun supportsComments(meta: Meta?): Boolean {
         if (meta == null || isServerItem) return false
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return false // Sports & Live S5: no section, no dead toggles
         return when (meta.type) {
             ContentType.MOVIE -> true
             ContentType.SERIES, ContentType.TV -> true
@@ -1311,6 +1316,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun loadMoreLikeThisAsync(meta: Meta) {
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return // Sports & Live F2-3: other replays' raw titles
         moreLikeThisJob?.cancel()
         moreLikeThisJob = viewModelScope.launch {
             val source = when {
@@ -2904,6 +2910,7 @@ class MetaDetailsViewModel @Inject constructor(
         if (isServerItem) return
         if (trailerHandoffActive) return
         val meta = _uiState.value.meta ?: return
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return // Sports & Live F7: no highlights found by title
 
         trailerFetchJob?.cancel()
         trailerFetchJob = viewModelScope.launch {

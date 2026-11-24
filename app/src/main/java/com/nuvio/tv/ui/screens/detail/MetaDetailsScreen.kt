@@ -1959,7 +1959,8 @@ private fun MetaDetailsContent(
     val showStandardOverallRatings = overallRatingsVisibility
         .showStandardDetailRatings(isMdbListRatingsActive)
     val visibleMdbListRatings = mdbListRatings.takeIf { isMdbListRatingsActive }
-    val hasRatingsSection = isTvShow && showEpisodeImdbRatings
+    // Sports & Live R4-F4: a hidden replay folder loads no ratings, so no empty Ratings section.
+    val hasRatingsSection = isTvShow && showEpisodeImdbRatings && !com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(meta.id)
     val strTabCast = stringResource(R.string.detail_tab_cast)
     val strTabRatings = stringResource(R.string.detail_tab_ratings)
     val strTabMoreLikeThis = stringResource(R.string.detail_tab_more_like_this)

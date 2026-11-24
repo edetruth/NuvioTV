@@ -14,6 +14,8 @@ data class StreamScreenUiState(
     val directAutoPlayMessage: String? = null,
     val directAutoPlayProgress: Float? = null,
     val videoId: String = "",
+    /** The content the video belongs to (a series, a replay folder): Sports & Live masks a hidden replay's by it. */
+    val contentId: String? = null,
     val contentType: String = "",
     val title: String = "",
     val poster: String? = null,

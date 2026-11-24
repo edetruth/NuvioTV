@@ -296,7 +296,8 @@ fun SportsLiveGameScreen(
                         viewModel.onReplayStarted(replay)
                         // As Results' and Replays' Watch replay: at once under ESPN's matchup, links named without the score.
                         if (replay.apiType == "series") {
-                            onOpenDetail(replay)
+                            // #240: a team folder's episodes, masked while this page hides the result.
+                            sportsLiveOpenDetail(replay, hidden = state.hidesDetailOf(replay), open = onOpenDetail)
                         } else {
                             playViewModel.playReplay(
                                 listOf(replay) + replay.alternates,
@@ -370,7 +371,13 @@ fun SportsLiveGameScreen(
             title = stringResource(R.string.sports_live_matchup, names[0], names[1]),
             sides = order.map { sideOf(it).name to followedOf(it) },
             onToggleFollow = { index -> order.getOrNull(index)?.let(viewModel::toggleFollow) },
-            onDetails = (state.replay ?: state.card)?.let { item -> { menuOpen = false; onOpenDetail(item) } },
+            // #243: a replay's Details masked while this page hides the result; a game's card as the addon gives it.
+            onDetails = (state.replay ?: state.card)?.let { item ->
+                {
+                    menuOpen = false
+                    sportsLiveOpenDetail(item, hidden = state.hidesDetailOf(item), open = onOpenDetail)
+                }
+            },
             onDismiss = { menuOpen = false },
             onWatchWith = if (state.offersWatchWith) {
                 {

@@ -737,7 +737,7 @@ internal fun PlayerRuntimeController.handleStreamRedirect(requestedUrl: String, 
     scope.launch {
         if (requestedUrl != currentStreamUrl) return@launch
         val addonName = currentAddonName
-        val target = findRedirectTargetStream(_uiState.value.sourceAllStreams, addonName, requestedUrl, resolvedUrl)
+        val found = findRedirectTargetStream(_uiState.value.sourceAllStreams, addonName, requestedUrl, resolvedUrl)
             ?: currentSourceStreamsRequest()?.let { request ->
                 streamRepository.getCachedStreamsFromAllAddons(
                     type = request.type,
@@ -748,6 +748,8 @@ internal fun PlayerRuntimeController.handleStreamRedirect(requestedUrl: String, 
                     findRedirectTargetStream(cached.flatMap { it.streams }, addonName, requestedUrl, resolvedUrl)
                 }
             }
+        // Sports & Live F2-2: the cached lists are the addons' own; a hidden replay's target is named with any score masked.
+        val target = found?.let { SportsLiveExtraSources.spoilerSafeStream(contentId, it) }
         if (target == null) {
             Log.d(PlayerRuntimeController.TAG, "Stream redirect matched no listed stream")
             return@launch
@@ -1261,14 +1263,15 @@ internal fun PlayerRuntimeController.loadEpisodesIfNeeded() {
                 .first { it !is NetworkResult.Loading }
         ) {
             is NetworkResult.Success -> {
-                val allEpisodes = result.data.videos
+                val meta = com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(id, result.data) // Sports & Live F2: a hidden replay's masked
+                val allEpisodes = meta.videos
                     .sortedWith(
                         compareBy<Video> { it.season ?: Int.MAX_VALUE }
                             .thenBy { it.episode ?: Int.MAX_VALUE }
                             .thenBy { it.title }
                     )
 
-                applyMetaDetails(result.data)
+                applyMetaDetails(meta)
 
                 val seasons = allEpisodes
                     .mapNotNull { it.season }
@@ -1430,7 +1433,7 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(
             when (result) {
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, sourceOrder, preferredServerNames)
-                    val allStreams = addonStreams.flatMap { it.streams }
+                    val allStreams = SportsLiveExtraSources.spoilerSafeStreams(contentId, addonStreams.flatMap { it.streams })
                     val availableAddons = addonStreams.map { it.addonName }
                     val currentFilter = _uiState.value.episodeSelectedAddonFilter
                     val filteredStreams = if (currentFilter == null) {
@@ -2370,7 +2373,9 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             }
             val streamToPlay = resolveRun?.resolved
             if (streamToPlay != null) {
-                val sourceName = (streamToPlay.name?.takeIf { it.isNotBlank() } ?: streamToPlay.addonName).trim()
+                // Sports & Live F2-1: a hidden replay's next episode is named with any score masked.
+                val shownStream = SportsLiveExtraSources.spoilerSafeStream(contentId, streamToPlay)
+                val sourceName = (shownStream.name?.takeIf { it.isNotBlank() } ?: shownStream.addonName).trim()
                 for (remaining in 3 downTo 1) {
                     _uiState.update { current ->
                         val episodeForMode = current.nextEpisode ?: nextInfo
@@ -2393,10 +2398,10 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
                     )
                 }
                 switchToEpisodeStream(
-                    stream = streamToPlay,
+                    stream = shownStream,
                     forcedTargetVideo = nextVideo,
                     isAutoPlay = !userInitiated,
-                    fallbackStreams = StreamAutoPlaySelector.orderAddonStreams(lastSuccessData.orEmpty(), sourceOrder).flatMap { it.streams },
+                    fallbackStreams = SportsLiveExtraSources.spoilerSafeStreams(contentId, StreamAutoPlaySelector.orderAddonStreams(lastSuccessData.orEmpty(), sourceOrder).flatMap { it.streams }),
                     // Auto source selection picked it whether or not the user asked for the episode.
                     autoSelection = SourceFallbackHandoff.TriedSources(
                         keys = resolveRun.triedKeys,
