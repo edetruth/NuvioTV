@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -147,14 +146,14 @@ class ZapPanelFocusTest {
 
     @Test
     fun `while the panel is open its order stays as it opened, and closing takes the fresh one`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             // Live now is earliest start first: a, then b.
             val a = item("a", now - 2 * HOUR)
             val b = item("b", now - HOUR)
             val latest = MutableStateFlow(SportsLiveLoad(listOf(a, b), emptyList(), 0L, setOf(CATALOG)))
             val viewModel = panelViewModel(latest, playing = a)
 
-            viewModel.openPanel()
+            PanelTests.open(viewModel)
             assertEquals(listOf("a", "b"), viewModel.panel.first { it?.items?.size == 2 }!!.items.map { it.id })
             // a's start moves after b's: the fresh order is b, a, but the open panel keeps a, b, updated in place.
             latest.value = SportsLiveLoad(listOf(a.copy(startMs = now - HOUR / 2), b), emptyList(), 1L, setOf(CATALOG))
@@ -162,7 +161,8 @@ class ZapPanelFocusTest {
             assertEquals(listOf("a", "b"), viewModel.panel.value!!.items.map { it.id })
             assertEquals(now - HOUR / 2, viewModel.panel.value!!.items.first().startMs)
             // A new game arrives: last, tagged New.
-            val c = item("c", now - 3 * HOUR)
+            // Two and a half hours in: well inside a basketball game's longest run (3 h), never overdue on a slow clock.
+            val c = item("c", now - 150 * 60_000L)
             latest.value = SportsLiveLoad(listOf(a.copy(startMs = now - HOUR / 2), b, c), emptyList(), 2L, setOf(CATALOG))
             runCurrent()
             assertEquals(listOf("a", "b", "c"), viewModel.panel.value!!.items.map { it.id })
@@ -171,14 +171,14 @@ class ZapPanelFocusTest {
             // Closed and opened again: the fresh order.
             viewModel.closePanel()
             runCurrent()
-            viewModel.openPanel()
+            PanelTests.open(viewModel)
             runCurrent()
             assertEquals(listOf("c", "b", "a"), viewModel.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
             viewModel.closePanel()
         }
 
     @Test
-    fun `the dual picker from the panel leaves out games that are over`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the dual picker from the panel leaves out games that are over`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val playing = item("a", now - HOUR)
         val other = item("b", now - HOUR / 2)
         // Started four hours ago: a basketball game is over (Just ended in the panel).
@@ -186,7 +186,7 @@ class ZapPanelFocusTest {
         val latest = MutableStateFlow(SportsLiveLoad(listOf(playing, other, over), emptyList(), 0L, setOf(CATALOG)))
         val viewModel = panelViewModel(latest, playing)
 
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         val state = viewModel.panel.first { it?.items?.size == 3 }!!
         assertEquals(ZapPanelGroup.JUST_ENDED, state.rows.first { it.item.id == "c" }.group)
 
@@ -204,7 +204,7 @@ class ZapPanelFocusTest {
 
     @Test
     fun `after a restart the kept logo map is read before the panel shows, and reading the setting redraws`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first()
             val earlier = TeamLogoBook(active = true).apply {
                 learn(EspnLeagueMap.NBA, nba.home)
@@ -238,7 +238,7 @@ class ZapPanelFocusTest {
 
     @Test
     fun `from Channels the panel and guide list the channel group CH plus and minus walk, not Live now's games (audit G15)`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             val games = listOf(item("a", now - HOUR), item("b", now - HOUR / 2))
             fun channel(id: String, group: String) =
                 item(id, null).copy(isChannel = true, kind = SportsLiveKind.CHANNELS, teams = null, group = group)
@@ -249,7 +249,7 @@ class ZapPanelFocusTest {
             // Started on UK's second channel: CH+/- walk the UK group first, then the rest.
             val viewModel = panelViewModel(latest, uk2, sessionItems = listOf(us1, uk1, uk2), tab = SportsLiveTab.CHANNELS, filter = "UK")
             try {
-                viewModel.openPanel()
+                PanelTests.open(viewModel)
                 assertEquals(listOf("uk1", "uk2", "us1"), viewModel.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
             } finally {
                 viewModel.closePanel()

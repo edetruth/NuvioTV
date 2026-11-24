@@ -31,7 +31,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -59,7 +58,7 @@ class ZapPanelScoreWaitTest {
     private val now = System.currentTimeMillis()
 
     @Test
-    fun `the panel's one-shot wait update never re-arms for the same deadline when the clock does not move`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the panel's one-shot wait update never re-arms for the same deadline when the clock does not move`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // ESPN-covered games whose feed never answers: they keep waiting, their deadline stays the same.
         val playing = item("p", "Indiana Pacers at Philadelphia 76ers")
         val other = item("o", "Boston Celtics at New York Knicks")
@@ -92,7 +91,7 @@ class ZapPanelScoreWaitTest {
         )
         runCurrent()
         // The open panel ticks every 30 s for ever, so the run cannot go to idle: it runs to just before the next tick.
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         try {
             runCurrent()
             advanceTimeBy(3 * SportsLiveScoreWait.MAX_WAIT_MS - 1_000L)

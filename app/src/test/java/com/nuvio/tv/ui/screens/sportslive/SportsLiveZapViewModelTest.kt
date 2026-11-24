@@ -38,7 +38,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -126,7 +125,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `the panel's keys hint shows for the profile's first 3 openings, then never`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the panel's keys hint shows for the profile's first 3 openings, then never`() = runPanelTest(mainDispatcherRule.dispatcher) {
         var shown = 0
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val viewModel = fullTimeViewModel(
@@ -134,7 +133,7 @@ class SportsLiveZapViewModelTest {
             claimHint = { shouldShowPanelKeysHint(shown).also { if (it) shown++ } }
         )
         val seen = (1..5).map {
-            viewModel.openPanel()
+            PanelTests.open(viewModel)
             runCurrent()
             viewModel.panelKeysHint.value.also { viewModel.closePanel() }
         }
@@ -142,10 +141,10 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `Info in the open panel brings the keys hint back, other keys do not`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Info in the open panel brings the keys hint back, other keys do not`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, emptyList(), claimHint = { false })
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         runCurrent()
 
         viewModel.onPanelKey(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
@@ -157,12 +156,12 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `the panel's hold OK menu ends with Report a problem, which saves one report through the reporter`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the panel's hold OK menu ends with Report a problem, which saves one report through the reporter`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val triggers = mutableListOf<String>()
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val celtics = game("Boston Celtics at New York Knicks")
         val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(celtics), report = { triggers += it })
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         runCurrent()
 
         assertEquals(SportsLiveMoreEntry.REPORT, viewModel.panelMenu(celtics).entries.last())
@@ -177,7 +176,7 @@ class SportsLiveZapViewModelTest {
     private val END_STRINGS = GameEndStrings("Game over", "Final · %1\$s %2\$d–%3\$d %4\$s")
 
     @Test
-    fun `the game playing ending shows the full-time toast once on screen, the score per the Scores setting`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the game playing ending shows the full-time toast once on screen, the score per the Scores setting`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
         val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
@@ -218,7 +217,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `the toast claims its game only when shown, and goes if the alerts announced it meanwhile`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the toast claims its game only when shown, and goes if the alerts announced it meanwhile`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
         val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
@@ -259,7 +258,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `Up next never picks a game Live now shows Probably ended`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Up next never picks a game Live now shows Probably ended`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // live.19 QA F2: no ESPN feed covers it and its start plus its sport's length is long past (an estimate).
         val rugby = game("Leinster vs Munster").let {
             it.copy(
@@ -278,7 +277,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `Up next and Next live game never pick a game saved with Watch later`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Up next and Next live game never pick a game saved with Watch later`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // #184: playing it would show it live. Hawks @ Spurs was saved for later (no ESPN match here: by its sides).
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs")
@@ -308,7 +307,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `Up next skips a game whose every known link failed this session`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Up next skips a game whose every known link failed this session`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // live.19 re-check: Up next picked a game whose only link had already failed.
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs")
@@ -326,7 +325,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `a stream stopping at the game's end shows the card with the countdown, and any key cancels it`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a stream stopping at the game's end shows the card with the countdown, and any key cancels it`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs").copy(followed = true)
         val watch = SportsLiveGameWatch()
@@ -355,7 +354,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `the countdown running out moves to Up next`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the countdown running out moves to Up next`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs").copy(followed = true)
         val watch = SportsLiveGameWatch()
@@ -383,7 +382,7 @@ class SportsLiveZapViewModelTest {
     private fun readyFor(game: SportsLiveItem) = SportsLiveGameReadiness().also { it.ready(game.id, STREAM) }
 
     @Test
-    fun `Up next that is not one of my games, or not Ready, waits for OK with no countdown`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Up next that is not one of my games, or not Ready, waits for OK with no countdown`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // Research 6: the card moves by itself only into my games showing "▶ Ready".
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs")
@@ -410,7 +409,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `with no key press for hours the card asks Are you still watching instead of counting down`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `with no key press for hours the card asks Are you still watching instead of counting down`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs").copy(followed = true)
         val watch = SportsLiveGameWatch()
@@ -434,7 +433,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `Both from an alert pairs the game playing, on its link, with the alert's game`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Both from an alert pairs the game playing, on its link, with the alert's game`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val hawks = game("Atlanta Hawks at San Antonio Spurs")
         val elsewhere = game("Boston Celtics at New York Knicks")
@@ -452,7 +451,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `a Game page opened over a playing game resumes it once on return`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a Game page opened over a playing game resumes it once on return`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, emptyList())
 
@@ -487,7 +486,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `nothing is scored or raised while the player is stopped`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `nothing is scored or raised while the player is stopped`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
         val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
@@ -513,7 +512,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `Next live game works only while the toast shows, and skips finished and dead-checked games`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Next live game works only while the toast shows, and skips finished and dead-checked games`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val lakers = game("Los Angeles Lakers at Phoenix Suns")
         val dead = game("Boston Celtics at New York Knicks")
@@ -548,7 +547,7 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `a zap to a merged game drops this player's extras and registers the target's`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a zap to a merged game drops this player's extras and registers the target's`() = runPanelTest(mainDispatcherRule.dispatcher) {
         SportsLiveExtraSources.register(PLAYING.id, PLAYING)
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(PLAYING, NEXT), PLAYING.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
