@@ -170,13 +170,14 @@ internal object PlayerPlaybackNetworking {
             !key.equals("Range", ignoreCase = true)
         }
         if (proxyHeaders.isNotEmpty()) {
+            val headerScope = PlaybackStreamHeaders.HostScope() // Fork #434: login headers stay on the link's host.
             builder.addNetworkInterceptor { chain ->
                 val request = chain.request()
                 val next = request.newBuilder()
                 for ((key, value) in proxyHeaders) {
                     next.header(key, value)
                 }
-                chain.proceed(next.build())
+                chain.proceed(headerScope.apply(next.build()))
             }
         }
         val http1Client = builder
