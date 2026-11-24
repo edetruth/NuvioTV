@@ -151,20 +151,48 @@ class TeamDirectory(
             noteRead(league.path)
             leagues[league.path]
         } ?: return null
+        return candidates(entry, league, cardSide).singleOrNull()?.let(entry.teams::get)
+    }
+
+    /** The indexes of [entry]'s teams (of [league]) whose names include [cardSide], as [resolve] reads them. */
+    private fun candidates(entry: Entry, league: EspnLeague, cardSide: String): List<Int> {
         fun found(keys: Set<String>) = entry.teams.indices.filter { index -> entry.keys[index].any { it in keys } }
         // The names layer drops a trailing bracketed group ("Celtics [HD]"), which would read "Miami (OH)"
         // as "Miami": with the brackets opened first, a side naming a team that way finds that team only.
         val opened = cardSide.replace(BRACKETS, " ")
         if (opened != cardSide) {
             val full = found(TeamLogoBook.sideKeys(opened))
-            if (full.isNotEmpty()) return full.singleOrNull()?.let(entry.teams::get)
+            if (full.isNotEmpty()) return full
         }
         // College lists also take "St" for "State" and the reverse, as the score matcher does (P4).
         val keys = TeamLogoBook.sideKeys(cardSide).let { own ->
             if (league in COLLEGE_LEAGUES) own + own.flatMap { ScoreMatcher.collegeAlternates(it) + stateInside(it) } else own
         }
-        if (keys.isEmpty()) return null
-        return found(keys).singleOrNull()?.let(entry.teams::get)
+        if (keys.isEmpty()) return emptyList()
+        return found(keys)
+    }
+
+    /**
+     * The ESPN ids of every team of [league] that [side] may name, its city also written short or in full ([cityVariants]):
+     * one, several (an ambiguous name, which [teamId] reads as none) or none, also when the list is not loaded (live.28:
+     * an untagged soccer card is checked against every loaded list, [NoEspnGame]). Kept per league, side and generation.
+     */
+    fun teamIdsNaming(league: EspnLeague, side: String): Set<String> = idsNamingMemo(Triple(league, side, generationRead()))
+
+    private val idsNamingMemo = Memo<Triple<EspnLeague, String, Long>, Set<String>>(HOLDING_MEMO) { (league, side, _) ->
+        val entry = synchronized(this) {
+            noteRead(league.path)
+            leagues[league.path]
+        }
+        if (entry == null) emptySet() else cityVariants(side).flatMapTo(HashSet()) { variant ->
+            candidates(entry, league, variant).map { entry.teams[it].id }
+        }
+    }
+
+    /** Every league whose list is loaded now (a read across them all, for [reading]). */
+    fun loadedLeagues(): List<EspnLeague> {
+        generationRead()
+        return synchronized(this) { leagues.keys.toList() }.mapNotNull(::leagueOf)
     }
 
     /**

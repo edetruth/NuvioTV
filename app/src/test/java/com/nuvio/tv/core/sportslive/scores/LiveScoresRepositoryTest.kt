@@ -2567,7 +2567,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a league with no team list, a team it does not know or a card on soccer-all alone stays live`() = runTest {
+    fun `a league with no team list, a team it does not know or a card on soccer-all alone with no NFL list stays live`() = runTest {
         provider.respond = ::tonightFeeds
         val verdicts = SportsLiveNoEspnGames()
         // The Bundesliga's list is not loaded for the first card; the others are told by the loaded lists.
@@ -2581,6 +2581,8 @@ class LiveScoresRepositoryTest {
         val repo = repository(monday, logos = tonightLists(), noEspnGames = known)
         collect(repo)
         val unknownTeam = item("Bayern Munich vs Hamburg", "Bundesliga", "2026-11-23T21:00:00Z", addon = "c")
+        // live.28: an untagged soccer card is told by every loaded soccer list, but never while the NFL's list (a
+        // "Football" card may be American football) is not loaded, as here.
         val soccerOnly = item("Bayern Munich vs Hoffenheim", "Soccer", "2026-11-23T21:00:00Z", addon = "d")
         repo.track(SECTION, listOf(unknownTeam, soccerOnly))
         runCurrent()
@@ -2660,5 +2662,75 @@ class LiveScoresRepositoryTest {
         repo.track(SECTION, listOf(bayernChannel))
         runCurrent()
         assertFalse(verdicts.holds(bayernChannel, ms(monday)))
+    }
+
+    // ---- live.28 item e: untagged soccer rows ("Real Madrid vs Inter" under "Soccer", no competition) ----
+
+    private val nflTeams = TeamDirectory.parse(EspnFixtures.json("espn_teams_nfl_20261118.json"), EspnFixtures.moshi)!!
+
+    /** [tonightLists] and the NFL's list, which inference keeps loaded. */
+    private fun untaggedLists() = tonightLists().also { it.directory.put(EspnLeagueMap.NFL, nflTeams, 1L) }
+
+    private val untaggedBayern = item("Bayern Munich vs Hoffenheim", "Soccer", "2026-11-23T21:00:00Z", addon = "e")
+
+    @Test
+    fun `an untagged soccer row ESPN soccer has no game for leaves Live now for Other streams`() = runTest {
+        provider.respond = ::tonightFeeds
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = untaggedLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(untaggedBayern, byuCard))
+        runCurrent()
+        val now = ms(monday)
+        assertTrue(provider.calls.any { it.league == EspnLeagueMap.SOCCER_ALL && it.date == nov23 })
+        // No soccer league feed is asked for it: soccer-all and the loaded lists tell it.
+        assertTrue(provider.calls.none { it.league == ger1 })
+        assertTrue(verdicts.holds(untaggedBayern, now))
+        val (games, others) = SportsLiveOtherStreams.split(listOf(untaggedBayern, byuCard), now, verdicts, com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents())
+        assertEquals(listOf(byuCard.streamKey), games.map { it.streamKey })
+        assertEquals(listOf(untaggedBayern.streamKey), others.map { it.streamKey })
+        com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents.shared.clear()
+    }
+
+    @Test
+    fun `an untagged soccer row one of whose clubs plays today on soccer-all stays live`() = runTest {
+        // Bayern play Dortmund 3 h 30 after the card's start: no match for it, but it may be that game misnamed.
+        val bayernDortmund = ScoreSnapshot(
+            eventId = "bay-dor", league = EspnLeagueMap.SOCCER_ALL, leagueSlug = "ger.1", startMs = ms("2026-11-24T00:30:00Z"),
+            state = ScoreState.PRE, clockText = null, isFinal = false,
+            home = side("132", "Bayern Munich", "Bayern", "BAY"), away = side("124", "Borussia Dortmund", "Dortmund", "DOR")
+        )
+        provider.respond = { feed ->
+            ScoreboardResult(if (feed.league == EspnLeagueMap.SOCCER_ALL && feed.date == nov23) listOf(bayernDortmund) else emptyList())
+        }
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = untaggedLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(untaggedBayern))
+        runCurrent()
+        assertTrue(untaggedBayern.streamKey in repo.unmatched.value)
+        assertFalse(verdicts.holds(untaggedBayern, ms(monday)))
+    }
+
+    @Test
+    fun `an untagged soccer row stays live while soccer-all or another soccer board of today failed`() = runTest {
+        provider.respond = { feed -> if (feed.league == EspnLeagueMap.SOCCER_ALL) ScoreboardResult.FAILED else tonightFeeds(feed) }
+        val noBoard = SportsLiveNoEspnGames()
+        val failedAll = repository(monday, logos = untaggedLists(), noEspnGames = noBoard)
+        collect(failedAll)
+        failedAll.track(SECTION, listOf(untaggedBayern))
+        runCurrent()
+        assertFalse(noBoard.holds(untaggedBayern, ms(monday)))
+
+        // The Bundesliga's board, polled for a Bundesliga card, failed: it may hold the untagged row's game.
+        provider.respond = { feed -> if (feed.league == ger1) ScoreboardResult.FAILED else tonightFeeds(feed) }
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = untaggedLists(), noEspnGames = verdicts)
+        collect(repo)
+        val untaggedDortmund = item("Borussia Dortmund vs TSG Hoffenheim", "Soccer", "2026-11-23T21:00:00Z", addon = "f")
+        repo.track(SECTION, listOf(bayernChannel, untaggedDortmund))
+        runCurrent()
+        assertTrue(provider.calls.any { it.league == ger1 && it.date == nov23 })
+        assertFalse(verdicts.holds(untaggedDortmund, ms(monday)))
     }
 }
