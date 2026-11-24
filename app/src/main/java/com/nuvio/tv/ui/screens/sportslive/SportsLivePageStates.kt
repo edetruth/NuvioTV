@@ -15,6 +15,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -34,12 +35,20 @@ internal fun SportsLivePageFailure(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     /** The page's own requester for Try again, so its header's Down can lead here (review R2). */
-    focus: FocusRequester = remember { FocusRequester() }
+    focus: FocusRequester = remember { FocusRequester() },
+    /**
+     * #461: whether Try again takes focus as the card appears ([SportsLivePageFocus.failureTakesFocus]): only while nothing
+     * on the page holds focus yet. A load failing later never pulls focus from where the user is; Down reaches it.
+     */
+    takeFocus: Boolean = true,
+    /** #461: Try again gained or lost focus (the page moves focus on recovery only if it was here). */
+    onFocused: (Boolean) -> Unit = {}
 ) {
     // After a frame, once the button is placed (review R2: a request in the first frame was lost to the header's).
+    val takes = androidx.compose.runtime.rememberUpdatedState(takeFocus)
     LaunchedEffect(focus) {
         withFrameNanos { }
-        runCatching { focus.requestFocus() }
+        if (takes.value) runCatching { focus.requestFocus() }
     }
     SportsLiveStateCard(
         title = title,
@@ -50,8 +59,17 @@ internal fun SportsLivePageFailure(
         ),
         problem = true,
         modifier = modifier,
-        primaryModifier = Modifier.focusRequester(focus)
+        primaryModifier = Modifier.focusRequester(focus).onFocusChanged { onFocused(it.isFocused) }
     )
+}
+
+/** #461: the failure card's focus rules (principle 3: nothing moves under focus), shared by the Game and Team pages. */
+internal object SportsLivePageFocus {
+    /** Try again takes focus by itself only when nothing on the page holds focus yet (its first focus). */
+    fun failureTakesFocus(pageHasFocus: Boolean): Boolean = !pageHasFocus
+
+    /** When the failure clears, focus moves to the header only if it was on the card that went away. */
+    fun recoveryMovesFocus(cardHadFocus: Boolean): Boolean = cardHadFocus
 }
 
 /** A skeleton block in the state card's placeholder colour: no shimmer, nothing moves (principle 3). */

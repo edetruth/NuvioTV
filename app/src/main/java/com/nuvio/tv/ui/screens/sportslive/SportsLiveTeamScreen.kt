@@ -139,6 +139,9 @@ fun SportsLiveTeamScreen(
     val failureFocus = remember { FocusRequester() }
     val failed = state.status == GameLoadStatus.FAILED
     val failedNow by rememberUpdatedState(failed)
+    // #461: whether anything on the page holds focus, and whether Try again did while the card showed.
+    var pageHasFocus by remember { mutableStateOf(false) }
+    var failureHadFocus by remember { mutableStateOf(false) }
     // First focus: Reveal under Off, else Follow. A Reveal goes away once pressed: focus moves to Follow.
     LaunchedEffect(state.revealed) {
         repeat(2) { withFrameNanos { } }
@@ -158,6 +161,9 @@ fun SportsLiveTeamScreen(
         }
         if (!wasFailed) return@LaunchedEffect
         wasFailed = false
+        // #461: only when focus was on the card that went away; elsewhere it stays where the user is.
+        if (!SportsLivePageFocus.recoveryMovesFocus(failureHadFocus)) return@LaunchedEffect
+        failureHadFocus = false
         withFrameNanos { }
         runCatching { headerFocus.requestFocus() }
     }
@@ -187,6 +193,7 @@ fun SportsLiveTeamScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .onFocusChanged { pageHasFocus = it.hasFocus }
             .background(Colors.Background)
             .padding(start = PAGE_SIDE, end = PAGE_SIDE, top = PAGE_TOP)
     ) {
@@ -202,7 +209,11 @@ fun SportsLiveTeamScreen(
             when {
                 waiting -> SportsLivePageMessage(stringResource(R.string.sports_live_team_hidden_off))
                 state.status == GameLoadStatus.FAILED ->
-                    SportsLivePageFailure(stringResource(R.string.sports_live_team_failed_title), state.retrying, viewModel::retry, focus = failureFocus)
+                    SportsLivePageFailure(
+                        stringResource(R.string.sports_live_team_failed_title), state.retrying, viewModel::retry, focus = failureFocus,
+                        takeFocus = SportsLivePageFocus.failureTakesFocus(pageHasFocus),
+                        onFocused = { focused -> if (failedNow) failureHadFocus = focused }
+                    )
                 data == null -> SportsLiveRowsSkeleton()
                 // Scrolling only when a row nears an edge, so the list opens at its top with its heading showing (the TV
                 // default pivot would scroll a row returned to from a Game page up to a third of the height).

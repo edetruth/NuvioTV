@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -172,6 +173,9 @@ fun SportsLiveGameScreen(
     val failureFocus = remember { FocusRequester() }
     val failed = state.showsFailure
     val failedNow by rememberUpdatedState(failed)
+    // #461: whether anything on the page holds focus, and whether Try again did while the card showed.
+    var pageHasFocus by remember { mutableStateOf(false) }
+    var failureHadFocus by remember { mutableStateOf(false) }
 
     // Back from a clip or a Player card: focus returns to what opened it (a highlight, Watch all, a performer).
     // The key stays (the element keeps its requester); [returnPending] says to use it once.
@@ -209,6 +213,9 @@ fun SportsLiveGameScreen(
         }
         if (!wasFailed) return@LaunchedEffect
         wasFailed = false
+        // #461: only when focus was on the card that went away; elsewhere it stays where the user is.
+        if (!SportsLivePageFocus.recoveryMovesFocus(failureHadFocus)) return@LaunchedEffect
+        failureHadFocus = false
         withFrameNanos { }
         runCatching { headerFirst.requestFocus() }
     }
@@ -257,6 +264,7 @@ fun SportsLiveGameScreen(
             .fillMaxSize()
             .background(Colors.Background)
             .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) keyPressed = true; false }
+            .onFocusChanged { pageHasFocus = it.hasFocus }
             .padding(start = PAGE_SIDE, end = PAGE_SIDE, top = PAGE_TOP)
     ) {
         // A team with a page (#62): its header name and logo take focus, OK opens it (BUG12, Q9).
@@ -359,6 +367,8 @@ fun SportsLiveGameScreen(
                 },
                 onRetry = viewModel::retry,
                 failureFocus = failureFocus,
+                failureTakesFocus = SportsLivePageFocus.failureTakesFocus(pageHasFocus),
+                onFailureFocused = { focused -> if (failedNow) failureHadFocus = focused },
                 standingRanks = standingRanks
             )
         }
