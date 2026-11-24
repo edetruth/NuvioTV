@@ -737,7 +737,7 @@ internal fun PlayerRuntimeController.handleStreamRedirect(requestedUrl: String, 
     scope.launch {
         if (requestedUrl != currentStreamUrl) return@launch
         val addonName = currentAddonName
-        val target = findRedirectTargetStream(_uiState.value.sourceAllStreams, addonName, requestedUrl, resolvedUrl)
+        val found = findRedirectTargetStream(_uiState.value.sourceAllStreams, addonName, requestedUrl, resolvedUrl)
             ?: currentSourceStreamsRequest()?.let { request ->
                 streamRepository.getCachedStreamsFromAllAddons(
                     type = request.type,
@@ -748,6 +748,8 @@ internal fun PlayerRuntimeController.handleStreamRedirect(requestedUrl: String, 
                     findRedirectTargetStream(cached.flatMap { it.streams }, addonName, requestedUrl, resolvedUrl)
                 }
             }
+        // Sports & Live F2-2: the cached lists are the addons' own; a hidden replay's target is named with any score masked.
+        val target = found?.let { SportsLiveExtraSources.spoilerSafeStream(contentId, it) }
         if (target == null) {
             Log.d(PlayerRuntimeController.TAG, "Stream redirect matched no listed stream")
             return@launch
