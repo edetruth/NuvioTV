@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveManifestDrm
 import com.nuvio.tv.core.sportslive.SportsLiveMediaPlaylist
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHeaders
 import com.nuvio.tv.core.sportslive.SportsLiveStreamLicences
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -70,7 +71,8 @@ class SportsLiveLinkProber @Inject constructor() {
         if (protectedHere(url, body)) return ProbeVerdict.DEAD
         if (!SportsLiveMediaPlaylist.isMaster(body)) return SportsLiveMediaPlaylist.verdict(body, System.currentTimeMillis())
         val variant = SportsLiveMediaPlaylist.firstVariant(body)?.let(first.url::resolve) ?: return ProbeVerdict.UNKNOWN
-        val media = get(variant, headers.takeIf { variant.host.equals(first.url.host, ignoreCase = true) }.orEmpty(), readBody = true)
+        // #279: the headers only go on to the addon link's own host, not to wherever a redirect led.
+        val media = get(variant, SportsLiveStreamHeaders.forFollowUp(url, variant.toString(), headers), readBody = true)
             ?: return ProbeVerdict.UNKNOWN
         media.failed?.let { return it }
         if (media.code !in 200..299) return codeVerdict(media.code)

@@ -92,13 +92,15 @@ internal object PlayerPlaybackNetworking {
             .followRedirects(true)
             .followSslRedirects(true)
             .retryOnConnectionFailure(true)
+            .addNetworkInterceptor(PlaybackStreamHeaders.CallOriginGuard) // Fork P5: login headers stay on the call's origin.
             .addInterceptor { chain ->
                 val request = chain.request()
                 try {
                     chain.proceed(request)
                 } catch (e: SSLException) {
                     // Fallback to trust-all client if standard system SSL fails (e.g. self-signed local server)
-                    trustAllPlaybackHttpClient.newCall(request).execute()
+                    // Fork #435: unchecked, so no stream header or token goes with it.
+                    PlaybackStreamHeaders.uncheckedRetry(trustAllPlaybackHttpClient, request).execute()
                 }
             }
             .build()
@@ -169,16 +171,8 @@ internal object PlayerPlaybackNetworking {
         val proxyHeaders = defaultHeaders.filterKeys { key ->
             !key.equals("Range", ignoreCase = true)
         }
-        if (proxyHeaders.isNotEmpty()) {
-            builder.addNetworkInterceptor { chain ->
-                val request = chain.request()
-                val next = request.newBuilder()
-                for ((key, value) in proxyHeaders) {
-                    next.header(key, value)
-                }
-                chain.proceed(next.build())
-            }
-        }
+        // Fork #434: sets the stream's headers per hop; login headers stay on the link's origin (always installed, P8).
+        builder.addNetworkInterceptor(PlaybackStreamHeaders.StreamGuard(PlaybackStreamHeaders.HostScope(), proxyHeaders))
         val http1Client = builder
             .let { NuvioExoPlayerPerformanceHelper.applyNetworkOptimizations(it) }
             .build()

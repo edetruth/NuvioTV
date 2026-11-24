@@ -22,8 +22,11 @@ enum class LinkCheckResult {
     UNKNOWN
 }
 
-/** A manifest fetch's answer: the HTTP [code], and the [body] (the first part of it) when successful. */
-data class ManifestResponse(val code: Int, val body: String?)
+/**
+ * A manifest fetch's answer: the HTTP [code], the [body] (the first part of it) when successful, and [finalUrl], where it
+ * was read after any redirects (#279: a playlist's relative links resolve against it); null when not known.
+ */
+data class ManifestResponse(val code: Int, val body: String?, val finalUrl: String? = null)
 
 /**
  * One link check: the card ([key], its [SportsLiveItem.streamKey]), its already-resolved [url] and the

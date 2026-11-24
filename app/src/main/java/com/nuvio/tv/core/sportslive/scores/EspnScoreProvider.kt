@@ -551,7 +551,7 @@ class EspnScoreProvider internal constructor(
             }
 
         private fun debugLog(message: String) {
-            if (BuildConfig.DEBUG) Log.d(TAG, message)
+            if (BuildConfig.IS_DEBUG_BUILD) Log.d(TAG, message)
         }
     }
 }

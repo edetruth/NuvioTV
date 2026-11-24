@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.core.network.StreamOrigin
 import com.nuvio.tv.core.sportslive.ManifestResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,12 @@ class SportsLiveManifestFetcher @Inject constructor() {
             .build()
     }
 
-    suspend fun fetch(url: String, headers: Map<String, String>): ManifestResponse? = withContext(Dispatchers.IO) {
+    /** [url]'s answer, the body read up to [maxBytes]; null when it could not be read or a redirect may not be followed. */
+    suspend fun fetch(
+        url: String,
+        headers: Map<String, String>,
+        maxBytes: Long = MAX_BYTES
+    ): ManifestResponse? = withContext(Dispatchers.IO) {
         try {
             var target = url.toHttpUrlOrNull() ?: return@withContext null
             var sent = headers
@@ -45,7 +51,11 @@ class SportsLiveManifestFetcher @Inject constructor() {
                         nextHop(target, response.header("Location"))
                             ?: return@withContext null
                     } else {
-                        return@withContext ManifestResponse(response.code, if (response.isSuccessful) bodyStart(response) else null)
+                        return@withContext ManifestResponse(
+                            response.code,
+                            if (response.isSuccessful) bodyStart(response, maxBytes) else null,
+                            finalUrl = target.toString()
+                        )
                     }
                 }
                 if (!hop.keepHeaders) sent = emptyMap()
@@ -60,10 +70,10 @@ class SportsLiveManifestFetcher @Inject constructor() {
         }
     }
 
-    private fun bodyStart(response: okhttp3.Response): String? =
+    private fun bodyStart(response: okhttp3.Response, maxBytes: Long): String? =
         response.body?.source()?.let { source ->
-            source.request(MAX_BYTES)
-            val size = minOf(source.buffer.size, MAX_BYTES)
+            source.request(maxBytes)
+            val size = minOf(source.buffer.size, maxBytes)
             source.buffer.readUtf8(size)
         }
 
@@ -77,12 +87,12 @@ class SportsLiveManifestFetcher @Inject constructor() {
 
         /**
          * The redirect from [from] to [location]: null (not followed, no verdict) when there is no usable
-         * location or it goes from https down to http; the headers only go on to the same host.
+         * location or it goes from https down to http; the headers only go on to the same origin ([StreamOrigin]).
          */
         fun nextHop(from: HttpUrl, location: String?): Hop? {
             val to = location?.let { from.resolve(it) } ?: return null
             if (from.isHttps && !to.isHttps) return null
-            return Hop(to, keepHeaders = to.host.equals(from.host, ignoreCase = true))
+            return Hop(to, keepHeaders = StreamOrigin.same(from, to))
         }
     }
 }
