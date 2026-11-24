@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.scores
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** live.23: a game first seen shows its score at once; only the game being watched keeps the first-seen hold. */
@@ -182,6 +183,32 @@ class ScoreDelayTest {
             it.copy(individual = (it.individual as TennisMatch).copy(ending = TennisEnding.RETIRED))
         }
         val shown = ScoreDelay().apply(mapOf(key to retired), delayMs, start + 3_600_000L, setOf(base.eventId)).getValue(key)
+        assertEquals(TennisEnding.COMPLETED, (shown.individual as TennisMatch).ending)
+    }
+
+    @Test
+    fun `a fight, a race and a golf result held back show no winner, podium or leaders`() {
+        // S8: every individual sport, ready for when they are matched to cards.
+        val fight = base.copy(individual = Fight("Main card", listOf(Fighter("A", winner = true), Fighter("B", winner = false)), FightMethod.KO_TKO, 2, "3:14", 0))
+        val heldFight = fight.withResultWithheld().individual as Fight
+        assertTrue(heldFight.fighters.none { it.winner })
+        assertNull(heldFight.method)
+        assertNull(heldFight.round)
+        assertNull(heldFight.clock)
+        val race = base.copy(individual = RaceResult("Grand Prix", listOf(RaceFinisher(1, "Driver A", "DRA"))))
+        assertTrue((race.withResultWithheld().individual as RaceResult).podium.isEmpty())
+        val golf = base.copy(individual = GolfResult("Open", listOf(GolfLeader(1, false, "Player A", "-12"))))
+        assertTrue((golf.withResultWithheld().individual as GolfResult).leaders.isEmpty())
+    }
+
+    @Test
+    fun `a tennis match being watched that ended by walkover is held with no ending`() {
+        // S9: the walkover too, and the watched game's mask is the same.
+        val walkover = tennis(0, ScoreState.POST, winner = true).let {
+            it.copy(individual = (it.individual as TennisMatch).copy(ending = TennisEnding.WALKOVER))
+        }
+        assertEquals(TennisEnding.COMPLETED, (ScoreWatch.masked(walkover).individual as TennisMatch).ending)
+        val shown = ScoreDelay().apply(mapOf(key to walkover), delayMs, start + 3_600_000L, setOf(base.eventId)).getValue(key)
         assertEquals(TennisEnding.COMPLETED, (shown.individual as TennisMatch).ending)
     }
 

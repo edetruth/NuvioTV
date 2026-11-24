@@ -168,15 +168,15 @@ internal fun ScoreSnapshot.withResultWithheld(): ScoreSnapshot = copy(
     away = away.copy(score = null, linescores = emptyList(), record = null, form = null),
     scorers = emptyList(),
     situation = null,
-    individual = individual.let { result ->
-        // A tennis match (#160, the individual sport a card is matched to).
-        if (result is TennisMatch) {
-            result.copy(
-                players = result.players.map { it.copy(winner = false, sets = emptyList(), setsWon = 0, serving = false) },
-                ending = TennisEnding.COMPLETED
-            )
-        } else {
-            result
-        }
+    // Every individual sport (S8): today only a tennis match (#160) is matched to a card, the others may follow.
+    individual = when (val result = individual) {
+        is TennisMatch -> result.copy(
+            players = result.players.map { it.copy(winner = false, sets = emptyList(), setsWon = 0, serving = false) },
+            ending = TennisEnding.COMPLETED
+        )
+        is Fight -> result.copy(fighters = result.fighters.map { it.copy(winner = false) }, method = null, round = null, clock = null)
+        is RaceResult -> result.copy(podium = emptyList())
+        is GolfResult -> result.copy(leaders = emptyList())
+        null -> null
     }
 )
