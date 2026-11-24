@@ -62,7 +62,7 @@ fun SportsLiveWaitingCard(
             .claimsBottomLeft()
             .widthIn(max = SportsLiveTokens.Alert.Width + 60.dp)
             .clip(shape)
-            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            .background(SportsLiveTokens.Colors.SurfaceRaised)
             .border(1.dp, SportsLiveTokens.Alert.Border, shape)
             .padding(SportsLiveTokens.Alert.Padding)
     ) {

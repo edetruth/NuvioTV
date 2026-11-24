@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -88,12 +90,12 @@ fun SportsLiveToastCard(toast: SportsLiveToast, modifier: Modifier = Modifier) {
 /** The toast card's frame: the surface, the icon column for [kind], then [content] (the text column). */
 @Composable
 fun SportsLiveToastFrame(kind: SportsLiveToastKind, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    // The alert cards' surface (#136): the panel colour, slightly see-through, with their hairline border.
+    // The one overlay surface (#101): opaque raised, 1 dp outline, 12 dp corners.
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
     Row(
         modifier = modifier
             .width(SportsLiveTokens.Toast.Width)
-            .background(Colors.Surface.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA), shape)
+            .background(Colors.SurfaceRaised, shape)
             .border(1.dp, SportsLiveTokens.Alert.Border, shape)
             .padding(horizontal = SportsLiveTokens.Toast.PaddingHorizontal, vertical = SportsLiveTokens.Toast.PaddingVertical),
         horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Toast.IconGap),
@@ -174,12 +176,14 @@ fun SportsLiveToastHost(queue: SportsLiveToastQueue = SportsLiveToasts.shared) {
             claimedTop = claimedTop,
             gap = SportsLiveTokens.Size.RowGap
         )
+        val travel = with(density) { SportsLiveTokens.Motion.TRAVEL.roundToPx() }
+        val offset = SportsLiveTokens.Motion.slideOffset(fromEnd = false, travelPx = travel)
         AnimatedVisibility(
             visible = toast != null && !inPip && !overMovie,
-            enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { width -> -width } +
-                fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
-            exit = slideOutHorizontally(tween(SportsLiveTokens.Toast.ENTER_MS)) { width -> -width } +
-                fadeOut(tween(SportsLiveTokens.Toast.ENTER_MS)),
+            enter = slideInHorizontally(tween(SportsLiveTokens.Motion.ENTER_MS, easing = FastOutSlowInEasing)) { offset } +
+                fadeIn(tween(SportsLiveTokens.Motion.ENTER_MS, easing = FastOutSlowInEasing)),
+            exit = slideOutHorizontally(tween(SportsLiveTokens.Motion.EXIT_MS, easing = FastOutLinearInEasing)) { offset } +
+                fadeOut(tween(SportsLiveTokens.Motion.EXIT_MS, easing = FastOutLinearInEasing)),
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = corner.start, bottom = bottom)
