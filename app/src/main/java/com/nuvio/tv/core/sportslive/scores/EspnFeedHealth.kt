@@ -99,6 +99,16 @@ class EspnFeedHealth internal constructor(private val now: () -> Long) {
     /** Every feed asked for since the app started, by key. */
     val feeds: StateFlow<Map<EspnFeedKey, FeedHealth>> = state.asStateFlow()
 
+    /**
+     * #462: the leagues ESPN is unreachable for now: those whose latest scoreboard request failed (timeout, no
+     * connection, an HTTP error, unreadable data). One answer from any of the league's scoreboards takes it out.
+     */
+    fun failingLeagues(): Set<EspnLeague> = state.value.values
+        .filter { it.key.family != EspnFeedFamily.SUMMARY && it.key.league != null }
+        .groupBy { it.key.league!! }
+        .filterValues { feeds -> feeds.maxByOrNull { it.lastAttemptAt }?.failing == true }
+        .keys
+
     fun recordSuccess(key: EspnFeedKey) {
         val at = now()
         state.update { all ->

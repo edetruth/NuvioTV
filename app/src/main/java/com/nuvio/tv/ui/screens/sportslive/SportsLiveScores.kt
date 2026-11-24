@@ -45,6 +45,9 @@ class SportsLiveScoresViewModel @Inject constructor(
     /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
     val unmatched: StateFlow<Set<String>> = repo.unmatched
 
+    /** #462: ESPN known unreachable for [item] (its leagues' feeds failing): Home skips the wait for ESPN's answer. */
+    fun espnUnreachable(item: SportsLiveItem): Boolean = repo.espnUnreachable(item)
+
     /** The Scores setting; null until read, so nothing is tracked or shown before it is known. */
     val mode: StateFlow<ScoresMode?> = repo.mode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

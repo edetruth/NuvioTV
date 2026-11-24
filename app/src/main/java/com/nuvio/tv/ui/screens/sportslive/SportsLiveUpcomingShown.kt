@@ -35,10 +35,14 @@ internal fun sportsLiveUpcomingShown(
         val event = stateOf(item)
         if (event?.state == ScoreState.POST) return true
         if (event?.state == ScoreState.IN && event.eventId in liveNowEvents) return true
-        // #355: a late start stays, but not for ever: past ESPN's start (its own when ESPN has no valid time) by more than
-        // [UPCOMING_LATE_START_GRACE_MS], an ESPN still saying "not started" is stale, and the game leaves.
+        // #355: a late start stays, but not for ever: once the game's own timed start has passed, an ESPN still saying
+        // "not started" more than [UPCOMING_LATE_START_GRACE_MS] past the later of ESPN's start and its own is stale, and
+        // the game leaves. #460: a game whose own start is still ahead, or that has no time of its own (Time TBA), stays
+        // whatever ESPN's (possibly stale or session) time says: it is on no other list until then.
         if (event?.state == ScoreState.PRE) {
-            val start = event.startMs?.takeIf { event.timeValid } ?: item.startMs?.takeIf { item.startHasTimeOfDay } ?: return false
+            val own = item.startMs?.takeIf { item.startHasTimeOfDay } ?: return false
+            if (own > nowMs) return false
+            val start = maxOf(own, event.startMs?.takeIf { event.timeValid } ?: own)
             return nowMs - start > UPCOMING_LATE_START_GRACE_MS
         }
         // L7: a date-only row whose date has passed everywhere goes, between sortings too.

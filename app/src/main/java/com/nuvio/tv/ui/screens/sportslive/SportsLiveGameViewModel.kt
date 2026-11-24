@@ -175,7 +175,16 @@ data class SportsLiveGameUiState(
      * hidden-score card wins over it. Its Try again then takes the header's Down and the first focus (review R2).
      */
     val showsFailure: Boolean
-        get() = settled && (showsScore || section == GameSection.PREVIEW) && status == GameLoadStatus.FAILED && shownSummary == null
+        get() = settled && (showsScore || section == GameSection.PREVIEW || showsPreview) && status == GameLoadStatus.FAILED && shownSummary == null
+
+    /**
+     * #474: an upcoming game whose summary was asked for (not Scores Off waiting for Reveal): its spoiler-neutral Preview is
+     * what the page shows under a hidden score, so while it loads or after it failed the page shows the skeleton or the
+     * failure card (Try again), never the "Score hidden" card. Before the summary lands its sections are empty, so
+     * [section] alone could never say so.
+     */
+    val showsPreview: Boolean
+        get() = event?.state == ScoreState.PRE && status != GameLoadStatus.WAITING_REVEAL
 }
 
 /**

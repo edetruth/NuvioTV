@@ -247,7 +247,7 @@ class SportsLiveViewModel internal constructor(
         dataSaver = prefs.dataSaver,
         onResolveFailed = resolver::invalidate,
         endedInputs = combine(liveScores.scores, liveScores.mode, liveScores.unmatched) { scores, mode, unmatched ->
-            EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched))
+            EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched), liveScores::espnUnreachable)
         }.firstThenCoalesce(STATE_SCORES_SETTLE_MS, SCORES_CATCH_UP_MS),
         endedGames = SportsLiveEndedGames.shared,
         clock = flow {
@@ -1766,7 +1766,7 @@ class SportsLiveViewModel internal constructor(
                     mySports.isDefault || selection.moreLiveOpen -> live
                     else -> SportsLiveMySportsScope.scope(live, mySports)
                 }
-                awaitingScore = scoreWait.awaiting(tracked, scores, inputs.canEstimate, now)
+                awaitingScore = scoreWait.awaiting(tracked, scores, inputs.canEstimate, now, inputs.espnDown)
                 scheduleWaitWake(scoreWait.deadline)
                 if (toCheck.isNotEmpty() && screenVisible && selection.tab == SportsLiveTab.LIVE_NOW) {
                     linkChecker?.offer(toCheck, viewModelScope)
@@ -1874,13 +1874,20 @@ class SportsLiveViewModel internal constructor(
         } else {
             items
         }
-        val counts = sportsLiveFilterCounts(counted(scopedItems), filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
+        val shownCounts = sportsLiveFilterCounts(counted(scopedItems), filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
             .let { if (mySportsScoped && !onLiveNow) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size + waiting) else it }
+        // #470: the numbers leave out games still waiting for ESPN, as the LIVE header does; a chip still shows meanwhile
+        // ([shownCounts]), so none appears or goes for a 10 s wait.
+        val counts = if (onLiveNow && awaitingScore.isNotEmpty()) {
+            sportsLiveFilterCounts(counted(scopedItems).filter { it.streamKey !in awaitingScore }, filterOf, myTeams = true)
+        } else {
+            shownCounts
+        }
         // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no
         // games hide, except the selected one, kept with 0 until the user moves (onUserMoved). All sports
         // follows it while My sports hides any of the tab's games (#146).
         val filter = selection.filter.takeUnless { onLiveNow && it == SportsLiveUiState.ALL_SPORTS_FILTER }
-        val filters = sportsLiveShownFilters(values, counts, filter.takeIf { !allSports })
+        val filters = sportsLiveShownFilters(values, shownCounts, filter.takeIf { !allSports })
             .let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
             .let { shown -> if ((mySportsScoped || allSports) && !onLiveNow) withAllSports(shown) else shown }
         // More live (user 2026-11-21): under My sports, Live now ends with one row holding the live games it leaves out

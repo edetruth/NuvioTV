@@ -33,14 +33,16 @@ class SportsLiveScoreWait(private val maxWaitMs: Long = MAX_WAIT_MS) {
         items: List<SportsLiveItem>,
         scores: Map<String, ScoreSnapshot>,
         answered: (SportsLiveItem) -> Boolean,
-        nowMs: Long
+        nowMs: Long,
+        /** #462: ESPN known unreachable for the card (its feeds failing): no answer is coming, so it never waits. */
+        espnDown: (SportsLiveItem) -> Boolean = { false }
     ): Set<String> {
         val keys = items.mapTo(HashSet()) { it.streamKey }
         since.keys.retainAll(keys)
         val waiting = HashSet<String>()
         for (item in items) {
             val key = item.streamKey
-            if (item.isChannel || scores[key] != null || answered(item)) {
+            if (item.isChannel || scores[key] != null || answered(item) || espnDown(item)) {
                 since.remove(key)
                 continue
             }

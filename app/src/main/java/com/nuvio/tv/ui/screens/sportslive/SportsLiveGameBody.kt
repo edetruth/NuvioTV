@@ -101,6 +101,10 @@ internal fun GameBody(
     onRetry: () -> Unit = {},
     /** The failure card's Try again: the header's Down and the first focus while it shows (review R2). */
     failureFocus: FocusRequester = remember { FocusRequester() },
+    /** #461: Try again takes focus as it appears ([SportsLivePageFocus.failureTakesFocus]). */
+    failureTakesFocus: Boolean = true,
+    /** #461: Try again gained or lost focus. */
+    onFailureFocused: (Boolean) -> Unit = {},
     /** A college league's AP ranks by team id, for every Standings row (BUG18). */
     standingRanks: Map<String, Int> = emptyMap()
 ) {
@@ -109,9 +113,14 @@ internal fun GameBody(
         // The Scores setting and spoiler protection not read yet (a frame or two): neither the hidden card nor stats.
         !state.settled -> Unit
         // An upcoming game's Preview is spoiler-neutral (#171): it shows with the score hidden too.
-        !state.showsScore && section != GameSection.PREVIEW -> HiddenGameBody(hasReplay = state.replay != null)
+        // #474: an upcoming game still loading its Preview (or failed) is no hidden game: skeleton or Try again below.
+        !state.showsScore && section != GameSection.PREVIEW && !(state.showsPreview && state.shownSummary == null) ->
+            HiddenGameBody(hasReplay = state.replay != null)
         state.showsFailure ->
-            SportsLivePageFailure(stringResource(R.string.sports_live_game_failed_title), state.retrying, onRetry, focus = failureFocus)
+            SportsLivePageFailure(
+                stringResource(R.string.sports_live_game_failed_title), state.retrying, onRetry, focus = failureFocus,
+                takeFocus = failureTakesFocus, onFocused = onFailureFocused
+            )
         summary == null -> SportsLiveGameSkeleton()
         section == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_no_stats))
         else -> androidx.compose.runtime.key(section) {

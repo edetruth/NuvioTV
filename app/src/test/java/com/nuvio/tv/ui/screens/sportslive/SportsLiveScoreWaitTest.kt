@@ -69,6 +69,16 @@ class SportsLiveScoreWaitTest {
     }
 
     @Test
+    fun `#462 - with ESPN known unreachable for a covered game it never waits, and waits again once ESPN answers`() {
+        val wait = SportsLiveScoreWait()
+        var down = true
+        assertTrue(wait.awaiting(listOf(covered), emptyMap(), waitingGate, NOW) { down }.isEmpty())
+        assertEquals(null, wait.deadline)
+        down = false
+        assertEquals(setOf(covered.streamKey), wait.awaiting(listOf(covered), emptyMap(), waitingGate, NOW + 1) { down })
+    }
+
+    @Test
     fun `Scores Off waits for nothing`() {
         val off = SportsLiveEndedGames.estimateGate(scoresOff = true, unmatched = emptySet())
         assertTrue(SportsLiveScoreWait().awaiting(listOf(covered), emptyMap(), off, NOW).isEmpty())

@@ -2173,7 +2173,7 @@ class SportsLiveViewModelTest {
         )
         val viewModel = SportsLiveViewModel(
             repo,
-            endedInputs = flowOf(EndedInputs(scores) { false }),
+            endedInputs = flowOf(EndedInputs(scores, canEstimate = { false })),
             endedGames = SportsLiveEndedGames(),
             clock = linkTicks,
             linkChecker = checker,
@@ -2232,6 +2232,11 @@ class SportsLiveViewModelTest {
         assertEquals(setOf(stillOn.streamKey), covered.uiState.value.awaitingScore)
         // Listed in place all the same: nothing hidden or held back.
         assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+        // #470: every count leaves it out while it waits (tab, Results' line, chips), as the LIVE header does; its chip stays.
+        assertEquals(0, covered.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+        assertEquals(0, covered.uiState.value.liveGameCount)
+        assertEquals(0, covered.uiState.value.filterCounts[null] ?: 0)
+        assertTrue(covered.uiState.value.filters.isNotEmpty())
 
         val uncovered = newViewModel(canEstimate = { true })
         advanceUntilIdle()
@@ -2243,6 +2248,7 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertTrue(covered.uiState.value.awaitingScore.isEmpty())
         assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+        assertEquals(1, covered.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
     }
 
     @Test
@@ -2269,7 +2275,7 @@ class SportsLiveViewModelTest {
         nextLoad = load(listOf(nba, cricket))
         val viewModel = SportsLiveViewModel(
             repo,
-            endedInputs = flowOf(EndedInputs(emptyMap()) { false }),
+            endedInputs = flowOf(EndedInputs(emptyMap(), canEstimate = { false })),
             endedGames = SportsLiveEndedGames(),
             mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
             computeDispatcher = compute
@@ -2327,6 +2333,19 @@ class SportsLiveViewModelTest {
         val resuming = newViewModel(scores = mapOf(off.streamKey to suspended))
         advanceUntilIdle()
         assertEquals(2, resuming.uiState.value.filterCounts[null])
+    }
+
+    @Test
+    fun `#462 - Live now skips the wait for a covered game ESPN is known unreachable for`() = runTest {
+        nextLoad = load(listOf(stillOn))
+        val viewModel = SportsLiveViewModel(
+            repo, endedInputs = flowOf(EndedInputs(emptyMap(), { false }, { true })), endedGames = SportsLiveEndedGames(), computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.awaitingScore.isEmpty())
+        assertEquals(listOf("on"), viewModel.uiState.value.visibleItems.map { it.id })
     }
 
     @Test

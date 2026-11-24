@@ -215,6 +215,18 @@ class LiveScoresRepository internal constructor(
      */
     val unmatched: StateFlow<Set<String>> = unmatchedOutput.asStateFlow()
 
+    /**
+     * #462: ESPN is known unreachable for [item]: every league it routes to has its latest scoreboard request failed
+     * ([EspnFeedHealth.failingLeagues]). Live now, Home and the panel then skip the "not LIVE until ESPN answers" wait for
+     * it (an answer is not coming); the wait comes back once a request of its league answers.
+     */
+    fun espnUnreachable(item: SportsLiveItem): Boolean {
+        val failing = health.failingLeagues()
+        if (failing.isEmpty()) return false
+        val leagues = (listOf(item) + item.alternates).flatMap(EspnLeagueMap::leaguesFor).distinct()
+        return leagues.isNotEmpty() && leagues.all { it in failing }
+    }
+
     private val logosLoadedFlow = MutableStateFlow(logoFile == null)
 
     /**

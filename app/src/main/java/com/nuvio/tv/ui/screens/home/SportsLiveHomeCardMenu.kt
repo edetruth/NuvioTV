@@ -74,12 +74,19 @@ internal data class HomeCardMenuEntries(
     val report: Boolean = true
 )
 
-internal fun homeCardMenuEntries(item: SportsLiveItem, game: ScoreSnapshot?, followSides: Int, partners: Int): HomeCardMenuEntries =
+internal fun homeCardMenuEntries(
+    item: SportsLiveItem,
+    game: ScoreSnapshot?,
+    followSides: Int,
+    partners: Int,
+    /** #469: the card is over as Live Now has it (final, Probably ended, postponed): no Watch with another game. */
+    over: Boolean = false
+): HomeCardMenuEntries =
     HomeCardMenuEntries(
         gameStats = game != null,
         followSides = if (item.isChannel) 0 else followSides,
         watchLater = game != null && !item.isChannel,
-        watchWith = partners > 0 && sportsLiveDualAvailable()
+        watchWith = !over && partners > 0 && sportsLiveDualAvailable()
     )
 
 /**
@@ -106,7 +113,7 @@ internal fun SportsLiveHomeCardMenu(
     val targets = remember(item, game) { FollowTargets.of(item, game, homeFirst) }
     val pick = remember(item, all, ended) { SportsLiveDualPick(item, all, filter = null, tab = SportsLiveTab.LIVE_NOW, endedKeys = ended) }
     // live.26 (#222): only live games count as partners; the entry is hidden with none.
-    val entries = homeCardMenuEntries(item, game, targets.size, pick.candidates.count { !it.isChannel })
+    val entries = homeCardMenuEntries(item, game, targets.size, pick.candidates.count { !it.isChannel }, over = item.hasEnded(ended))
     var picking by remember(item) { mutableStateOf(false) }
     if (picking) {
         // The same rows and spoiler gate as Live Now's picker: Hide until focused reveals a focused row (#117).

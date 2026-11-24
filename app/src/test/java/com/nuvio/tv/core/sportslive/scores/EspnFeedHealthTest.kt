@@ -35,6 +35,21 @@ class EspnFeedHealthTest {
     // --- Tracker state ---
 
     @Test
+    fun `#462 - a league is unreachable while its latest scoreboard request failed, and answers again on one success`() {
+        assertTrue(health.failingLeagues().isEmpty())
+        health.recordFailure(nba, FeedFailureKind.TIMEOUT)
+        health.recordSuccess(nfl)
+        assertEquals(setOf(EspnLeagueMap.NBA), health.failingLeagues())
+        // A later answer from the league's board takes it out.
+        nowMs += 60_000
+        health.recordSuccess(nba)
+        assertTrue(health.failingLeagues().isEmpty())
+        // The summary endpoint never makes a league unreachable.
+        health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.NETWORK)
+        assertTrue(health.failingLeagues().isEmpty())
+    }
+
+    @Test
     fun `a failure run counts up, keeps when it began, and a success clears it`() {
         health.recordSuccess(nba)
         val okAt = nowMs

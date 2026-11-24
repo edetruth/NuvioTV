@@ -77,4 +77,18 @@ class SportsLivePostponedTest {
         )
         assertEquals(ScoreboardStatusLines("Postponed"), scoreboardStatusLines(row, strings, kickoff = null))
     }
+
+    @Test
+    fun `#468 - under Hide until focused a postponed row reads Postponed, never Score hidden`() {
+        val postponed = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Postponed", mayResume = false)
+        val row = scoreboardRows(listOf(card), SportsLiveTab.LIVE_NOW, mapOf(card.streamKey to postponed), ScoresMode.HIDE_UNTIL_FOCUSED, emptySet(), 0L)
+            .single().copy(chip = com.nuvio.tv.core.sportslive.scores.ScoreChip.Hidden)
+        val strings = com.nuvio.tv.core.sportslive.GameStatusStrings(
+            liveClock = "● %1\$s", live = "LIVE", clockPeriod = "%1\$s · %2\$s", timeCountdown = "%1\$s · %2\$s",
+            inHoursMinutes = "in %1\$d h %2\$d m", inHours = "in %1\$d h", inMinutes = "in %1\$d min",
+            final = "Final", fullTime = "FT", probablyEnded = "Probably ended", postponed = "Postponed",
+            chip = com.nuvio.tv.core.sportslive.scores.ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
+        )
+        assertEquals(ScoreboardStatusLines("Postponed"), scoreboardStatusLines(row, strings, kickoff = null))
+    }
 }
