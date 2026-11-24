@@ -241,6 +241,12 @@ class SportsLiveResultsTest {
         assertEquals(1_000L, resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, SpoilerProtection()).single().nextStartMs)
         // Revealed or watched: the next game shows.
         assertEquals(1_000L, resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, ended).single().nextStartMs)
+        // The same answer as the final's own Results row (#360), for every mode and protection.
+        for (mode in ScoresMode.values()) for (protection in listOf(SpoilerProtection(), SpoilerProtection(myTeamsResults = true), ended)) {
+            val rowHides = resultHiddenReason(last, true, mode, emptySet(), protection) != null
+            val shown = resultsNotPlayedShown(listOf(line), mode, protection).single().nextStartMs
+            assertEquals("$mode $protection", !rowHides, shown != null)
+        }
         // No final within Results' days: as it was.
         val noFinal = ResultsNotPlayed("Chicago Bears", 1_000L)
         assertEquals(1_000L, resultsNotPlayedShown(listOf(noFinal), ScoresMode.SHOW, SpoilerProtection()).single().nextStartMs)

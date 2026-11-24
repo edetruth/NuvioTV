@@ -144,7 +144,7 @@ class SportsLiveReportTest {
         )
         assertTrue(titled, titled.contains("FOOTBALL | no score | Illinois · Iowa"))
         assertFalse(titled, titled.contains("2-1"))
-        assertTrue(titled, titled.contains("SOCCER | no score | Arsenal ${SportsLiveCrashReport.NUMBERS} Chelsea"))
+        assertTrue(titled, titled.contains("SOCCER | no score | Arsenal – Chelsea"))
         // No panel shown: no panel line, no section.
         val closed = SportsLiveReport.text(input(), secrets)
         assertFalse(closed, closed.contains("Panel:"))
@@ -230,8 +230,8 @@ class SportsLiveReportTest {
             assertFalse(text, text.contains(score))
             assertFalse(score, SportsLiveReport.qrPayload(text).contains(score))
         }
-        assertTrue(text, text.contains("Game: Arsenal <numbers> Chelsea · Arsenal <numbers> Chelsea · Premier League"))
-        assertTrue(text, text.contains("Focused: Bayern <numbers> Koln"))
+        assertTrue(text, text.contains("Game: Arsenal – Chelsea · Arsenal – Chelsea · Premier League"))
+        assertTrue(text, text.contains("Focused: Bayern – Koln"))
         assertTrue(text, text.contains("Saved: 2025-11-20 19:42:05 +00:00"))
     }
 

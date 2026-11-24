@@ -123,7 +123,7 @@ object SportsLiveReport {
         fun clean(value: String?): String = oneLine(LogRedact.report(value, secrets))
         // Titles are an addon's words, and a replay's can carry its result ("A 2-1 B", its sides "A 2" and "1 B"): no
         // score-shaped pair survives (spoilers).
-        fun title(value: String?): String = SportsLiveCrashReport.noScores(SPLIT_SCORE.replace(clean(value), SportsLiveCrashReport.NUMBERS))
+        fun title(value: String?): String = SportsLiveCrashReport.noScores(SPLIT_SCORE.replace(clean(value), "–"))
         val game = input.game
         return buildString {
             appendLine("Nuvio Live report #${input.number}")

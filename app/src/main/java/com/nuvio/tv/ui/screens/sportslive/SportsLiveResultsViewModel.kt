@@ -179,9 +179,9 @@ internal fun resultHiddenReason(
 internal fun resultsNotPlayedShown(notPlayed: List<ResultsNotPlayed>, mode: ScoresMode, protection: SpoilerProtection): List<ResultsNotPlayed> =
     notPlayed.map { line ->
         val last = line.lastFinal ?: return@map line
-        // Hidden: Scores Off, a protected final, or (Hide my teams' results on, M2's own key) one not revealed or watched.
-        val hidden = mode == ScoresMode.OFF || protection.protects(last) ||
-            (protection.myTeamsResults && !protection.revealed(last.eventId))
+        // Hidden exactly as the final's own Results row hides it (#360): the one rule, [resultHiddenReason], for a followed
+        // team's game. No focus reveal here: under Hide until I reveal the next game stays left out.
+        val hidden = resultHiddenReason(last, followed = true, mode, revealed = emptySet(), protection) != null
         if (hidden) line.copy(nextStartMs = null) else line
     }
 
