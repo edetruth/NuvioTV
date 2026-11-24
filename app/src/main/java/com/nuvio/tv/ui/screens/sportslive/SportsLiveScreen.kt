@@ -474,7 +474,8 @@ fun SportsLiveScreen(
             dialogOpen = playState != SportsLivePlayState.Idle || dualPick != null,
             onPreviewFocus = viewModel::setPreviewFocus,
             onPreviewKey = viewModel::onPreviewKey,
-            onOpenDetail = onOpenDetail,
+            // #240, #243: a replay whose result is hidden (as its links) opens its Detail page masked.
+            onOpenDetail = { item -> sportsLiveOpenDetail(item, hidesReplayLinks(item), onOpenDetail) },
             onToggleFollow = { _, target -> viewModel.toggleFollow(target) },
             canWatchWith = canWatchWith,
             onWatchWith = { item ->

@@ -43,11 +43,12 @@ internal fun <T> sportsLiveNoticesLast(streams: List<T>, isNotice: (T) -> Boolea
 }
 
 /**
- * The full-screen Stream screen's list for [videoId] (N2): a Sports & Live game's notices last; any
- * other title's list as is.
+ * The full-screen Stream screen's list for [videoId] (N2): a Sports & Live game's notices last; a spoiler-safe replay's
+ * links score-masked, an episode of a hidden replay folder opened from its Detail page too (#240); any other title's
+ * list as is.
  */
 internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>): List<Stream> =
-    if (!SportsLiveExtraSources.isSportsPlayback(videoId)) streams
+    if (!SportsLiveExtraSources.isSportsPlayback(videoId)) SportsLiveExtraSources.spoilerSafeStreams(videoId, streams)
     else sportsLiveNoticesLast(SportsLiveExtraSources.spoilerSafeStreams(videoId, streams), SportsLiveZapResolver::isNoticeEntry)
 
 /**

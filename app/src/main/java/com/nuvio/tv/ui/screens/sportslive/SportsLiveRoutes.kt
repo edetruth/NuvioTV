@@ -50,3 +50,46 @@ internal fun sportsLiveLocalStamps(context: Context, text: String?): String? {
 internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta =
     if (!SportsLiveExtraSources.isSpoilerSafe(videoId)) meta
     else meta.copy(poster = null, background = null, landscapePoster = null, logo = null, rawPosterUrl = null, releaseInfo = null)
+
+/**
+ * Opens [item]'s Detail page (a replay team folder's episodes, More… > Details; #240, #243): a replay whose result is
+ * [hidden] for the user (as its card's links: [sportsLiveHidesReplayLinks], or a Game page not showing its result) opens
+ * masked ([sportsLiveDetailMeta]); anything else as the addon gives it.
+ */
+internal fun sportsLiveOpenDetail(item: SportsLiveItem, hidden: Boolean, open: (SportsLiveItem) -> Unit) {
+    SportsLiveExtraSources.markSpoilerSafe(item.id, hidden)
+    open(item)
+}
+
+/**
+ * [meta] as the Detail page for [itemId] shows it (#240, #243): a spoiler-safe replay's ([sportsLiveOpenDetail]) with any
+ * score masked in its title and its videos' titles and links, and no description, date, artwork, trailer or episode
+ * summary, any of which may carry the result; its videos become spoiler-safe too, so an episode's Stream screen and
+ * player mask as the replay does. Any other title's as is.
+ */
+internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
+    val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
+    SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id })
+    return meta.copy(
+        name = spoilerSafeLinkText(meta.name) ?: meta.name,
+        description = null,
+        releaseInfo = null,
+        poster = null,
+        background = null,
+        landscapePoster = null,
+        logo = null,
+        rawPosterUrl = null,
+        seasonPosters = emptyMap(),
+        trailerYtIds = emptyList(),
+        trailers = emptyList(),
+        videos = meta.videos.map { video ->
+            video.copy(
+                title = spoilerSafeLinkText(video.title) ?: video.title,
+                overview = null,
+                thumbnail = null,
+                seasonPoster = null,
+                streams = video.streams.map(::spoilerSafeReplayStream)
+            )
+        }
+    )
+}

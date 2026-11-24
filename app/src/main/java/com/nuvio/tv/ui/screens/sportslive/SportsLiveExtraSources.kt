@@ -76,6 +76,10 @@ object SportsLiveExtraSources {
     // Content ids of replays played spoiler-safe (#223): every list of their links masks scores. Bounded like [entries].
     private val spoilerSafeIds = LinkedHashSet<String>()
 
+    // Per spoiler-safe replay team folder (#240): its videos' ids, so an episode's Stream screen and player mask as the
+    // folder does. Guarded by [spoilerSafeIds], dropped with its folder.
+    private val spoilerSafeVideos = HashMap<String, Set<String>>()
+
     // Per played content id: each source's Sources-panel name (its label, and the primary's addon name)
     // to its reliability key, so the full player can credit the source it plays. Bounded like [entries].
     private val sourceNames = LinkedHashMap<String, SourceNames>()
@@ -265,13 +269,31 @@ object SportsLiveExtraSources {
         if (contentId == null) return
         synchronized(spoilerSafeIds) {
             spoilerSafeIds.remove(contentId)
+            spoilerSafeVideos.remove(contentId)
             if (safe) spoilerSafeIds.add(contentId)
-            while (spoilerSafeIds.size > MAX_ENTRIES) spoilerSafeIds.remove(spoilerSafeIds.first())
+            while (spoilerSafeIds.size > MAX_ENTRIES) {
+                val oldest = spoilerSafeIds.first()
+                spoilerSafeIds.remove(oldest)
+                spoilerSafeVideos.remove(oldest)
+            }
         }
     }
 
+    /**
+     * [videoIds], the videos of [contentId] (a replay team folder the Detail page lists, #240): while [contentId] is
+     * spoiler-safe, each of them is too, so the episode's Stream screen and player name its links with the score masked.
+     */
+    fun markSpoilerSafeVideos(contentId: String, videoIds: Collection<String>) {
+        synchronized(spoilerSafeIds) {
+            if (contentId in spoilerSafeIds) spoilerSafeVideos[contentId] = videoIds.toSet()
+        }
+    }
+
+    /** Whether [contentId] (a replay, or a video of a spoiler-safe team folder) lists and plays its links score-masked. */
     fun isSpoilerSafe(contentId: String?): Boolean =
-        contentId != null && synchronized(spoilerSafeIds) { contentId in spoilerSafeIds }
+        contentId != null && synchronized(spoilerSafeIds) {
+            contentId in spoilerSafeIds || spoilerSafeVideos.values.any { contentId in it }
+        }
 
     /** [streams] of [contentId] as its lists name them: a spoiler-safe replay's with any score masked. */
     fun spoilerSafeStreams(contentId: String?, streams: List<Stream>): List<Stream> =
@@ -385,7 +407,10 @@ object SportsLiveExtraSources {
     internal fun reset() {
         synchronized(entries) { entries.clear() }
         synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
-        synchronized(spoilerSafeIds) { spoilerSafeIds.clear() }
+        synchronized(spoilerSafeIds) {
+            spoilerSafeIds.clear()
+            spoilerSafeVideos.clear()
+        }
         synchronized(sourceNames) { sourceNames.clear() }
         synchronized(streamSources) { streamSources.clear() }
         synchronized(seeds) { seeds.clear() }

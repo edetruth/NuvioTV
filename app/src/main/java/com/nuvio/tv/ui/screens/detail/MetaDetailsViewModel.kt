@@ -1047,7 +1047,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     private suspend fun applyMetaWithEnrichment(meta: Meta) {
         if (!isServerItem) loadMoreLikeThisAsync(meta)
-        val enriched = if (isServerItem) meta else enrichMeta(meta)
+        val enriched = com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(itemId, if (isServerItem) meta else enrichMeta(meta))
 
         syncEffectiveContentId(enriched)
         val cachedNextToWatch = metaDetailsSessionState.getNextToWatch(
