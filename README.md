@@ -25,6 +25,7 @@ already use. It installs next to the official app (`io.github.edetruth.nuviotv`)
   and fast starts (about 4 s on an onn 4K Pro); "▶ Ready" for your teams' games; a Your teams strip; Report a
   problem (hold OK on any screen) with privacy-safe reports and crash capture; first-run setup; settings synced with
   your Nuvio account.
+- **New in live.26:** Live now opens settled (no empty flash, rows stay put); "All sports" next to My sports, with channel up/down through the whole list; Dual Screen picker rebuilt from Live now; "Watch with" your team's game; hidden replays open under the matchup name with link names masked; Home follows the Scores setting at once. Known issues: Hold OK in a replay, replay team folders (#240).
 - **New in live.25:** one shared game order for every live list and channel up/down; coming back from the player lands on the game you were watching; Live now refreshes cleanly after a long absence; a screenshot is saved next to problem reports; polish across the Sports & Live screens.
 - **New in live.24:** opens much faster on low-end boxes (first list in about 2-4 s, was about 9 s); one consistent
   game view everywhere (college ranks, tags and logos, "Final · OT"); Channels from IPTV lists with country tags and
