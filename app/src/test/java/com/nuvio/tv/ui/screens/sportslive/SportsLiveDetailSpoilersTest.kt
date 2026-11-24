@@ -226,6 +226,20 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a hidden replay looks up no trailer, TMDB text, More like this or comments, under either id`() {
+        // F7, F2-3: the Detail page's and the player's look-ups by title or id are skipped while its result is hidden.
+        assertFalse(sportsLiveHidesExtras("catalog:1", "canonical:1"))
+        SportsLiveExtraSources.markSpoilerSafe("catalog:1", true)
+        assertTrue(sportsLiveHidesExtras("catalog:1", "canonical:1"))
+        assertTrue(sportsLiveHidesExtras("catalog:1"))
+        SportsLiveExtraSources.reset()
+        SportsLiveExtraSources.markSpoilerSafe("catalog:1", true)
+        sportsLiveDetailMeta("catalog:1", folder.copy(id = "canonical:1"))
+        // The player knows the content by the addon's id only.
+        assertTrue(sportsLiveHidesExtras("canonical:1"))
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)

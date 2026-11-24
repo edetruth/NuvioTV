@@ -1109,6 +1109,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun loadComments(meta: Meta, forceRefresh: Boolean = false) {
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return // Sports & Live F2-3: comments discuss the result
         if (!traktCommentsEnabled || !traktAuthenticated || !supportsComments(meta)) {
             cancelCommentsRequests()
             _uiState.update { state ->
@@ -1311,6 +1312,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun loadMoreLikeThisAsync(meta: Meta) {
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return // Sports & Live F2-3: other replays' raw titles
         moreLikeThisJob?.cancel()
         moreLikeThisJob = viewModelScope.launch {
             val source = when {
@@ -2904,7 +2906,7 @@ class MetaDetailsViewModel @Inject constructor(
         if (isServerItem) return
         if (trailerHandoffActive) return
         val meta = _uiState.value.meta ?: return
-        if (com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.isSpoilerSafe(meta.id)) return // Sports & Live F7: no highlights found by title
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return // Sports & Live F7: no highlights found by title
 
         trailerFetchJob?.cancel()
         trailerFetchJob = viewModelScope.launch {

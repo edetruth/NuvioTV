@@ -111,6 +111,7 @@ internal fun PlayerRuntimeController.updateEpisodeDescription() {
 
 private suspend fun PlayerRuntimeController.enrichDescriptionFromTmdb(id: String?, type: String?) {
     if (id.isNullOrBlank() || type.isNullOrBlank()) return
+    if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(id)) return // Sports & Live F2-3: TMDB's text and logo may tell the result
     val settings = tmdbSettingsDataStore.settings.first()
     if (!settings.enabled || !settings.useBasicInfo) return
 

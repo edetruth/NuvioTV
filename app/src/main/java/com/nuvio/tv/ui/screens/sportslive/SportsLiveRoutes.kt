@@ -83,6 +83,14 @@ internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
 }
 
 /**
+ * Whether the Detail page of [itemId] (the addon's [metaId]) or the player of that content looks up nothing more about it
+ * by its title or id (F7, F2-3: a trailer, TMDB's description, title and logo, More like this, comments), any of which
+ * may carry the result: true for a spoiler-safe replay.
+ */
+internal fun sportsLiveHidesExtras(itemId: String?, metaId: String? = null): Boolean =
+    SportsLiveExtraSources.isSpoilerSafe(itemId) || SportsLiveExtraSources.isSpoilerSafe(metaId)
+
+/**
  * [meta] with nothing that may carry a result (see [sportsLiveDetailMeta]): the one mask of an addon's meta. An allow-list
  * (F7-1): only what identifies and plays it (ids, type, default video), its sport (genres) and its title, score masked,
  * are kept; every other field, filled by the addon now or added by a later upstream, is left out.
