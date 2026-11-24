@@ -432,6 +432,7 @@
     <string name="sports_live_live_pill">LIVE</string>
     <!-- #215: a game its addon lists live that ESPN could not place (no LIVE, no red dot). -->
     <string name="sports_live_listed_live">No score yet</string>
+    <string name="sports_live_checking_score">Checking score…</string>
     <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
     <string name="sports_live_probably_ended">Probably ended</string>
     <!-- Live Now, Scoreboard + Stage (V2, #132): group headings, channel rows and the stage. -->

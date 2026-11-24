@@ -114,7 +114,9 @@ data class GameStatusStrings(
     val postponed: String,
     val chip: ScoreChipStrings,
     /** "Listed live" (#215): a game its addon lists live that ESPN could not place, so no LIVE and no red dot. */
-    val listedLive: String = "Listed live"
+    val listedLive: String = "Listed live",
+    /** "Checking score…" (live.28): an ESPN-covered game waiting for its feed's first answer, with no start time to show. */
+    val checkingScore: String = "Checking score…"
 )
 
 /**

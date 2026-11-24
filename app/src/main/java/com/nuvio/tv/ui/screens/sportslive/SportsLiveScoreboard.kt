@@ -401,7 +401,8 @@ internal fun withAwaitingScore(rows: List<ScoreboardRow>, awaiting: Set<String>)
     if (awaiting.isEmpty()) rows else rows.map { row ->
         val status = row.status
         val waiting = row.item.streamKey in awaiting && row.group == ScoreboardGroup.LIVE && status is GameStatus.Live && status.event == null
-        if (waiting == row.awaitingScore) row else row.copy(awaitingScore = waiting)
+        // F6: no live progress bar either while it is not LIVE.
+        if (waiting == row.awaitingScore) row else row.copy(awaitingScore = waiting, progress = if (waiting) null else row.progress)
     }
 
 /**
@@ -429,7 +430,8 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
         // live.28: an ESPN-covered game whose feed has not answered yet: its start time, never LIVE before ESPN says so.
-        row.awaitingScore && row.group == ScoreboardGroup.LIVE -> ScoreboardStatusLines(kickoff)
+        // F6: with no start to show, a quiet "Checking score…", never a blank status.
+        row.awaitingScore && row.group == ScoreboardGroup.LIVE -> ScoreboardStatusLines(kickoff ?: strings.checkingScore)
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
             // The game grammar's one scoreless form (live.24, audit A6): LIVE with its dot, then the muted "No score yet".
             if (row.listedOnly) ScoreboardStatusLines(strings.live, strings.listedLive, live = true, listed = true) else ScoreboardStatusLines(strings.live, live = true)
