@@ -178,6 +178,18 @@ class SportsLiveAlerts @Inject constructor(
             if (alert.noStreamYet) return@synchronized
             val nowMs = System.currentTimeMillis()
             when {
+                // Review R6: the viewer left the movie into this very game: nothing to ask, the game is answered.
+                alert.passive && SportsLiveAlertEngine.isPlaying(alert.item, now, alert.snapshot) -> {
+                    engine.answered(alert.item)
+                    currentFlow.value = null
+                    showNextLocked(nowMs)
+                }
+                // Review R6: into dual screen, which holds kickoffs: the offer waits until it closes.
+                alert.passive && now.dual -> {
+                    engine.deferOffer(alert.item)
+                    currentFlow.value = null
+                    showNextLocked(nowMs)
+                }
                 // The passive kickoff card over a movie (#91): the viewer paused or left it, so the card asks now, as a new
                 // card. It is the game's one deferred offer.
                 alert.passive && SportsLiveAlertEngine.viewerFree(now) ->

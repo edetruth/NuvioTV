@@ -265,6 +265,35 @@ class SportsLiveMovieKickoffTest {
         assertEquals(1, alerts.engine.look(START + 30 * MINUTE, live(10, 8), paused).size)
     }
 
+    // R6 (review): the viewer leaves the movie into the game itself, or into dual screen
+
+    @Test
+    fun `leaving the movie into the game itself answers the passive card - nothing asks over the game (review R6)`() {
+        val alerts = newAlerts()
+        alerts.setWatching(playing)
+        alerts.engine.look(START + MINUTE, live(0, 0), playing)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        assertTrue((alerts.current.value!!.alert as SportsLiveAlert.Kickoff).passive)
+
+        alerts.setWatching(SportsLiveWatching(playingIds = setOf(game.id), inPlayer = true, sportsPlayback = true, streamStartedAtMs = START))
+        assertNull(alerts.current.value)
+        assertEquals(emptyList<SportsLiveAlert>(), alerts.engine.look(START + 30 * MINUTE, live(10, 8), browsing))
+    }
+
+    @Test
+    fun `opening dual screen from the movie keeps the offer for when it closes - dual holds kickoffs (review R6)`() {
+        val alerts = newAlerts()
+        alerts.setWatching(playing)
+        alerts.engine.look(START + MINUTE, live(0, 0), playing)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+
+        val dual = browsing.copy(dual = true)
+        alerts.setWatching(dual)
+        assertNull(alerts.current.value)
+        assertEquals(emptyList<SportsLiveAlert>(), alerts.engine.look(START + 10 * MINUTE, live(4, 2), dual))
+        assertEquals(1, alerts.engine.look(START + 11 * MINUTE, live(4, 2), browsing).size)
+    }
+
     @Test
     fun `a seek while paused is not a resume - the player's pause holds until it plays`() {
         // Paused, then buffering for a seek (neither paused nor playing): still paused.
