@@ -47,7 +47,9 @@ data class EndedGame(
  */
 data class EndedInputs(
     val scores: Map<String, ScoreSnapshot> = emptyMap(),
-    val canEstimate: (SportsLiveItem) -> Boolean = { true }
+    val canEstimate: (SportsLiveItem) -> Boolean = { true },
+    /** #462: ESPN known unreachable for the card ([com.nuvio.tv.core.sportslive.scores.LiveScoresRepository.espnUnreachable]). */
+    val espnDown: (SportsLiveItem) -> Boolean = { false }
 )
 
 /** Live now cut in three: still [live], [justEnded] (the dimmed strip, in list order) and the [ended] verdicts of those. */

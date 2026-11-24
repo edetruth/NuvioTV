@@ -607,7 +607,7 @@ class SportsLiveZapViewModel internal constructor(
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
             // #375: while open (its games tracked for scores then), covered games no feed has answered for yet wait, at
             // most SportsLiveScoreWait.MAX_WAIT_MS; closed, nothing waits (the wait starts again when it opens).
-            val awaiting = panelWait.awaiting(if (open) split.live else emptyList(), scores, canEstimate, nowMs)
+            val awaiting = panelWait.awaiting(if (open) split.live else emptyList(), scores, canEstimate, nowMs, liveScores::espnUnreachable)
             schedulePanelWaitWake(panelWait.deadline)
             PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished, favorites, awaiting)
         }.flowOn(computeDispatcher)

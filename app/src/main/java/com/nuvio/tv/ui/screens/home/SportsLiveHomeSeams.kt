@@ -218,7 +218,7 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
     val unmatchedScores = liveScoresViewModel.unmatched.collectAsStateWithLifecycle()
     // #375: which cards wait for ESPN and which Live Now calls Probably ended, worked out in the scores' own scope.
     val truth = remember { SportsLiveHomeTruth() }
-    SportsLiveHomeScores(viewModel, uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores, truth)
+    SportsLiveHomeScores(viewModel, uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores, truth, liveScoresViewModel::espnUnreachable)
     // V2 phase 10: Live now games are drawn as the section's game card; See all counts every live game.
     val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores, truth)
     val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
@@ -241,7 +241,8 @@ private fun SportsLiveHomeScores(
     scores: State<Map<String, ScoreSnapshot>>,
     mode: ScoresMode?,
     unmatched: State<Set<String>>,
-    truth: SportsLiveHomeTruth
+    truth: SportsLiveHomeTruth,
+    espnDown: (SportsLiveItem) -> Boolean
 ) {
     val current = scores.value
     val scoreChipStrings = rememberScoreChipStrings()
@@ -269,7 +270,7 @@ private fun SportsLiveHomeScores(
     val homeTruth = remember(items, current, mode, unmatchedNow, clockMs, wake) {
         homeLiveTruth(
             items, viewModel.liveNowAllItems, current, mode, unmatchedNow, System.currentTimeMillis(), wait,
-            SportsLiveEndedGames.shared, viewModel.sportsLiveRepository::hasRecentLinks
+            SportsLiveEndedGames.shared, viewModel.sportsLiveRepository::hasRecentLinks, espnDown
         )
     }
     // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
@@ -319,12 +320,14 @@ internal fun homeLiveTruth(
     nowMs: Long,
     wait: SportsLiveScoreWait,
     endedGames: SportsLiveEndedGames,
-    hasRecentLinks: (SportsLiveItem) -> Boolean
+    hasRecentLinks: (SportsLiveItem) -> Boolean,
+    /** #462: ESPN known unreachable for the card: it never waits. */
+    espnDown: (SportsLiveItem) -> Boolean = { false }
 ): HomeLiveTruth {
     val gate = SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched)
     val probablyEnded = endedGames.probablyEndedKeys(allItems, scores, nowMs, gate, hasRecentLinks)
     val tracked = if (mode == null) emptyList() else items.filter { it.isLive && !it.isChannel && it.streamKey !in probablyEnded }
-    val awaiting = wait.awaiting(tracked, scores, gate, nowMs)
+    val awaiting = wait.awaiting(tracked, scores, gate, nowMs, espnDown)
     return HomeLiveTruth(awaiting, probablyEnded, wait.deadline)
 }
 

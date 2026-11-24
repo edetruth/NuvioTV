@@ -2330,6 +2330,19 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `#462 - Live now skips the wait for a covered game ESPN is known unreachable for`() = runTest {
+        nextLoad = load(listOf(stillOn))
+        val viewModel = SportsLiveViewModel(
+            repo, endedInputs = flowOf(EndedInputs(emptyMap(), { false }, { true })), endedGames = SportsLiveEndedGames(), computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.awaitingScore.isEmpty())
+        assertEquals(listOf("on"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
     fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
         // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
         // estimate with no stream yet stays live, dimmed (#145).

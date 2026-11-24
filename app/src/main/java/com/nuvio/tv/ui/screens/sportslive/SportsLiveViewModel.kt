@@ -247,7 +247,7 @@ class SportsLiveViewModel internal constructor(
         dataSaver = prefs.dataSaver,
         onResolveFailed = resolver::invalidate,
         endedInputs = combine(liveScores.scores, liveScores.mode, liveScores.unmatched) { scores, mode, unmatched ->
-            EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched))
+            EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched), liveScores::espnUnreachable)
         }.firstThenCoalesce(STATE_SCORES_SETTLE_MS, SCORES_CATCH_UP_MS),
         endedGames = SportsLiveEndedGames.shared,
         clock = flow {
@@ -1766,7 +1766,7 @@ class SportsLiveViewModel internal constructor(
                     mySports.isDefault || selection.moreLiveOpen -> live
                     else -> SportsLiveMySportsScope.scope(live, mySports)
                 }
-                awaitingScore = scoreWait.awaiting(tracked, scores, inputs.canEstimate, now)
+                awaitingScore = scoreWait.awaiting(tracked, scores, inputs.canEstimate, now, inputs.espnDown)
                 scheduleWaitWake(scoreWait.deadline)
                 if (toCheck.isNotEmpty() && screenVisible && selection.tab == SportsLiveTab.LIVE_NOW) {
                     linkChecker?.offer(toCheck, viewModelScope)
