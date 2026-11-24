@@ -276,4 +276,26 @@ class SportsLivePlayerCardViewModelTest {
         assertEquals(PlayerCardTarget(EspnLeagueMap.NBA, "4431678", "T. Maxey", sixers.name), PlayerCards.targetFor(leader, sixers))
         assertNull(PlayerCards.targetFor(leader.copy(athleteId = null), sixers))
     }
+
+    @Test
+    fun `a failed Player card offers Try again that loads it afresh (#97)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextCard = null
+        val vm = viewModel()
+        runCurrent()
+        assertEquals(PlayerCardStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+
+        vm.retry()
+        runCurrent()
+        assertEquals(2, requests.size)
+        assertEquals(PlayerCardStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+
+        nextCard = embiid
+        vm.retry()
+        runCurrent()
+        assertEquals(3, requests.size)
+        assertEquals(PlayerCardStatus.READY, vm.uiState.value.status)
+        assertEquals(embiid, vm.uiState.value.card)
+    }
 }

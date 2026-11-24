@@ -69,7 +69,6 @@ import com.nuvio.tv.core.sportslive.scores.TeamOutcome
 import com.nuvio.tv.core.sportslive.scores.TeamPageSpoilers
 import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.domain.model.SportsLiveItem
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
@@ -186,8 +185,9 @@ fun SportsLiveTeamScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 waiting -> SportsLivePageMessage(stringResource(R.string.sports_live_team_hidden_off))
-                state.status == GameLoadStatus.FAILED -> SportsLivePageMessage(stringResource(R.string.sports_live_team_unavailable))
-                data == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                state.status == GameLoadStatus.FAILED ->
+                    SportsLivePageFailure(stringResource(R.string.sports_live_team_failed_title), state.retrying, viewModel::retry)
+                data == null -> SportsLiveRowsSkeleton()
                 // Scrolling only when a row nears an edge, so the list opens at its top with its heading showing (the TV
                 // default pivot would scroll a row returned to from a Game page up to a third of the height).
                 else -> SportsLiveKeepFromEdge(margin = TEAM_EDGE_KEEP) { Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {

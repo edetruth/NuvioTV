@@ -133,7 +133,9 @@ data class SportsLiveGameUiState(
      * show, so the score stays hidden and the page has no actions yet (live.19 F18: a protected game opened from
      * Results first drew as a plain final, with its score and only More…).
      */
-    val settled: Boolean = true
+    val settled: Boolean = true,
+    /** Try again was pressed and the load is running (#97): the failure card's button reads "Trying...". */
+    val retrying: Boolean = false
 ) {
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
     val showsScore: Boolean
@@ -235,11 +237,13 @@ class SportsLiveGameViewModel internal constructor(
         /** Null until the Scores setting has been read. */
         val mode: ScoresMode? = null,
         val revealed: Boolean = false,
-        val selected: GameSection? = null
+        val selected: GameSection? = null,
+        val retrying: Boolean = false
     )
 
     private val page = MutableStateFlow(Page(revealed = request?.revealed == true, selected = request?.section))
     private val visible = MutableStateFlow(false)
+    private val retryTick = MutableStateFlow(0)
     private val revealRequested = MutableStateFlow(request?.revealed == true)
 
     val uiState: StateFlow<SportsLiveGameUiState> = combine(page, followedTeams, failedHighlights, protection) { page, followed, failed, protection ->
@@ -265,7 +269,8 @@ class SportsLiveGameViewModel internal constructor(
             offersWatchWith = request?.watchWith != null && (page.summary?.state ?: event?.state) == ScoreState.IN,
             openedOnSection = request?.section != null,
             spoilerProtected = event != null && protection.protects(event),
-            settled = page.mode != null
+            settled = page.mode != null,
+            retrying = page.retrying
         )
     }.stateIn(
         viewModelScope,
@@ -304,6 +309,7 @@ class SportsLiveGameViewModel internal constructor(
                     settings = settings,
                     revealed = revealRequested,
                     visible = visible,
+                    retry = retryTick,
                     mode = { it.mode },
                     context = SpoilerContext(SpoilerSurface.GAME, spoilerSafe = request?.spoilerSafe == true),
                     onChange = { current, revealed, mayLoad ->
@@ -339,7 +345,7 @@ class SportsLiveGameViewModel internal constructor(
                     }
                     GameSummaryLoad.Failed -> {
                         if (page.value.summary == null && values.nextDueAt(now()) == null) {
-                            page.update { it.copy(status = GameLoadStatus.FAILED) }
+                            page.update { it.copy(status = GameLoadStatus.FAILED, retrying = false) }
                         }
                         // A live game tries again at the next refresh; anything else stays as it is.
                         event.state == ScoreState.IN || page.value.summary?.isLive == true
@@ -348,12 +354,19 @@ class SportsLiveGameViewModel internal constructor(
                 nextFetchAt = if (live) now() + REFRESH_MS else Long.MAX_VALUE
             }
             values.current(now())?.let { shown ->
-                page.update { it.copy(summary = shown, status = GameLoadStatus.READY) }
+                page.update { it.copy(summary = shown, status = GameLoadStatus.READY, retrying = false) }
             }
             val wake = minOf(nextFetchAt, values.nextDueAt(now()) ?: Long.MAX_VALUE)
             if (wake == Long.MAX_VALUE) return
             delay((wake - now()).coerceAtLeast(0))
         }
+    }
+
+    /** Try again on the failure card (#97): the load runs afresh; the button reads "Trying..." until it ends. */
+    fun retry() {
+        if (page.value.retrying || page.value.status != GameLoadStatus.FAILED) return
+        page.update { it.copy(retrying = true) }
+        retryTick.update { it + 1 }
     }
 
     /** The page is on screen (started): only then does it load and refresh. */

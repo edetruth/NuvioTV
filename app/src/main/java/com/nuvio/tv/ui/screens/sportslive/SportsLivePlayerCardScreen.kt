@@ -52,7 +52,6 @@ import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.PlayerGame
 import com.nuvio.tv.core.sportslive.scores.PlayerStat
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
@@ -123,8 +122,9 @@ fun SportsLivePlayerCardScreen(
                 focusRequester = revealFocus,
                 onReveal = viewModel::reveal
             )
-            state.status == PlayerCardStatus.FAILED -> SportsLivePageMessage(stringResource(R.string.sports_live_player_unavailable))
-            card == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+            state.status == PlayerCardStatus.FAILED || state.retrying ->
+                SportsLivePageFailure(stringResource(R.string.sports_live_player_failed_title), state.retrying, viewModel::retry)
+            card == null -> SportsLivePlayerSkeleton()
             else -> Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP)) {
                 // Left: the last 5 games, where focus lives.
                 LazyColumn(

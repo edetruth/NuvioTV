@@ -432,4 +432,40 @@ class SportsLiveGameViewModelTest {
         addonId = "a", addonName = "a", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
         kind = SportsLiveKind.REPLAY, isLive = false, isChannel = false, startMs = null, sport = "Soccer", teams = null
     )
+
+    @Test
+    fun `a failed Game load offers Try again - it shows Trying, then the stats once the service answers (#97)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+        assertEquals(1, requests.size)
+
+        // A second failure: the card stays, the button is back to Try again.
+        vm.retry()
+        runCurrent()
+        assertEquals(2, requests.size)
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+
+        nextLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
+        vm.retry()
+        runCurrent()
+        assertEquals(3, requests.size)
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+    }
+
+    @Test
+    fun `Try again does nothing unless the load failed (#97)`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        vm.retry()
+        runCurrent()
+        assertEquals(1, requests.size)
+    }
 }

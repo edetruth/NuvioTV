@@ -1037,4 +1037,9 @@
     <string name="sports_live_results_reveal_day">Reveal all for this day</string>
     <string name="sports_live_debug_safe_area_title">Safe-area frame</string>
     <string name="sports_live_debug_safe_area_subtitle">Draws a red frame at 48 dp left and right and 27 dp top and bottom over every screen, to spot text near the screen edge.</string>
+    <string name="sports_live_page_failed_line">Check your connection, then try again.</string>
+    <string name="sports_live_state_trying">Trying\u2026</string>
+    <string name="sports_live_game_failed_title">Couldn\'t load this game\'s stats</string>
+    <string name="sports_live_team_failed_title">Couldn\'t load this team</string>
+    <string name="sports_live_player_failed_title">Couldn\'t load this player\'s stats</string>
 </resources>

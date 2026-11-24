@@ -340,6 +340,7 @@ fun SportsLiveGameScreen(
                     SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                     onOpenTeam()
                 },
+                onRetry = viewModel::retry,
                 standingRanks = standingRanks
             )
         }

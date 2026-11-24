@@ -242,4 +242,38 @@ class SportsLiveTeamViewModelTest {
         assertEquals(SportsLiveTeamRequest(sixers, spoilerSafe = true), sportsLiveCardTeamRequest(sixers, SportsLiveTab.REPLAYS))
         assertEquals(SportsLiveTeamRequest(sixers, spoilerSafe = false), sportsLiveCardTeamRequest(sixers, SportsLiveTab.LIVE_NOW))
     }
+
+    @Test
+    fun `a failed Team load offers Try again that loads it afresh (#97)`() = runTest(mainDispatcherRule.dispatcher) {
+        var answer: TeamPageLoad = TeamPageLoad.Failed
+        val vm = SportsLiveTeamViewModel(
+            request = SportsLiveTeamRequest(sixers),
+            loadTeam = { league: EspnLeague, id: String ->
+                requests += "${league.path}/$id"
+                answer
+            },
+            settings = settings,
+            followedTeams = followed,
+            follow = { team -> followed.update { it + team } },
+            unfollow = { team -> followed.update { list -> list.filterNot { it == team } } },
+            items = items,
+            now = { TeamFixtures.NOW }
+        ).also { backgroundScope.launch { it.uiState.collect {} } }
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+
+        vm.retry()
+        runCurrent()
+        assertEquals(2, requests.size)
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+
+        answer = TeamPageLoad.Loaded(page)
+        vm.retry()
+        runCurrent()
+        assertEquals(3, requests.size)
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+    }
 }

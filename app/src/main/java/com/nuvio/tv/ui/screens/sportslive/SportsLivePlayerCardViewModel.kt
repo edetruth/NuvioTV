@@ -76,7 +76,9 @@ data class SportsLivePlayerCardUiState(
      * Spoiler protection (#151, tier 1 H6): a protected game's result and line stay hidden, as on the Team page. Null
      * until the profile's is read: no last game shows meanwhile, so a protected one never flashes.
      */
-    val protection: SpoilerProtection? = null
+    val protection: SpoilerProtection? = null,
+    /** Try again was pressed and the load is running (#97). */
+    val retrying: Boolean = false
 ) {
     private val spoilers: SpoilerVisibility
         get() = SpoilerPolicy.visibility(mode, revealed, SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = spoilerSafe))
@@ -133,6 +135,7 @@ class SportsLivePlayerCardViewModel internal constructor(
     val uiState: StateFlow<SportsLivePlayerCardUiState> = state.asStateFlow()
 
     private val revealRequested = MutableStateFlow(request?.revealed == true)
+    private val retryTick = MutableStateFlow(0)
 
     init {
         val target = request?.target
@@ -142,6 +145,7 @@ class SportsLivePlayerCardViewModel internal constructor(
                 revealGatedLoad(
                     settings = settings.map { it.mode },
                     revealed = revealRequested,
+                    retry = retryTick,
                     mode = { it },
                     context = SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = request?.spoilerSafe == true),
                     onChange = { mode, revealed, mayLoad ->
@@ -154,12 +158,19 @@ class SportsLivePlayerCardViewModel internal constructor(
                     state.update { it.copy(status = PlayerCardStatus.LOADING) }
                     val card = loadCard(target.league, target.athleteId)
                     state.update {
-                        if (card != null) it.copy(card = card, status = PlayerCardStatus.READY)
-                        else it.copy(status = PlayerCardStatus.FAILED)
+                        if (card != null) it.copy(card = card, status = PlayerCardStatus.READY, retrying = false)
+                        else it.copy(status = PlayerCardStatus.FAILED, retrying = false)
                     }
                 }
             }
         }
+    }
+
+    /** Try again on the failure card (#97): the load runs afresh; the button reads "Trying..." until it ends. */
+    fun retry() {
+        if (state.value.retrying || state.value.status != PlayerCardStatus.FAILED) return
+        state.update { it.copy(retrying = true) }
+        retryTick.update { it + 1 }
     }
 
     /** Reveal: the last games show; under Scores Off this is when the card is first requested. */
