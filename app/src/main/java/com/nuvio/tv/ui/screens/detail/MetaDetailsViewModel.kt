@@ -887,6 +887,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private suspend fun tryApplyTmdbFallbackMeta(): Boolean {
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId)) return false // Sports & Live S1
         val tmdbId = itemId
             .takeIf { it.startsWith("tmdb:", ignoreCase = true) }
             ?.substringAfter(':')
@@ -1047,7 +1048,9 @@ class MetaDetailsViewModel @Inject constructor(
 
     private suspend fun applyMetaWithEnrichment(meta: Meta) {
         if (!isServerItem) loadMoreLikeThisAsync(meta)
-        val enriched = com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(itemId, if (isServerItem) meta else enrichMeta(meta))
+        // Sports & Live S1: a hidden replay's meta is not enriched from TMDB (rating, collection, titles) before its mask.
+        val hidesExtras = com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)
+        val enriched = com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(itemId, if (isServerItem || hidesExtras) meta else enrichMeta(meta))
 
         syncEffectiveContentId(enriched)
         val cachedNextToWatch = metaDetailsSessionState.getNextToWatch(
@@ -1066,7 +1069,7 @@ class MetaDetailsViewModel @Inject constructor(
 
         // Ratings don't depend on watch progress, so start them before the remote
         // progress wait below, which can take long or never finish if the sync keeps failing.
-        if (!isServerItem) {
+        if (!isServerItem && !hidesExtras) {
             loadEpisodeRatingsAsync(enriched)
             viewModelScope.launch { loadMDBListRatings(enriched) }
         }
