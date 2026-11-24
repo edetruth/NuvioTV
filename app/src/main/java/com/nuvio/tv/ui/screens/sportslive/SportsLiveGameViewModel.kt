@@ -26,6 +26,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -133,8 +134,21 @@ data class SportsLiveGameUiState(
      * show, so the score stays hidden and the page has no actions yet (live.19 F18: a protected game opened from
      * Results first drew as a plain final, with its score and only More…).
      */
-    val settled: Boolean = true
+    val settled: Boolean = true,
+    /** A replay team folder opened from here is masked ([sportsLiveReplayFolderHides], F5); true until protection is read. */
+    val replayFoldersHidden: Boolean = true
 ) {
+    /**
+     * Whether [item]'s Detail page (Watch replay on a team folder, More… > Details) opens masked (#240, #243): a replay
+     * while this page hides the result, and a team folder also while any other game in it could be hidden (F5); a
+     * game's card as the addon gives it.
+     */
+    fun hidesDetailOf(item: SportsLiveItem): Boolean = when {
+        item != replay && item.kind != SportsLiveKind.REPLAY -> false
+        item.apiType == "series" -> !showsScore || replayFoldersHidden
+        else -> !showsScore
+    }
+
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
     val showsScore: Boolean
         get() = SpoilerPolicy.visibility(
@@ -265,7 +279,8 @@ class SportsLiveGameViewModel internal constructor(
             offersWatchWith = request?.watchWith != null && (page.summary?.state ?: event?.state) == ScoreState.IN,
             openedOnSection = request?.section != null,
             spoilerProtected = event != null && protection.protects(event),
-            settled = page.mode != null
+            settled = page.mode != null,
+            replayFoldersHidden = sportsLiveReplayFolderHides(page.mode, protection)
         )
     }.stateIn(
         viewModelScope,

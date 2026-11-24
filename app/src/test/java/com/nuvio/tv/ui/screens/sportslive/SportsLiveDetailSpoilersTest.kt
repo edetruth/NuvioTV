@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.PosterShape
@@ -10,6 +11,7 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -118,6 +120,29 @@ class SportsLiveDetailSpoilersTest {
         // Shown (or a game's card): as the addon gives it.
         sportsLiveOpenDetail(replay, hidden = false) { opened += it.id }
         assertEquals(false, SportsLiveExtraSources.isSpoilerSafe("replay"))
+    }
+
+    // F5: the Game page's Watch replay and More… > Details.
+    private val replayCard = AlertFixtures.item(name = "Team A vs Team B", id = "replay").copy(kind = SportsLiveKind.REPLAY)
+    private val folderCard = replayCard.copy(meta = replayCard.meta.copy(id = "folder", type = ContentType.SERIES, rawType = "series"), teams = null)
+    private val gameCard = AlertFixtures.item(name = "Team A vs Team B", id = "game")
+
+    @Test
+    fun `a Game page opens a replay folder masked while any game in it could be hidden, even with its own result shown`() {
+        val shown = SportsLiveGameUiState(mode = ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true, replay = folderCard, replayFoldersHidden = true)
+        assertTrue(shown.showsScore)
+        assertTrue(shown.hidesDetailOf(folderCard))
+        assertFalse(shown.copy(mode = ScoresMode.SHOW, replayFoldersHidden = false).hidesDetailOf(folderCard))
+        // Not read yet: masked.
+        assertTrue(SportsLiveGameUiState(replay = folderCard).hidesDetailOf(folderCard))
+    }
+
+    @Test
+    fun `a Game page opens a single replay masked while it hides the result, a game's card as the addon gives it`() {
+        val hidden = SportsLiveGameUiState(mode = ScoresMode.HIDE_UNTIL_FOCUSED, replay = replayCard, card = gameCard, replayFoldersHidden = false)
+        assertTrue(hidden.hidesDetailOf(replayCard))
+        assertFalse(hidden.hidesDetailOf(gameCard))
+        assertFalse(hidden.copy(revealed = true).hidesDetailOf(replayCard))
     }
 
     private fun stream(name: String, url: String) = Stream(
