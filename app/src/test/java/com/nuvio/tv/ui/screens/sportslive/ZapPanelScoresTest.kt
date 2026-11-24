@@ -423,16 +423,41 @@ class ZapPanelScoresTest {
         val (viewModel, playing) = panelViewModel(scores, book)
 
         viewModel.openPanel()
-        val before = viewModel.panel.first { it != null }!!
-        assertNull(before.rows.first { it.item == playing }.teams!!.first.logo)
+        // Closed whatever happens: an open panel ticks for ever and the run would never end (the l28 hang).
+        try {
+            val before = viewModel.panel.first { it != null }!!
+            assertNull(before.rows.first { it.item == playing }.teams!!.first.logo)
 
-        // The map learns the teams (a feed answering elsewhere): the open panel redraws with them.
-        book.learn(EspnLeagueMap.NBA, pacersEvent.away)
-        book.learn(EspnLeagueMap.NBA, pacersEvent.home)
-        val after = viewModel.panel.first { panel -> panel?.rows?.first { it.item == playing }?.teams?.first?.logo != null }!!
-        assertEquals(pacersEvent.away.logo, after.rows.first { it.item == playing }.teams!!.first.logo)
+            // The map learns the teams (a feed answering elsewhere): the open panel redraws with them.
+            book.learn(EspnLeagueMap.NBA, pacersEvent.away)
+            book.learn(EspnLeagueMap.NBA, pacersEvent.home)
+            val after = viewModel.panel.first { panel -> panel?.rows?.firstOrNull { it.item == playing }?.teams?.first?.logo != null }!!
+            assertEquals(pacersEvent.away.logo, after.rows.first { it.item == playing }.teams!!.first.logo)
+        } finally {
+            viewModel.closePanel()
+        }
+    }
 
-        viewModel.closePanel()
+    @Test
+    fun `the game playing is never dropped from its own panel as overdue, however old its listed start`() = runTest(mainDispatcherRule.dispatcher) {
+        // Its start is the fixture's (days before the wall clock the panel reads), no ESPN answer, no recent links on the
+        // mock: the overdue rule would drop it. It is playing, so it stays; the other old game goes.
+        val provider = object : ScoreProvider {
+            override suspend fun scoreboard(league: EspnLeague, date: LocalDate) = ScoreboardResult(emptyList())
+        }
+        val scores = LiveScoresRepository(
+            provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
+        )
+        val (viewModel, playing) = panelViewModel(scores)
+        viewModel.openPanel()
+        try {
+            val shown = viewModel.panel.first { it != null }!!
+            assertTrue(shown.rows.any { it.item == playing })
+        } finally {
+            viewModel.closePanel()
+        }
     }
 
     @Test
