@@ -108,4 +108,3 @@ private fun spoilerMaskedMeta(meta: Meta): Meta =
             )
         }
     )
-}
