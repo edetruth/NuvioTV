@@ -35,7 +35,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -233,7 +232,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `the player panel polls scores only while it is open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the player panel polls scores only while it is open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val requests = mutableListOf<LocalDate>()
         val provider = object : ScoreProvider {
             override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
@@ -254,7 +253,7 @@ class ZapPanelScoresTest {
         assertTrue(requests.isEmpty())
 
         // Open: the panel's games are tracked and the live score reaches the playing game's row.
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         val state = viewModel.panel.first { panel -> panel?.rows?.any { it.chip != null } == true }!!
         assertTrue(requests.isNotEmpty())
         assertEquals(ScoreChip.Live("Q3 4:12", com.nuvio.tv.core.sportslive.scores.ChipScore(80, 88)), state.rows.first { it.item == playing }.chip)
@@ -270,7 +269,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `the game playing is scored in the open panel even when its chip hides it`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the game playing is scored in the open panel even when its chip hides it`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val provider = object : ScoreProvider {
             override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
                 ScoreboardResult(if (league == EspnLeagueMap.NBA) listOf(live(pacersEvent, "Q3 4:12", 88, 80)) else emptyList())
@@ -282,7 +281,7 @@ class ZapPanelScoresTest {
         )
         val hockey = item("Boston Bruins at Toronto Maple Leafs", pacersEvent.startMs).copy(sport = "Hockey")
         val (viewModel, playing) = panelViewModel(scores, extra = listOf(hockey))
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         runCurrent()
         // The Hockey chip lists the hockey game only: the basketball game playing is pinned above it, still scored.
         viewModel.onPanelChip(com.nuvio.tv.core.sportslive.SportsLiveSportKind.filterKeyOf(hockey))
@@ -332,7 +331,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `the game playing is polled under Scores, never under Off, through the shared feeds`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the game playing is polled under Scores, never under Off, through the shared feeds`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // Off: no request at all, and no toast.
         val (offRequests, offViewModel) = playerNowRequests(ScoresMode.OFF, alsoTrackedElsewhere = false)
         assertEquals(0, offRequests)
@@ -351,7 +350,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `the game playing stops being polled when the player stops`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the game playing stops being polled when the player stops`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val requests = mutableListOf<LocalDate>()
         val provider = object : ScoreProvider {
             override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
@@ -410,7 +409,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `logos learned while the panel is open appear on its rows`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `logos learned while the panel is open appear on its rows`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val provider = object : ScoreProvider {
             override suspend fun scoreboard(league: EspnLeague, date: LocalDate) = ScoreboardResult(emptyList())
         }
@@ -422,7 +421,7 @@ class ZapPanelScoresTest {
         val book = TeamLogoBook(active = true)
         val (viewModel, playing) = panelViewModel(scores, book)
 
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         // Closed whatever happens: an open panel ticks for ever and the run would never end (the l28 hang).
         try {
             val before = viewModel.panel.first { it != null }!!
@@ -439,7 +438,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `the game playing is never dropped from its own panel as overdue, however old its listed start`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the game playing is never dropped from its own panel as overdue, however old its listed start`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // Its start is the fixture's (days before the wall clock the panel reads), no ESPN answer, no recent links on the
         // mock: the overdue rule would drop it. It is playing, so it stays; the other old game goes.
         val provider = object : ScoreProvider {
@@ -451,7 +450,7 @@ class ZapPanelScoresTest {
             espnStarts = SportsLiveEspnStarts()
         )
         val (viewModel, playing) = panelViewModel(scores)
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         try {
             val shown = viewModel.panel.first { it != null }!!
             assertTrue(shown.rows.any { it.item == playing })
@@ -461,7 +460,7 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `hide until focused reveals no row until a key is pressed in the panel`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `hide until focused reveals no row until a key is pressed in the panel`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val provider = object : ScoreProvider {
             override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
                 ScoreboardResult(if (league == EspnLeagueMap.NBA) listOf(live(pacersEvent, "Q3 4:12", 88, 80)) else emptyList())
@@ -472,7 +471,7 @@ class ZapPanelScoresTest {
             espnStarts = SportsLiveEspnStarts()
         )
         val (viewModel, playing) = panelViewModel(scores)
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         val state = viewModel.panel.first { panel -> panel?.rows?.any { it.chip != null } == true }!!
         assertEquals(ScoreChip.Hidden, state.rows.first { it.item == playing }.chip)
 
@@ -490,7 +489,7 @@ class ZapPanelScoresTest {
 
         // Reopened: the gate is back until the next key.
         viewModel.closePanel()
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         viewModel.onPanelRowFocus("a|other")
         advanceTimeBy(5_000L); runCurrent()
         assertEquals(setOf(playing.streamKey), viewModel.revealedRows)

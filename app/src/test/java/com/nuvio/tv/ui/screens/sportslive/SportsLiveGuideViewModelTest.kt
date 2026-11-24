@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -72,7 +71,7 @@ class SportsLiveGuideViewModelTest {
 
     @Test
     fun `with the new guide a short OK opens it on its release in the player's preview, and it closes itself after 20 s without a key`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             val viewModel = guideViewModel(guide = true)
             runCurrent()
             assertTrue(viewModel.guideTable.value)
@@ -112,10 +111,10 @@ class SportsLiveGuideViewModelTest {
 
     @Test
     fun `the open table gets every key first from the player's preview, whatever holds focus, and Back passes`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             val viewModel = guideViewModel(guide = true)
             runCurrent()
-            viewModel.openPanel()
+            PanelTests.open(viewModel)
             val seen = mutableListOf<Int>()
             // The table takes what it uses and passes Back (false).
             viewModel.guideKeyHandler = { event -> seen += event.keyCode; event.keyCode != KeyEvent.KEYCODE_BACK }
@@ -136,11 +135,11 @@ class SportsLiveGuideViewModelTest {
 
     @Test
     fun `a Down held in the table as it closes never zaps, and a new press after it is the player's again`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             var clock = 0L
             val viewModel = guideViewModel(guide = true, uptimeMs = { clock })
             runCurrent()
-            viewModel.openPanel()
+            PanelTests.open(viewModel)
             viewModel.guideKeyHandler = { true }
             // Held Down scrolls the table.
             assertTrue(viewModel.onGuidePreviewKey(keyEvent(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, 100L), playerIdle = false, partyActive = false))
@@ -157,10 +156,10 @@ class SportsLiveGuideViewModelTest {
         }
 
     @Test
-    fun `a game picked in the guide closes it, the switch going ahead`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a game picked in the guide closes it, the switch going ahead`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val viewModel = guideViewModel(guide = true)
         runCurrent()
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         assertTrue(viewModel.panelOpen.value)
         viewModel.onPanelPick(other)
         assertFalse(viewModel.panelOpen.value)
@@ -172,7 +171,7 @@ class SportsLiveGuideViewModelTest {
 
     @Test
     fun `with the side panel, or OK on live set to Pause, OK stays the player's and nothing closes by itself`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             val panel = guideViewModel(guide = false)
             runCurrent()
             // #218: the press waits for its release (it may be a hold), then the player's own OK runs, once.
@@ -185,10 +184,10 @@ class SportsLiveGuideViewModelTest {
             assertFalse(panel.panelOpen.value)
             panel.shortOk = null
             // The side panel open: the preview leaves its keys alone.
-            panel.openPanel()
+            PanelTests.open(panel)
             assertFalse(panel.onGuidePreviewKey(okEvent(KeyEvent.ACTION_DOWN, down = 5L), playerIdle = false, partyActive = false))
             panel.closePanel()
-            panel.openPanel()
+            PanelTests.open(panel)
             advanceTimeBy(GUIDE_IDLE_CLOSE_MS * 2)
             runCurrent()
             assertTrue(panel.panelOpen.value)
@@ -211,7 +210,7 @@ class SportsLiveGuideViewModelTest {
 
     @Test
     fun `Hold OK while watching opens the player menu on its release, with the report snapshot taken as the hold starts`() =
-        runTest(mainDispatcherRule.dispatcher) {
+        runPanelTest(mainDispatcherRule.dispatcher) {
             val captured = mutableListOf<String>()
             var saved = 0
             val viewModel = guideViewModel(guide = true, captureReport = { trigger -> captured += trigger; { saved++ } })

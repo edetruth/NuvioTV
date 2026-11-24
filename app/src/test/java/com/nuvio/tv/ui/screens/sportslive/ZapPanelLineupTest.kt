@@ -34,7 +34,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -74,7 +73,7 @@ class ZapPanelLineupTest {
     // live.24 (user): CH+ then CH- always return to the game you were on. The zap order is frozen at the session's first
     // zap; the panel may re-sort as it opens, the zaps keep their order until a guide pick or a new session.
     @Test
-    fun `channel keys walk the panel's list, and an order change re-sorts the panel but never the zaps`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `channel keys walk the panel's list, and an order change re-sorts the panel but never the zaps`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // Live now is earliest start first: a, b, c, d.
         val a = item("a", now - 90 * MINUTE)
         val b = item("b", now - 60 * MINUTE)
@@ -92,7 +91,7 @@ class ZapPanelLineupTest {
         // c started earliest after all: the list becomes c, a, b, d.
         latest.value = SportsLiveLoad(listOf(d, c.copy(startMs = now - 120 * MINUTE), b, a), emptyList(), 1L, setOf(CATALOG))
         runCurrent()
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         // The panel is closed whatever happens: an open panel ticks on and the run never ends (it ran the test JVM out
         // of memory on the live.24 RC when an assertion here failed with the panel open).
         try {
@@ -110,7 +109,7 @@ class ZapPanelLineupTest {
     }
 
     @Test
-    fun `the lineup and the panel follow My sports, and More live in the panel lists the games it leaves out`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the lineup and the panel follow My sports, and More live in the panel lists the games it leaves out`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // Earliest start first: a (basketball), c (cricket), b (basketball).
         val a = item("a", now - 90 * MINUTE)
         val c = item("c", now - 60 * MINUTE, sport = "Cricket")
@@ -123,7 +122,7 @@ class ZapPanelLineupTest {
         assertEquals("b", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
         assertEquals("b", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
 
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         val panel = viewModel.panel.first { it != null }!!
         assertEquals(listOf("a", "b"), panel.items.map { it.id })
         // The game playing listed in its place too (#140), then More live's row with the game My sports leaves out.
@@ -145,7 +144,7 @@ class ZapPanelLineupTest {
 
         // #216: All sports is for one look: the panel opens on My sports again (never a frame of the old scope), and the
         // zaps follow it. The panel is closed whatever happens: an open panel ticks on and the run never ends.
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         try {
             val reopened = viewModel.panel.first { it != null }!!
             assertNull(reopened.chip)
@@ -160,7 +159,7 @@ class ZapPanelLineupTest {
     // live.25 (#225): the panel and CH± take the one shared order (league priority before start), and a game started from
     // Live now's list follows that list as it was shown.
     @Test
-    fun `the panel and CH take the shared order, and follow Live now's list as shown when started there`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the panel and CH take the shared order, and follow Live now's list as shown when started there`() = runPanelTest(mainDispatcherRule.dispatcher) {
         // Start order: n (NBA), e (Premier League), u (Champions League). The shared order: u, e, n.
         val n = item("n", now - 90 * MINUTE, sport = "NBA")
         val e = item("e", now - 60 * MINUTE, sport = "Premier League")
@@ -172,7 +171,7 @@ class ZapPanelLineupTest {
         runCurrent()
         assertEquals("n", zap(fresh, KeyEvent.KEYCODE_CHANNEL_DOWN))
         assertEquals("u", zap(fresh, KeyEvent.KEYCODE_CHANNEL_UP))
-        fresh.openPanel()
+        PanelTests.open(fresh)
         try {
             assertEquals(listOf("u", "e", "n"), fresh.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
         } finally {
@@ -186,7 +185,7 @@ class ZapPanelLineupTest {
         runCurrent()
         assertEquals("u", zap(seeded, KeyEvent.KEYCODE_CHANNEL_DOWN))
         assertEquals("n", zap(seeded, KeyEvent.KEYCODE_CHANNEL_UP))
-        seeded.openPanel()
+        PanelTests.open(seeded)
         try {
             assertEquals(listOf("n", "e", "u"), seeded.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
         } finally {

@@ -31,7 +31,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -61,11 +60,11 @@ class ZapPanelChipsTest {
     private val my = SportsLiveUiState.MY_TEAMS_FILTER
 
     @Test
-    fun `the panel opens on all with followed games first, a chip filters rows and zaps for its session, a pick keeps it`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the panel opens on all with followed games first, a chip filters rows and zaps for its session, a pick keeps it`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val viewModel = panelViewModel()
 
         // A game started from My teams opens the panel on All, followed games first.
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         val state = viewModel.panel.first { it != null }!!
 
         assertNull(state.chip)
@@ -98,7 +97,7 @@ class ZapPanelChipsTest {
         // Reopened in the same playback: the chip picked.
         viewModel.closePanel()
         runCurrent()
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         runCurrent()
         assertEquals(sportKey("Soccer"), viewModel.panel.first { it != null }!!.chip)
         viewModel.closePanel()
@@ -106,14 +105,14 @@ class ZapPanelChipsTest {
 
         // A new playback session opens on All again.
         SportsLiveZapSessions.start(session(on = knicks))
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         runCurrent()
         assertNull(viewModel.panel.first { it != null }!!.chip)
         viewModel.closePanel()
         runCurrent()
 
         // A pick under a chip keeps zapping by that chip.
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         viewModel.panel.first { it != null }
         viewModel.onPanelChip(sportKey("Basketball"))
         viewModel.panel.first { it?.chip == sportKey("Basketball") }
