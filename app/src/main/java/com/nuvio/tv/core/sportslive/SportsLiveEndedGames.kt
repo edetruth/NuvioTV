@@ -338,7 +338,9 @@ class SportsLiveEndedGames {
         val time = times[key]?.takeIf { nowMs - it.atMs in 0..FORGET_AFTER_MS } ?: return null
         val start = timedStart(item)
         if (start != null && start > time.atMs) return null
-        return EndedGame(EndedSignal.FINAL, time.atMs, event = null, graced = time.graced)
+        // F1: no grace. With no ESPN game in hand there is no final to show in place, and a final in its grace stays in
+        // the live list, where a surface with no snapshot reads it LIVE: straight to Just ended.
+        return EndedGame(EndedSignal.FINAL, time.atMs, event = null, graced = false)
     }
 
     /**

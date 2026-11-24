@@ -428,6 +428,31 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `F1 - a remembered final inside its grace goes straight to Just ended, never back to the live list`() {
+        val card = item()
+        val endedAt = START + 2 * HOUR
+        val after = SportsLiveEndedGames()
+        after.install(mapOf(card.streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt + 2 * MINUTE) { }
+        val split = after.split(listOf(card), emptyMap(), endedAt + 2 * MINUTE) { false }
+        assertTrue(split.live.isEmpty())
+        assertEquals(listOf(card), split.justEnded)
+        val status = GameStatus.of(card, null, split.ended[card.streamKey], endedAt + 2 * MINUTE)
+        assertTrue(status is GameStatus.JustEnded)
+        // Nothing to link-check: it is over.
+        assertNull(after.linkCheckEnd(card, null, endedAt + 4 * HOUR))
+    }
+
+    @Test
+    fun `F1 - ESPN showing the game scheduled clears a remembered final too`() {
+        val card = item()
+        val endedAt = START + 2 * HOUR
+        val games = SportsLiveEndedGames()
+        games.install(mapOf(card.streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt) { }
+        assertNull(games.verdict(card, live(pacersFinal).copy(state = ScoreState.PRE), endedAt + MINUTE))
+        assertNull(games.verdict(card, null, endedAt + 2 * MINUTE, canEstimate = false))
+    }
+
+    @Test
     fun `a final remembered from a restart never ends a later game under the same card key, and ESPN in play clears it`() {
         val endedAt = START + 2 * HOUR
         val stored = mapOf(item().streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId))
