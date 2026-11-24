@@ -47,7 +47,30 @@ internal object SportsLiveHomeMeta {
          * ([com.nuvio.tv.core.sportslive.scores.ScoreWatch.masked]), so it has no chip; it reads as Live Now's row does,
          * never "No score yet".
          */
-        watching: String? = null
+        watching: String? = null,
+        /**
+         * #375: an ESPN-covered game still waiting for ESPN ([com.nuvio.tv.core.sportslive.SportsLiveScoreWait]): its start
+         * ("7:00 PM") or "Checking score…", never "● Live", as its Live Now row reads.
+         */
+        awaiting: String? = null,
+        /** #375: "Probably ended" for a game Live Now shows so (an estimate, overdue): labelled, never hidden, never "● Live". */
+        probablyEnded: String? = null
+    ): DrawnCardFooter = when {
+        probablyEnded != null && (chip == null || chip is ScoreChip.Live || chip == ScoreChip.Hidden) -> DrawnCardFooter(lead = probablyEnded)
+        awaiting != null && chip == null -> DrawnCardFooter(lead = awaiting)
+        else -> footerOf(chip, mode, strings, liveWord, listedLive, halves, noScoreYet, startsAt, watching)
+    }
+
+    private fun footerOf(
+        chip: ScoreChip?,
+        mode: ScoresMode?,
+        strings: ScoreChipStrings,
+        liveWord: String,
+        listedLive: String?,
+        halves: Boolean,
+        noScoreYet: String?,
+        startsAt: String?,
+        watching: String?
     ): DrawnCardFooter = when (chip) {
         is ScoreChip.Live -> {
             // The game grammar's one clock line (live.24): "Q4 4:12", period first.

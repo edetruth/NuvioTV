@@ -233,6 +233,24 @@ class SportsLiveEndedGames {
     }
 
     /**
+     * #375: the card keys of [items] Live now shows "Probably ended" at [nowMs]: an estimate ([verdict] with [canEstimate]),
+     * or an overdue game ([moreEnds], links found lately ([hasRecentLinks]) excepted). Never an ESPN final, never a
+     * channel. What Home labels so (it never hides one), so one game reads the same on every surface.
+     */
+    fun probablyEndedKeys(
+        items: List<SportsLiveItem>,
+        scores: Map<String, ScoreSnapshot>,
+        nowMs: Long,
+        canEstimate: (SportsLiveItem) -> Boolean,
+        hasRecentLinks: (SportsLiveItem) -> Boolean
+    ): Set<String> {
+        val (over, live) = items.partition { item -> verdict(item, scores[item.streamKey], nowMs, canEstimate(item)) != null }
+        val estimated = over.filter { item -> verdict(item, scores[item.streamKey], nowMs, canEstimate(item))?.signal == EndedSignal.ESTIMATE }
+            .mapTo(HashSet()) { it.streamKey }
+        return estimated + moreEnds(live, scores, nowMs, emptySet(), hasRecentLinks).moved
+    }
+
+    /**
      * Splits Live now [items] (in order) by their verdicts at [nowMs]; [scores] are the delayed
      * snapshots by card key, [canEstimate] which cards may be estimated. A card whose drop time has
      * passed is in neither list.

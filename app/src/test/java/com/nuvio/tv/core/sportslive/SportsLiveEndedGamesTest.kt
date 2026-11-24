@@ -533,6 +533,20 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `#375 - the games Home labels Probably ended are Live now's - estimates and overdue, never a final or a live game`() {
+        val games = SportsLiveEndedGames()
+        val estimated = item(name = "Leinster vs Munster", sport = "Rugby", id = "est", startMs = START - 5 * HOUR)
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "over", startMs = START - 4 * HOUR)
+        val final = item(id = "fin", startMs = START - 3 * HOUR)
+        val on = item(name = "Team C vs Team D", sport = "Soccer", id = "on", startMs = START - HOUR)
+        val keys = games.probablyEndedKeys(
+            listOf(estimated, overdue, final, on), mapOf(final.streamKey to pacersFinal), START,
+            canEstimate = { it.id == "est" }, hasRecentLinks = { false }
+        )
+        assertEquals(setOf(estimated.streamKey, overdue.streamKey), keys)
+    }
+
+    @Test
     fun `F4 - what live counts leave out - Just ended, dropped and finals in their grace`() {
         val games = SportsLiveEndedGames()
         val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)

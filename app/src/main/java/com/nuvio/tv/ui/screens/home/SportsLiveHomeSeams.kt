@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveScoreWait
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -213,10 +215,12 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
         enabled = liveScoresMode != null,
         tracking = liveScoresViewModel.tracking
     )
-    SportsLiveHomeScores(viewModel, uiState.liveNowItems, liveScores, liveScoresMode)
-    // V2 phase 10: Live now games are drawn as the section's game card; See all counts every live game.
     val unmatchedScores = liveScoresViewModel.unmatched.collectAsStateWithLifecycle()
-    val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores)
+    // #375: which cards wait for ESPN and which Live Now calls Probably ended, worked out in the scores' own scope.
+    val truth = remember { SportsLiveHomeTruth() }
+    SportsLiveHomeScores(viewModel, uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores, truth)
+    // V2 phase 10: Live now games are drawn as the section's game card; See all counts every live game.
+    val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores, truth)
     val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
     val liveNowOver = uiState.liveNowOver
     val liveGameCount = remember(uiState.liveNowItems, liveNowOver) {
@@ -235,7 +239,9 @@ private fun SportsLiveHomeScores(
     viewModel: HomeViewModel,
     items: List<SportsLiveItem>,
     scores: State<Map<String, ScoreSnapshot>>,
-    mode: ScoresMode?
+    mode: ScoresMode?,
+    unmatched: State<Set<String>>,
+    truth: SportsLiveHomeTruth
 ) {
     val current = scores.value
     val scoreChipStrings = rememberScoreChipStrings()
@@ -257,11 +263,42 @@ private fun SportsLiveHomeScores(
     // Games ESPN shows final leave the row (#60), at once (l24 polish P1: in the postgame grace too, so a final never
     // reads "Live now"); an estimate never drops one.
     val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.finalKeys(items, current, clockMs) }
+    // #375: the games Live Now calls Probably ended (an estimate, overdue) are labelled so on their card, never hidden, and
+    // leave the "N live" count and the zap list as Live Now's strip does.
+    val unmatchedNow = unmatched.value
+    val gate = remember(mode, unmatchedNow) { SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatchedNow) }
+    val probablyEnded = remember(items, current, clockMs, gate) {
+        SportsLiveEndedGames.shared.probablyEndedKeys(viewModel.liveNowAllItems, current, clockMs, gate, viewModel.sportsLiveRepository::hasRecentLinks)
+    }
     // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
-    val over = remember(items, current, clockMs) {
-        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs)
+    val over = remember(items, current, clockMs, probablyEnded) {
+        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs) + probablyEnded
     }
     LaunchedEffect(ended, over) { viewModel.setLiveNowEnded(ended, over) }
+    // #375: an ESPN-covered game reads its start, not "● Live", until ESPN answers (at most SportsLiveScoreWait.MAX_WAIT_MS,
+    // then as before), as on Live Now; a game no feed covers and Scores Off are unchanged. One update at the deadline.
+    val wait = remember { SportsLiveScoreWait() }
+    var wake by remember { mutableStateOf(0) }
+    val waiting = remember(items, current, gate, mode, clockMs, wake) {
+        val tracked = if (mode == null) emptyList() else items.filter { it.isLive && !it.isChannel }
+        wait.awaiting(tracked, current, gate, System.currentTimeMillis())
+    }
+    val deadline = wait.deadline
+    LaunchedEffect(deadline) {
+        val at = deadline ?: return@LaunchedEffect
+        kotlinx.coroutines.delay((at - System.currentTimeMillis()).coerceAtLeast(0L) + 1)
+        wake++
+    }
+    SideEffect {
+        truth.awaiting.value = waiting
+        truth.probablyEnded.value = probablyEnded
+    }
+}
+
+/** #375: Home's Live now cards' waiting and Probably ended keys, written by [SportsLiveHomeScores], read by each card. */
+internal class SportsLiveHomeTruth {
+    val awaiting: MutableState<Set<String>> = mutableStateOf(emptySet())
+    val probablyEnded: MutableState<Set<String>> = mutableStateOf(emptySet())
 }
 
 /** Provides Home's content the Sports & Live drawn card art, Live now's See all line and My games today. */
