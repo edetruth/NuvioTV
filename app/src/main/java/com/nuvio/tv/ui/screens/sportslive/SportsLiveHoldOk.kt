@@ -149,9 +149,28 @@ object SportsLiveHoldOk {
     /** The open sheet: its [title] and [save], which saves the report snapshot taken as the hold began. */
     internal class Sheet(val title: String, val save: () -> Unit)
 
-    /** The full player now open plays a sports replay, which has no zap session and so no Hold OK menu of its own (G-C10). */
-    @Volatile
-    internal var replayPlayerOpen = false
+    // The full players open, oldest first, each with whether it plays a sports replay; the newest is on top (F9).
+    private val players = ArrayList<Pair<Any, Boolean>>()
+
+    /**
+     * The full player on top plays a sports replay, which has no zap session and so no Hold OK menu of its own (G-C10).
+     * Read from the newest player open, so a live game's player opened over a replay's keeps its own menu (F9).
+     */
+    internal val replayPlayerOpen: Boolean
+        get() = synchronized(players) { players.lastOrNull()?.second == true }
+
+    /** A full player ([owner]) opened; [replay]: it plays a sports replay. */
+    internal fun playerOpened(owner: Any, replay: Boolean) {
+        synchronized(players) {
+            players.removeAll { it.first === owner }
+            players += owner to replay
+        }
+    }
+
+    /** That player closed. */
+    internal fun playerClosed(owner: Any) {
+        synchronized(players) { players.removeAll { it.first === owner } }
+    }
 
     private val key = SportsLiveHoldOkKey(playerHasOwnHold = { !replayPlayerOpen })
     private val _sheet = MutableStateFlow<Sheet?>(null)

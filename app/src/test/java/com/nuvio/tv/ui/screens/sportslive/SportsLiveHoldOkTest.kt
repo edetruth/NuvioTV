@@ -93,6 +93,24 @@ class SportsLiveHoldOkTest {
     }
 
     @Test
+    fun `the top player decides whether the player has its own Hold OK`() {
+        // F9: a live game's player opened over a replay's player (an alert) keeps its own Hold OK menu.
+        val replay = Any()
+        val live = Any()
+        try {
+            SportsLiveHoldOk.playerOpened(replay, replay = true)
+            assertTrue(SportsLiveHoldOk.replayPlayerOpen)
+            SportsLiveHoldOk.playerOpened(live, replay = false)
+            assertFalse(SportsLiveHoldOk.replayPlayerOpen)
+            SportsLiveHoldOk.playerClosed(live)
+            assertTrue(SportsLiveHoldOk.replayPlayerOpen)
+        } finally {
+            SportsLiveHoldOk.playerClosed(live)
+            SportsLiveHoldOk.playerClosed(replay)
+        }
+    }
+
+    @Test
     fun `a long press sent as one repeat and a release opens the sheet in a sports replay's player`() {
         // adb's --longpress (and some remotes over CEC): the press, one repeat at the long-press time, the release.
         val run = Run(SportsLiveHoldOkKey(graceMs = 500, playerHasOwnHold = { false }), Screens(consumeRepeats = true))
