@@ -21,6 +21,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveReplayResume
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
+import com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.CatchUp
@@ -124,7 +125,10 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val remindersKey = stringPreferencesKey("sports_live_reminders")
     private val reminderOptOutsKey = stringPreferencesKey("sports_live_reminder_opt_outs")
     private val remindMyTeamsKey = booleanPreferencesKey("sports_live_remind_my_teams")
+    // The On / Off switch before live.28: read while no level is stored, and kept in step for older builds.
     private val scoreAlertsKey = booleanPreferencesKey("sports_live_score_alerts")
+    // Live.28: Score alerts' level ([ScoreAlertLevel] name): Off / Big moments / Every score.
+    private val scoreAlertLevelKey = stringPreferencesKey("sports_live_score_alert_level")
     private val fullTimeAlertsKey = booleanPreferencesKey("sports_live_full_time_alerts")
     private val closeGameAlertsKey = booleanPreferencesKey("sports_live_close_game_alerts")
     // Reminder-only teams (#154), stored as the follows are.
@@ -326,7 +330,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
         factory.get(pid, FEATURE).data.map { prefs ->
             SportsLiveAlertSettings(
                 remindMyTeams = prefs[remindMyTeamsKey] ?: true,
-                scoreAlerts = prefs[scoreAlertsKey] ?: true,
+                scoreAlertLevel = ScoreAlertLevel.fromStored(prefs[scoreAlertLevelKey], prefs[scoreAlertsKey]),
                 fullTimeAlerts = prefs[fullTimeAlertsKey] ?: true,
                 closeGameAlerts = prefs[closeGameAlertsKey] ?: true,
                 tipOff = com.nuvio.tv.core.sportslive.SportsLiveTipOff.fromStored(prefs[tipOffKey])
@@ -338,8 +342,12 @@ class SportsLivePreferencesDataStore @Inject constructor(
         store().edit { it[remindMyTeamsKey] = v }
     }
 
-    suspend fun setScoreAlerts(v: Boolean) {
-        store().edit { it[scoreAlertsKey] = v }
+    /** Score alerts' level (live.28); the old switch follows it, on unless Off. */
+    suspend fun setScoreAlertLevel(level: ScoreAlertLevel) {
+        store().edit {
+            it[scoreAlertLevelKey] = level.name
+            it[scoreAlertsKey] = level != ScoreAlertLevel.OFF
+        }
     }
 
     suspend fun setFullTimeAlerts(v: Boolean) {

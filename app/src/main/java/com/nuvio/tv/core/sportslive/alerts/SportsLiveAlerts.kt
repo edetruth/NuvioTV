@@ -190,6 +190,13 @@ class SportsLiveAlerts @Inject constructor(
     /** The profile the waiting alerts were raised under; guarded by [lock]. */
     private var lastProfile: Int? = null
 
+    /**
+     * The ESPN games a card showed a live score of (a score, or a close finish with its score), this profile: their
+     * Full time card shows the score even when "Hide my teams' results" hides it (live.28, user decision: option 1).
+     * Guarded by [lock].
+     */
+    private val liveScoreShown = LinkedHashSet<String>()
+
     /** Games ESPN said are over (by [SportsLiveAlertEngine.gameKey]): no longer tracked. Guarded by [lock]. */
     private val endedGames = HashSet<String>()
 
@@ -416,8 +423,8 @@ class SportsLiveAlerts @Inject constructor(
         synchronized(lock) {
             val card = currentFlow.value ?: return
             val nowMs = System.currentTimeMillis()
-            val next = SportsLiveAlertEngine.stillShowable(card.alert, lastMode, lastSettings)
-                ?.let { underProtection(it, lastProtection.copy(nowMs = nowMs)) }
+            val next = underProtection(card.alert, lastProtection.copy(nowMs = nowMs), liveScoreShown::contains)
+                ?.let { SportsLiveAlertEngine.stillShowable(it, lastMode, lastSettings) }
             if (next == null) {
                 currentFlow.value = null
                 showNextLocked(nowMs)
@@ -435,6 +442,7 @@ class SportsLiveAlerts @Inject constructor(
     internal fun onProfile(profileId: Int) = synchronized(lock) {
         if (lastProfile != null && lastProfile != profileId) {
             queue.clear()
+            liveScoreShown.clear()
             // The card up belongs to the profile before too (live.24 RC3 review L1).
             currentFlow.value = null
         }
@@ -478,8 +486,9 @@ class SportsLiveAlerts @Inject constructor(
      * ([underProtection]).
      */
     private fun showable(queued: SportsLiveAlert, nowMs: Long, raisedAt: Long): SportsLiveAlert? {
-        val allowed = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
-        val next = underProtection(allowed, lastProtection.copy(nowMs = nowMs)) ?: return null
+        // Protection first (it may show a hidden final's score, live.28 option 1), then the Scores setting and switches.
+        val protectedNow = underProtection(queued, lastProtection.copy(nowMs = nowMs), liveScoreShown::contains) ?: return null
+        val next = SportsLiveAlertEngine.stillShowable(protectedNow, lastMode, lastSettings) ?: return null
         if (SportsLiveAlertCards.expired(next, raisedAt, nowMs)) return null
         if (!mayShowOver(next, watching.value)) return null
         if (SportsLiveAlertEngine.isPlaying(next.item, watching.value, SportsLiveAlertEngine.snapshotOf(next))) {
@@ -508,6 +517,11 @@ class SportsLiveAlerts @Inject constructor(
             // raised (l24 polish): a waiting one may still show as "result hidden" or not at all, and a known result
             // takes its replay out of Catch up and Your teams.
             if (next is SportsLiveAlert.FullTime && !next.namesOnly) ResultSeen.shared.finalScoreShown(next.snapshot.eventId)
+            val liveScoreOf = SportsLiveAlertEngine.snapshotOf(next)?.eventId?.takeIf { showsLiveScore(next) }
+            if (liveScoreOf != null) {
+                if (liveScoreShown.size >= MAX_ENDED) liveScoreShown.remove(liveScoreShown.first())
+                liveScoreShown += liveScoreOf
+            }
             return
         }
         currentFlow.value = null
@@ -671,6 +685,10 @@ class SportsLiveAlerts @Inject constructor(
         internal fun bigGamesOnly(candidates: List<CrunchCandidate>): List<CrunchCandidate> =
             candidates.filter { it.bigScore >= BigGame.BIG }
 
+        /** [alert]'s card shows a live score: a score card, or a close finish under Show. */
+        internal fun showsLiveScore(alert: SportsLiveAlert): Boolean =
+            alert is SportsLiveAlert.ScoreChange || (alert is SportsLiveAlert.Crunch && !alert.namesOnly)
+
         /** A first kickoff prompt waits for a live link (#162); a re-ask after Later or the note does not. */
         fun holdsFirst(alert: SportsLiveAlert): Boolean = alert is SportsLiveAlert.Kickoff && !alert.again && !alert.noStreamYet
 
@@ -680,12 +698,25 @@ class SportsLiveAlerts @Inject constructor(
          * [alert] under spoiler [protection] as it is now (live.24 RC2 review R2): a score or close finish of a game now
          * protected (saved for Watch later, my teams' scores hidden) is dropped; a full time of one becomes the "result
          * hidden" card, as when it is raised protected. A kickoff carries no score.
+         *
+         * Live.28 option 1 (user decision): a full time whose game had a live score shown on a card ([liveScoreShown], by
+         * ESPN event id) shows its score after all, when only its result is protected ("Hide my teams' results"): its
+         * live score is not, so the viewer followed the score all game. A game saved for later or with its live scores
+         * hidden stays "result hidden".
          */
-        fun underProtection(alert: SportsLiveAlert, protection: SpoilerProtection): SportsLiveAlert? = when (alert) {
+        fun underProtection(
+            alert: SportsLiveAlert,
+            protection: SpoilerProtection,
+            liveScoreShown: (String) -> Boolean = { false }
+        ): SportsLiveAlert? = when (alert) {
             is SportsLiveAlert.Kickoff -> alert
             is SportsLiveAlert.ScoreChange -> alert.takeUnless { protection.protects(it.snapshot) }
             is SportsLiveAlert.Crunch -> alert.takeUnless { protection.protects(it.snapshot) }
-            is SportsLiveAlert.FullTime -> if (alert.resultHidden || !protection.protects(alert.snapshot)) {
+            is SportsLiveAlert.FullTime -> if (!alert.resultHidden && !protection.protects(alert.snapshot)) {
+                alert
+            } else if (liveScoreShown(alert.snapshot.eventId) && !protectsLiveScore(protection, alert.snapshot)) {
+                alert.copy(namesOnly = false, resultHidden = false, team = null)
+            } else if (alert.resultHidden) {
                 alert
             } else {
                 val event = alert.snapshot
@@ -694,6 +725,10 @@ class SportsLiveAlerts @Inject constructor(
                 alert.copy(namesOnly = true, resultHidden = true, team = team)
             }
         }
+
+        /** Whether [protection] hides [event]'s game while it is live too (saved for later, my teams' live scores). */
+        private fun protectsLiveScore(protection: SpoilerProtection, event: ScoreSnapshot): Boolean =
+            protection.protects(event.copy(state = ScoreState.IN, isFinal = false))
 
         /** The sides of [event] a followed team is, by ESPN data (strict). */
         fun followedSides(followed: List<FollowedTeam>, event: ScoreSnapshot): Set<ScoreSide> = buildSet {

@@ -109,7 +109,7 @@ class SportsLiveSettingsSyncTest {
         prefs.updateMySports { MySports.DEFAULT.toggleSport(MySport.SOCCER) }
         prefs.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
         prefs.setScoreDelaySeconds(ScoreDelayChoices.SECONDS.last())
-        prefs.setScoreAlerts(false)
+        prefs.setScoreAlertLevel(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.EVERY_SCORE)
         prefs.setCatchUpRow(false)
         prefs.setHideMyTeamsScores(true)
         prefs.hideTitle("Morning Talk Show")
@@ -420,7 +420,7 @@ class SportsLiveSettingsSyncTest {
         val mySports: MySports,
         val mode: ScoresMode,
         val delay: Int,
-        val scoreAlerts: Boolean,
+        val scoreAlertLevel: com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel,
         val catchUpRow: Boolean,
         val hideMyTeams: Boolean,
         val hidden: Set<String>,
@@ -436,7 +436,7 @@ class SportsLiveSettingsSyncTest {
             mySports = prefs.mySports.first(),
             mode = prefs.scoreSettings.first().mode,
             delay = prefs.scoreSettings.first().delaySeconds,
-            scoreAlerts = prefs.alertSettings.first().scoreAlerts,
+            scoreAlertLevel = prefs.alertSettings.first().scoreAlertLevel,
             catchUpRow = prefs.catchUpRow.first(),
             hideMyTeams = prefs.hideMyTeamsScores.first(),
             hidden = prefs.hiddenTitles.first(),

@@ -99,6 +99,7 @@ import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertContent
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertEngine
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveWatching
+import com.nuvio.tv.core.sportslive.alerts.ScoreMoment
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.navigation.navigateToSportsLiveZapTarget
@@ -204,7 +205,9 @@ fun SportsLiveAlertsHost(
     val miniItem = (miniState as? SportsLiveMiniState.Playing)?.item
     val dualPanes by SportsLiveAlertSurfaces.dualPanes.collectAsState()
     val panes = dualPanes?.takeIf { dualRoute }
-    LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route, panes) {
+    // Live.28: the player learns its game's ESPN event id after it opens; the games on screen are read again then.
+    val watchedEventIds by SportsLiveGameWatch.shared.eventIds.collectAsState()
+    LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route, panes, watchedEventIds) {
         // Every game on screen (the full player's, both dual panes', the mini player's) is watched: none of them
         // alerts, matched by card, game identity or ESPN event, never by title.
         val playerItem = playerContentId?.let { id -> SportsLiveZapSessions.activeFor(id)?.current ?: SportsLiveGameWatch.shared.item(id) }
@@ -876,8 +879,15 @@ private fun AlertBody(content: AlertContent, followed: Boolean) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (followed) StarIcon()
                 Text(
-                    text = content.scorer?.let { stringResource(R.string.sports_live_alert_scored, it.name) }
-                        ?: stringResource(R.string.sports_live_alert_score_update),
+                    // Live.28: a big moment says what it is; a score names who scored; a break or both: "Score update".
+                    text = when (content.moment) {
+                        ScoreMoment.LEAD_CHANGE -> stringResource(R.string.sports_live_alert_lead_change)
+                        ScoreMoment.TIED -> stringResource(R.string.sports_live_alert_tied)
+                        ScoreMoment.OVERTIME -> stringResource(R.string.sports_live_alert_overtime)
+                        ScoreMoment.COMEBACK -> stringResource(R.string.sports_live_alert_comeback)
+                        ScoreMoment.SCORE, ScoreMoment.PERIOD_BREAK -> content.scorer?.let { stringResource(R.string.sports_live_alert_scored, it.name) }
+                            ?: stringResource(R.string.sports_live_alert_score_update)
+                    },
                     style = MaterialTheme.typography.titleSmall.sportsLiveBold(),
                     color = ArtColors.Text,
                     maxLines = 1,

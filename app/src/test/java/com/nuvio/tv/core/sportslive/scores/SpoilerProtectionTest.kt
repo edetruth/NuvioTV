@@ -79,7 +79,7 @@ class SpoilerProtectionTest {
             val engine = SportsLiveAlertEngine()
             val watching = SportsLiveWatching(playingIds = setOf("movie"), inPlayer = true, streamStartedAtMs = START - 60 * MINUTE)
             fun step(at: Long, snapshot: ScoreSnapshot) =
-                engine.update(at, listOf(AlertGame(card, protection.stamp(snapshot), false, setOf(ScoreSide.HOME))), SportsLiveAlertSettings(), ScoresMode.SHOW, watching)
+                engine.update(at, listOf(AlertGame(card, protection.stamp(snapshot), false, setOf(ScoreSide.HOME))), AlertFixtures.EVERY, ScoresMode.SHOW, watching)
             step(START + 10 * MINUTE, AlertFixtures.live(10, 8))
             val score = step(START + 11 * MINUTE, AlertFixtures.live(12, 8))
             val fullTime = step(START + 130 * MINUTE, AlertFixtures.final(101, 99))

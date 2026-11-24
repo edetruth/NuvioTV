@@ -478,13 +478,25 @@ class SportsLivePreferencesDataStoreTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         assertEquals(SportsLiveAlertSettings(), store.alertSettings.first())
         store.setRemindMyTeams(false)
-        store.setScoreAlerts(false)
+        store.setScoreAlertLevel(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.OFF)
         store.setFullTimeAlerts(false)
-        assertEquals(SportsLiveAlertSettings(remindMyTeams = false, scoreAlerts = false, fullTimeAlerts = false), store.alertSettings.first())
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = false, scoreAlertLevel = com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.OFF, fullTimeAlerts = false), store.alertSettings.first())
         assertEquals(false, store.reminders.first().remindMyTeams)
 
         activeProfile.value = 2
         assertEquals(SportsLiveAlertSettings(), store.alertSettings.first())
+    }
+
+    @Test
+    fun `score alerts switched off before live28 read as Off, and switched on as Big moments`() = runTest {
+        profile1Store.updateData { mutablePreferencesOf(booleanPreferencesKey("sports_live_score_alerts") to false) }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.OFF, store.alertSettings.first().scoreAlertLevel)
+        profile1Store.updateData { mutablePreferencesOf(booleanPreferencesKey("sports_live_score_alerts") to true) }
+        assertEquals(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.BIG_MOMENTS, store.alertSettings.first().scoreAlertLevel)
+        // A level stored wins over the old switch.
+        store.setScoreAlertLevel(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.EVERY_SCORE)
+        assertEquals(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.EVERY_SCORE, store.alertSettings.first().scoreAlertLevel)
     }
 
     @Test

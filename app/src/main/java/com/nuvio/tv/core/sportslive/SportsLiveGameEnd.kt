@@ -7,8 +7,11 @@ import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Settings → Sports & Live → "When a game ends" (#161): Move (default: after 10 s, only into one of my games showing
@@ -219,10 +222,21 @@ class SportsLiveGameWatch(
         while (games.size > MAX_GAMES) games.remove(games.keys.first())
     }
 
+    private val _eventIds = MutableStateFlow(0L)
+
+    /**
+     * Counts each time a watched game's ESPN event id is learned or changes (live.28): the alerts read the games on
+     * screen again then, as the full player learns its game's id only after it opens.
+     */
+    val eventIds: StateFlow<Long> = _eventIds.asStateFlow()
+
     /** [gameId]'s delayed ESPN snapshot now (null: none matched). */
     @Synchronized
     fun note(gameId: String, snapshot: ScoreSnapshot?) {
-        games[gameId]?.snapshot = snapshot
+        val entry = games[gameId] ?: return
+        val before = entry.snapshot?.eventId
+        entry.snapshot = snapshot
+        if (snapshot?.eventId != before) _eventIds.value += 1
     }
 
     @Synchronized

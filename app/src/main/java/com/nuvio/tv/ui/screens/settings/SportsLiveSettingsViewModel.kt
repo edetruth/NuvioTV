@@ -164,7 +164,6 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.PICTURE_IN_PICTURE -> setPipEnabled(on)
             SportsLiveSetting.HIDE_UNPLAYABLE -> setHideUnplayable(on)
             SportsLiveSetting.REMIND_MY_TEAMS -> setRemindMyTeams(on)
-            SportsLiveSetting.SCORE_ALERTS -> setScoreAlerts(on)
             SportsLiveSetting.FULL_TIME_ALERTS -> setFullTimeAlerts(on)
             SportsLiveSetting.CLOSE_GAME_ALERTS -> viewModelScope.launch { prefs.setCloseGameAlerts(on) }
             SportsLiveSetting.MY_TEAMS_SPOILERS -> viewModelScope.launch { prefs.updateScoresChoice { it.withMyTeamsOnly(on) } }
@@ -175,7 +174,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
             SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.RUN_SETUP, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS,
             SportsLiveSetting.GAME_END, SportsLiveSetting.REMINDED_TEAMS, SportsLiveSetting.TIP_OFF, SportsLiveSetting.OK_ON_LIVE,
-            SportsLiveSetting.REPORT_PROBLEM, SportsLiveSetting.GUIDE_TABLE -> Unit
+            SportsLiveSetting.REPORT_PROBLEM, SportsLiveSetting.GUIDE_TABLE, SportsLiveSetting.SCORE_ALERTS -> Unit
         }
     }
 
@@ -269,8 +268,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
         viewModelScope.launch { prefs.setRemindMyTeams(enabled) }
     }
 
-    fun setScoreAlerts(enabled: Boolean) {
-        viewModelScope.launch { prefs.setScoreAlerts(enabled) }
+    /** Score alerts' level (live.28): Off / Big moments / Every score. */
+    fun setScoreAlertLevel(level: com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel) {
+        viewModelScope.launch { prefs.setScoreAlertLevel(level) }
     }
 
     fun setFullTimeAlerts(enabled: Boolean) {

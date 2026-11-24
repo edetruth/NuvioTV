@@ -52,8 +52,8 @@ class SportsLiveAlertCardsTest {
             val engine = SportsLiveAlertEngine()
             val watching = SportsLiveWatching(playingIds = setOf("movie"), inPlayer = true)
             val game = { s: ScoreSnapshot -> listOf(AlertGame(pacers, s, false, setOf(ScoreSide.AWAY))) }
-            engine.update(START + 10 * MINUTE, game(before), SportsLiveAlertSettings(), ScoresMode.SHOW, watching)
-            return engine.update(START + 11 * MINUTE, game(after), SportsLiveAlertSettings(), ScoresMode.SHOW, watching).single() as SportsLiveAlert.ScoreChange
+            engine.update(START + 10 * MINUTE, game(before), AlertFixtures.EVERY, ScoresMode.SHOW, watching)
+            return engine.update(START + 11 * MINUTE, game(after), AlertFixtures.EVERY, ScoresMode.SHOW, watching).single() as SportsLiveAlert.ScoreChange
         }
         assertTrue(change(live(10, 8), live(10, 11)).leadChange)
         assertFalse(change(live(10, 8), live(12, 8)).leadChange)
@@ -558,8 +558,8 @@ class SportsLiveAlertCardsTest {
         fun toasts(watching: SportsLiveWatching): Int {
             val engine = SportsLiveAlertEngine()
             val game = { s: ScoreSnapshot -> listOf(AlertGame(pacers, s, false, setOf(ScoreSide.AWAY))) }
-            engine.update(START + 10 * MINUTE, game(live(10, 8)), SportsLiveAlertSettings(), ScoresMode.SHOW, watching)
-            return engine.update(START + 11 * MINUTE, game(live(10, 11)), SportsLiveAlertSettings(), ScoresMode.SHOW, watching).size
+            engine.update(START + 10 * MINUTE, game(live(10, 8)), AlertFixtures.EVERY, ScoresMode.SHOW, watching)
+            return engine.update(START + 11 * MINUTE, game(live(10, 11)), AlertFixtures.EVERY, ScoresMode.SHOW, watching).size
         }
         assertEquals(1, toasts(SportsLiveWatching(dual = true, playingIds = setOf("other"))))
         assertEquals(1, toasts(SportsLiveWatching(miniPlaying = true, playingIds = setOf("other"))))

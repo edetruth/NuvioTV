@@ -15,6 +15,9 @@ internal object AlertFixtures {
     const val START = 1_800_000_000_000L
     const val MINUTE = 60_000L
 
+    /** Score alerts at Every score (live.28): the tests of the score cards' plumbing, whatever the sport's moments. */
+    val EVERY = SportsLiveAlertSettings(scoreAlertLevel = ScoreAlertLevel.EVERY_SCORE)
+
     // IND @ PHI: home Philadelphia 76ers, away Indiana Pacers (NBA, final in the fixture).
     val pacersFinal: ScoreSnapshot =
         EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }

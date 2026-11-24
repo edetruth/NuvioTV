@@ -25,8 +25,17 @@ sealed interface AlertContent {
     /** "Watch now?": both sides with logos, the league, whether a followed team plays. */
     data class Kickoff(override val first: AlertSide, override val second: AlertSide, val league: String?, val followed: Boolean) : AlertContent
 
-    /** "‹Team› score" with the score in the card's order and the live clock. [scorer] null: both scored. */
-    data class Score(override val first: AlertSide, override val second: AlertSide, val scorer: AlertSide?, val clock: String?) : AlertContent
+    /**
+     * "‹Team› score" with the score in the card's order and the live clock. [scorer] null: both scored. [moment]
+     * (live.28): a lead change, a tie, an overtime or a comeback names that instead of the scorer.
+     */
+    data class Score(
+        override val first: AlertSide,
+        override val second: AlertSide,
+        val scorer: AlertSide?,
+        val clock: String?,
+        val moment: ScoreMoment = ScoreMoment.SCORE
+    ) : AlertContent
 
     /** Full time with the score and ESPN's note ("Final/OT"). */
     data class FullTime(
@@ -68,7 +77,7 @@ object SportsLiveAlertContent {
         is SportsLiveAlert.ScoreChange -> sides(alert.item, alert.snapshot, withScore = true)?.let { (first, second, _) ->
             val firstIsHome = firstIsHome(alert.item, alert.snapshot)
             val scorer = alert.scorer?.takeIf { firstIsHome != null }?.let { side -> if (firstIsHome == (side == ScoreSide.HOME)) first else second }
-            AlertContent.Score(first, second, scorer, alert.snapshot.clockText)
+            AlertContent.Score(first, second, scorer, alert.snapshot.clockText, alert.moment)
         }
         is SportsLiveAlert.Crunch -> sides(alert.item, alert.snapshot, withScore = !alert.namesOnly)?.let { (first, second, art) ->
             AlertContent.Crunch(first, second, alert.moment, withScore = !alert.namesOnly, league = art.league)

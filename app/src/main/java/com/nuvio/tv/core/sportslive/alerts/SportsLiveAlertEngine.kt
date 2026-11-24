@@ -9,13 +9,17 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
+import kotlin.math.abs
 
 /** Settings → Sports & Live → Alerts (#42, #44); each on by default. */
 data class SportsLiveAlertSettings(
     /** Followed teams' games get the kickoff prompt without "Remind me". */
     val remindMyTeams: Boolean = true,
-    /** "‹Team› score" toasts while watching something else (Scores = Show only). */
-    val scoreAlerts: Boolean = true,
+    /**
+     * Score cards while watching something else (Scores = Show only), live.28: one level for every followed team, Big
+     * moments by default ([ScoreAlertCadence]).
+     */
+    val scoreAlertLevel: ScoreAlertLevel = ScoreAlertLevel.DEFAULT,
     /** The full-time toast (names only under Hide until focused; none under Off). */
     val fullTimeAlerts: Boolean = true,
     /** Crunch-time alerts (#137): a close game late, in My sports (no score under Hide until focused; none under Off). */
@@ -29,10 +33,11 @@ data class SportsLiveWatching(
     /** Content ids playing (the full player's, both dual panes', the mini player's): their games never alert. */
     val playingIds: Set<String> = emptySet(),
     /**
-     * The games on screen by [SportsLiveAlertEngine.gameKey] (their two sides and day), so another addon's copy of
-     * a game playing, or a merged card led by another source, never alerts either.
+     * The games on screen by their two sides and start ([PlayingGame]), so another addon's copy of a game playing, or a
+     * merged card led by another source, never alerts either: the same sides within [PlayingGame.WINDOW_MS] of the start
+     * (live.28: a UTC-day key missed a game around midnight UTC).
      */
-    val playingGameKeys: Set<String> = emptySet(),
+    val playingGameKeys: Set<PlayingGame> = emptySet(),
     /** The ESPN event ids of the games on screen, where known: a card matched to one of them never alerts. */
     val playingEventIds: Set<String> = emptySet(),
     /** The full player is on screen: the kickoff prompt is the small one, and score toasts may show. */
@@ -56,6 +61,22 @@ data class SportsLiveWatching(
      */
     val sportsLiveScreen: Boolean = false
 )
+
+/** A game on screen as alerts match it: its two sides, canonical and sorted ([sides]), and its start when known. */
+data class PlayingGame(val sides: String, val startMs: Long?) {
+    /** [item] (one source of a card) is this game: the same sides, its start within [WINDOW_MS] (either unknown: yes). */
+    fun matches(item: SportsLiveItem): Boolean {
+        val teams = item.teams ?: return false
+        if (SportsLiveAlertEngine.sidesKey(teams.home, teams.away) != sides) return false
+        val start = item.startMs
+        return startMs == null || start == null || abs(start - startMs) <= WINDOW_MS
+    }
+
+    companion object {
+        /** One game's listings differ by hours at most (an addon's pre-show start, a time zone slip); a rematch is days away. */
+        const val WINDOW_MS = 6 * 60 * 60_000L
+    }
+}
 
 /** A card the alerts look at: reminded, or a followed team's game, with its delayed ESPN game. */
 data class AlertGame(
@@ -97,13 +118,15 @@ sealed interface SportsLiveAlert {
 
     /**
      * A followed team's game changed score (#42). [scorer]: the side that scored; null when both changed.
-     * [leadChange]: the other side led before and this one leads now, a big moment (#136).
+     * [leadChange]: the other side led before and this one leads now, a big moment (#136). [moment] (live.28): what
+     * the card is about ([ScoreAlertCadence]); a lead change has [leadChange] too.
      */
     data class ScoreChange(
         override val item: SportsLiveItem,
         val snapshot: ScoreSnapshot,
         val scorer: ScoreSide?,
-        val leadChange: Boolean = false
+        val leadChange: Boolean = false,
+        val moment: ScoreMoment = ScoreMoment.SCORE
     ) : SportsLiveAlert
 
     /**
@@ -139,8 +162,8 @@ sealed interface SportsLiveAlert {
  *   the start), or, with no ESPN game, whose timed start has just passed. Asked once; [later] asks once
  *   more after [LATER_MS]. Never for the game playing (it counts as answered).
  * - Score change: a followed side's game, Scores = Show, while a game plays (the full player, dual screen or the
- *   mini player, #136), not the game playing; at
- *   most one per game per [SCORE_ALERT_GAP_MS]. Never under Hide until focused (a "scored" toast already
+ *   mini player, #136), not the game playing nor one whose score is blanked as watched; when the level and sport
+ *   call it news ([ScoreAlertCadence], live.28). Never under Hide until focused (a "scored" toast already
  *   tells part of the score) or Off.
  * - Full time: a followed side's game seen live, then final: the score under Show, names only under
  *   Hide until focused, nothing under Off.
@@ -158,7 +181,7 @@ class SportsLiveAlertEngine {
     /** By ESPN event id: what was last seen. */
     private val seen = HashMap<String, Seen>()
     private val sawPregame = HashSet<String>()
-    private val lastScoreAlertAt = HashMap<String, Long>()
+    private val cadence = ScoreAlertCadence()
     private val finals = HashSet<String>()
 
     fun update(
@@ -179,8 +202,14 @@ class SportsLiveAlertEngine {
             val before = seen[event.eventId]
             seen[event.eventId] = Seen(event.state, event.homeScore, event.awayScore)
             if (event.state == ScoreState.PRE) sawPregame += event.eventId
-            if (before == null || game.followedSides.isEmpty() || playing || settling) continue
-            scoreChange(game, event, before, nowMs, settings, mode, watching)?.let(alerts::add)
+            if (game.followedSides.isEmpty()) continue
+            if (playing) {
+                // On screen (or blanked as watched): what it does meanwhile is never announced afterwards.
+                cadence.forget(event.eventId)
+                continue
+            }
+            scoreChange(game, event, nowMs, settings, mode, watching, settling)?.let(alerts::add)
+            if (before == null || settling) continue
             fullTime(game, event, before, settings, mode)?.let(alerts::add)
         }
         return alerts
@@ -235,39 +264,27 @@ class SportsLiveAlertEngine {
         }
     }
 
+    /**
+     * The score card due for a followed side's [event], if any ([ScoreAlertCadence]). Every snapshot is shown to the
+     * cadence so it knows the game's course; a card may come only while a game plays elsewhere (the full player, dual
+     * screen or the mini player), under Show, unprotected, past a stream's first seconds ([settling]).
+     */
     private fun scoreChange(
         game: AlertGame,
         event: ScoreSnapshot,
-        before: Seen,
         nowMs: Long,
         settings: SportsLiveAlertSettings,
         mode: ScoresMode,
-        watching: SportsLiveWatching
+        watching: SportsLiveWatching,
+        settling: Boolean
     ): SportsLiveAlert.ScoreChange? {
-        if (!settings.scoreAlerts || mode != ScoresMode.SHOW || event.spoilerProtected) return null
-        // Only while a game plays: the full player, dual screen or the mini player.
-        if (!watching.inPlayer && !watching.dual && !watching.miniPlaying) return null
-        if (event.state != ScoreState.IN || before.state != ScoreState.IN) return null
-        val home = event.homeScore ?: return null
-        val away = event.awayScore ?: return null
-        val homeBefore = before.home ?: return null
-        val awayBefore = before.away ?: return null
-        // Only a score going up: a correction downwards is not news.
-        if (home < homeBefore || away < awayBefore || (home == homeBefore && away == awayBefore)) return null
-        val last = lastScoreAlertAt[event.eventId]
-        if (last != null && nowMs - last < SCORE_ALERT_GAP_MS) return null
-        lastScoreAlertAt[event.eventId] = nowMs
-        val scorer = when {
-            home > homeBefore && away == awayBefore -> ScoreSide.HOME
-            away > awayBefore && home == homeBefore -> ScoreSide.AWAY
-            else -> null
-        }
-        return SportsLiveAlert.ScoreChange(game.item, event, scorer, leadChange = leadChanged(homeBefore, awayBefore, home, away))
+        val allowed = mode == ScoresMode.SHOW && !event.spoilerProtected && !settling &&
+            (watching.inPlayer || watching.dual || watching.miniPlaying)
+        val call = cadence.observe(event, nowMs, settings.scoreAlertLevel, allowed) ?: return null
+        return SportsLiveAlert.ScoreChange(
+            game.item, event, call.scorer, leadChange = call.moment == ScoreMoment.LEAD_CHANGE, moment = call.moment
+        )
     }
-
-    /** The side leading before trailed after (a tie on either side is no lead change). */
-    private fun leadChanged(homeBefore: Int, awayBefore: Int, home: Int, away: Int): Boolean =
-        homeBefore != awayBefore && home != away && (homeBefore > awayBefore) != (home > away)
 
     private fun fullTime(
         game: AlertGame,
@@ -292,7 +309,6 @@ class SportsLiveAlertEngine {
         if (prompts.size > MAX_REMEMBERED) prompts.clear()
         if (seen.size > MAX_REMEMBERED) seen.clear()
         if (sawPregame.size > MAX_REMEMBERED) sawPregame.clear()
-        if (lastScoreAlertAt.size > MAX_REMEMBERED) lastScoreAlertAt.clear()
         if (finals.size > MAX_REMEMBERED) finals.clear()
     }
 
@@ -300,8 +316,8 @@ class SportsLiveAlertEngine {
         /** "Later" asks again this much later, once (decision 2). */
         const val LATER_MS = 5 * 60_000L
 
-        /** At most one score toast per game this often (decision 4). */
-        const val SCORE_ALERT_GAP_MS = 2 * 60_000L
+        /** Every score: at most one score toast per game this often (decision 4). */
+        const val SCORE_ALERT_GAP_MS = ScoreAlertCadence.EVERY_SCORE_GAP_MS
 
         /** A game first seen live this long after its start is not "kicking off" any more. */
         const val KICKOFF_WINDOW_MS = 20 * 60_000L
@@ -322,6 +338,9 @@ class SportsLiveAlertEngine {
             return "${sideKeys(teams.home to teams.away)}|${item.startMs?.let { it / DAY_MS }}"
         }
 
+        /** [home] and [away], canonical and sorted, joined: one game's sides whichever way an addon lists them. */
+        fun sidesKey(home: String, away: String): String = sideKeys(home to away)
+
         /** The two sides, canonical and sorted, joined: remembered (#152), as cards and alerts ask for it often. */
         private val sideKeys = Memo(2_048) { (home, away): Pair<String, String> ->
             listOf(SportsLiveTeams.canonicalise(home), SportsLiveTeams.canonicalise(away)).sorted().joinToString("|")
@@ -338,7 +357,7 @@ class SportsLiveAlertEngine {
          */
         fun stillShowable(alert: SportsLiveAlert, mode: ScoresMode, settings: SportsLiveAlertSettings): SportsLiveAlert? = when (alert) {
             is SportsLiveAlert.Kickoff -> alert
-            is SportsLiveAlert.ScoreChange -> alert.takeIf { settings.scoreAlerts && mode == ScoresMode.SHOW }
+            is SportsLiveAlert.ScoreChange -> alert.takeIf { settings.scoreAlertLevel != ScoreAlertLevel.OFF && mode == ScoresMode.SHOW }
             is SportsLiveAlert.FullTime -> when {
                 !settings.fullTimeAlerts || mode == ScoresMode.OFF -> null
                 alert.resultHidden -> alert
@@ -362,13 +381,15 @@ class SportsLiveAlertEngine {
 
         /**
          * True when [item]'s game is on screen now (the full player, either dual pane, the mini player): by card
-         * (it or one of its sources), by game identity ([gameKey]: its two sides and day, whichever addon lists it),
-         * or by its ESPN event ([snapshot]). Never by title.
+         * (it or one of its sources), by game identity ([PlayingGame]: its two sides near its start, whichever addon
+         * lists it), by its ESPN event ([snapshot]), or because the scores blank [snapshot] as a game being watched
+         * ([ScoreSnapshot.watched], live.28: that holds before the player learns the event id). Never by title.
          */
         fun isPlaying(item: SportsLiveItem, watching: SportsLiveWatching, snapshot: ScoreSnapshot? = null): Boolean {
+            if (snapshot?.watched == true) return true
             if (watching.playingIds.isNotEmpty() && (listOf(item) + item.alternates).any { it.id in watching.playingIds }) return true
             if (item.teams != null && watching.playingGameKeys.isNotEmpty() &&
-                (listOf(item) + item.alternates).any { gameKey(it) in watching.playingGameKeys }
+                (listOf(item) + item.alternates).any { source -> watching.playingGameKeys.any { it.matches(source) } }
             ) {
                 return true
             }
@@ -376,11 +397,11 @@ class SportsLiveAlertEngine {
         }
 
         /** What [games] on screen are, for [SportsLiveWatching] ([eventIdOf]: a game's ESPN event, where known). */
-        fun watchingKeys(games: List<SportsLiveItem>, eventIdOf: (SportsLiveItem) -> String?): Triple<Set<String>, Set<String>, Set<String>> {
+        fun watchingKeys(games: List<SportsLiveItem>, eventIdOf: (SportsLiveItem) -> String?): Triple<Set<String>, Set<PlayingGame>, Set<String>> {
             val sources = games.flatMap { listOf(it) + it.alternates }
             return Triple(
                 sources.mapTo(HashSet()) { it.id },
-                sources.filter { it.teams != null }.mapTo(HashSet()) { gameKey(it) },
+                sources.mapNotNullTo(HashSet()) { source -> source.teams?.let { PlayingGame(sidesKey(it.home, it.away), source.startMs) } },
                 games.mapNotNullTo(HashSet(), eventIdOf)
             )
         }
