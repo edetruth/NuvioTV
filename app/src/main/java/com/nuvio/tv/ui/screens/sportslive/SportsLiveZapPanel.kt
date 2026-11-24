@@ -596,6 +596,15 @@ internal fun panelBoards(
 }
 
 /**
+ * #375: the panel's [boards] with the games of [awaiting] (ESPN-covered, no feed answered yet; [com.nuvio.tv.core.sportslive.SportsLiveScoreWait])
+ * read as Live Now reads them ([withAwaitingScore]): their start, not LIVE, no progress bar. Only a live row is touched.
+ */
+internal fun withPanelAwaiting(boards: List<ZapPanelBoard>, awaiting: Set<String>): List<ZapPanelBoard> =
+    if (awaiting.isEmpty()) boards else boards.map { board ->
+        if (board.board.item.streamKey in awaiting) board.copy(board = withAwaitingScore(listOf(board.board), awaiting).single()) else board
+    }
+
+/**
  * The live games panel's content: its [rows], grouped and ordered by [groupPanelRows]; [currentKey] is
  * the playing game's stream key, highlighted. [items] are the rows' games in that order. [chips] are
  * the filter chips over [allItems] (every game listed, whatever the chip), [chip] the selected one

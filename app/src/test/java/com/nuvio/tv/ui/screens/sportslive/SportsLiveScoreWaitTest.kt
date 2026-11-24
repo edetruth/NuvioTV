@@ -127,6 +127,20 @@ class SportsLiveScoreWaitTest {
         assertEquals(ScoreboardStatusLines("LIVE", live = true), scoreboardStatusLines(other, strings, kickoff = "7:00 PM"))
     }
 
+    @Test
+    fun `the player's panel reads a waiting game as Live Now does, the uncovered one as before`() {
+        val rows = groupPanelRows(listOf(covered, uncovered), emptyMap(), ScoresMode.SHOW, emptySet(), NOW)
+        val boards = withPanelAwaiting(panelBoards(rows, emptyMap(), ScoresMode.SHOW, emptySet(), NOW), setOf(covered.streamKey))
+            .associateBy { it.board.item.streamKey }
+        val waiting = boards.getValue(covered.streamKey).board
+        assertTrue(waiting.awaitingScore)
+        assertEquals(null, waiting.progress)
+        assertEquals(ScoreboardStatusLines("7:00 PM"), scoreboardStatusLines(waiting, strings, kickoff = "7:00 PM"))
+        val other = boards.getValue(uncovered.streamKey).board
+        assertFalse(other.awaitingScore)
+        assertEquals(ScoreboardStatusLines("LIVE", live = true), scoreboardStatusLines(other, strings, kickoff = "7:00 PM"))
+    }
+
     private companion object {
         const val NOW = 1_800_000_000_000L
         const val HOUR = 3_600_000L
