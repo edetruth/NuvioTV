@@ -280,12 +280,18 @@ object SportsLiveExtraSources {
     }
 
     /**
-     * [videoIds], the videos of [contentId] (a replay team folder the Detail page lists, #240): while [contentId] is
+     * [videoIds], the videos of [contentId] (a replay team folder the Detail page lists, #240): while its folder is
      * spoiler-safe, each of them is too, so the episode's Stream screen and player name its links with the score masked.
+     * [contentId] is the folder, or one of its videos (the addon's own id for it, read again by the player: F8-1). Each
+     * read adds to the folder's videos, never replaces them: another addon's answer with fewer videos must not unmask
+     * an episode already open. Blank ids are never registered.
      */
     fun markSpoilerSafeVideos(contentId: String, videoIds: Collection<String>) {
         synchronized(spoilerSafeIds) {
-            if (contentId in spoilerSafeIds) spoilerSafeVideos[contentId] = videoIds.toSet()
+            val folder = contentId.takeIf { it in spoilerSafeIds }
+                ?: spoilerSafeVideos.entries.firstOrNull { contentId in it.value }?.key
+                ?: return
+            spoilerSafeVideos[folder] = spoilerSafeVideos[folder].orEmpty() + videoIds.filter { it.isNotBlank() }
         }
     }
 

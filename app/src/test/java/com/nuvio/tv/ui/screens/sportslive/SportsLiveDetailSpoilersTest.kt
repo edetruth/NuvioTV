@@ -120,6 +120,35 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `the player reading the folder again from another addon keeps its episodes masked`() {
+        // F8-1: a second read with fewer (or no) videos adds to the folder's spoiler-safe videos, never replaces them.
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        sportsLiveDetailMeta("folder", folder)
+        sportsLiveDetailMeta("folder", folder.copy(videos = emptyList()))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe(episode.id))
+    }
+
+    @Test
+    fun `the player reading a folder under the addon's own id adds its new episodes to the folder`() {
+        // F8-1: "canonical:1" is a video of the folder "catalog:1", so its later reads add to that folder.
+        SportsLiveExtraSources.markSpoilerSafe("catalog:1", true)
+        sportsLiveDetailMeta("catalog:1", folder.copy(id = "canonical:1"))
+        val second = episode.copy(id = "folder:ep2")
+        sportsLiveDetailMeta("canonical:1", folder.copy(id = "canonical:1", videos = listOf(episode, second)))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe(second.id))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe(episode.id))
+    }
+
+    @Test
+    fun `a blank meta id is never registered`() {
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        SportsLiveExtraSources.markSportsPlayback("folder")
+        sportsLiveDetailMeta("folder", folder.copy(id = ""))
+        assertFalse(SportsLiveExtraSources.isSpoilerSafe(""))
+        assertFalse(SportsLiveExtraSources.isSportsPlayback(""))
+    }
+
+    @Test
     fun `any other title, or a replay whose result shows, opens its Detail page as the addon gives it`() {
         assertSame(folder, sportsLiveDetailMeta("folder", folder))
         SportsLiveExtraSources.markSpoilerSafe("folder", true)

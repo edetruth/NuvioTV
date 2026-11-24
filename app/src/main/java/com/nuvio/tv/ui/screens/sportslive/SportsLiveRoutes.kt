@@ -72,7 +72,9 @@ internal fun sportsLiveOpenDetail(item: SportsLiveItem, hidden: Boolean, open: (
  */
 internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
     // The page plays under meta.id, which an addon may give differently from the catalog's id (F3, F8).
-    if (meta.id != itemId && SportsLiveExtraSources.isSportsPlayback(itemId)) SportsLiveExtraSources.markSportsPlayback(meta.id)
+    if (meta.id.isNotBlank() && meta.id != itemId && SportsLiveExtraSources.isSportsPlayback(itemId)) {
+        SportsLiveExtraSources.markSportsPlayback(meta.id)
+    }
     val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
     // The page plays under meta.id, which an addon may give differently from the catalog's id (F8).
     SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id } + meta.id)
