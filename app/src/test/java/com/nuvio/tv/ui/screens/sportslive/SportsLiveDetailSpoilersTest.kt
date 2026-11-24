@@ -338,6 +338,16 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `an episode of a replay folder opened from its Detail page shows a source's notice as a notice`() {
+        // #477: the folder is Sports & Live playback; its episodes are known by the Stream screen's content id.
+        val tip = stream("Tip: Use an external player", "https://addon.example.invalid/configure")
+        sportsLiveOpenDetail(folderCard, hidden = true) {}
+        assertTrue(sportsLiveSourceNotice("folder:ep1", tip, parentId = "folder"))
+        assertFalse(sportsLiveSourceNotice("folder:ep1", scored, parentId = "folder"))
+        assertFalse(sportsLiveSourceNotice("movie:1", tip, parentId = "movie"))
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)
