@@ -308,6 +308,10 @@ object SportsLiveExtraSources {
     fun spoilerSafeStream(contentId: String?, stream: Stream): Stream =
         if (!isSpoilerSafe(contentId)) stream else spoilerSafeReplayStream(stream)
 
+    /** [text] about a link of [contentId] (its file name in Stream info, S7): a spoiler-safe replay's with any score masked. */
+    fun spoilerSafeText(contentId: String?, text: String?): String? =
+        if (!isSpoilerSafe(contentId)) text else spoilerSafeLinkText(text)
+
     /** [streams] of [contentId] as its lists name them: a spoiler-safe replay's with any score masked. */
     fun spoilerSafeStreams(contentId: String?, streams: List<Stream>): List<Stream> =
         if (!isSpoilerSafe(contentId)) streams else streams.map(::spoilerSafeReplayStream)

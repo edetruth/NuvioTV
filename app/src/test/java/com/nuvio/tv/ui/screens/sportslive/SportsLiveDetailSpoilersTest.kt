@@ -271,6 +271,14 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `Stream info shows a hidden replay's file name with the score masked`() {
+        // S7: the file name stays as is for playback (type, episode matching); only the shown text is masked.
+        assertEquals("Arsenal.2-1.Chelsea.1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal.2-1.Chelsea.1080p.mkv"))
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        assertEquals("Arsenal.–.Chelsea.1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal.2-1.Chelsea.1080p.mkv"))
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)
