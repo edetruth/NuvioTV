@@ -348,6 +348,8 @@ class SportsLiveGameViewModel internal constructor(
                         val hold = !load.final || sawUnfinished
                         if (!load.final) sawUnfinished = true
                         values.push(load.summary, now(), if (hold) delayMs else 0L)
+                        // A retry that worked waits out the score delay on the skeleton, not on "Trying..." (review R5).
+                        if (page.value.status == GameLoadStatus.FAILED) page.update { it.copy(status = GameLoadStatus.LOADING, retrying = false) }
                         !load.final && load.summary.isLive
                     }
                     GameSummaryLoad.Failed -> {

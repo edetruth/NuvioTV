@@ -485,6 +485,29 @@ class SportsLiveGameViewModelTest {
     }
 
     @Test
+    fun `a live game's retry that works waits out the score delay on the skeleton, not on Trying (review R5)`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(delaySeconds = 60)
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(liveEvent()))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+
+        nextLoad = { GameSummaryLoad.Loaded(liveNba(), final = false) }
+        vm.retry()
+        runCurrent()
+        assertEquals(GameLoadStatus.LOADING, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+        assertFalse(vm.uiState.value.showsFailure)
+        // Nothing of the score before the delay.
+        assertNull(vm.uiState.value.summary)
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        vm.setVisible(false)
+        runCurrent()
+    }
+
+    @Test
     fun `Try again does nothing unless the load failed (#97)`() = runTest(mainDispatcherRule.dispatcher) {
         val vm = viewModel(SportsLiveGameRequest(palaceGame))
         vm.setVisible(true)
