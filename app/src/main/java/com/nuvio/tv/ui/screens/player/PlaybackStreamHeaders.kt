@@ -21,22 +21,10 @@ import java.util.concurrent.atomic.AtomicReference
  */
 internal object PlaybackStreamHeaders {
 
-    private val CREDENTIAL_NAMES = setOf("authorization", "proxy-authorization", "cookie", "cookie2")
-    private val CREDENTIAL_WORDS = listOf(
-        "auth", "token", "key", "session", "secret", "pass", "sig", "jwt", "cred", "ticket", "login", "account"
-    )
-
-    /** Not credentials themselves, but they can carry a private link: never sent down from https to http. */
-    private val DOWNGRADE_NAMES = setOf("referer", "origin")
-
     /** Transport headers the player itself sets; the only ones kept on the unchecked retry. */
     private val TRANSPORT_NAMES = setOf("range", "if-range", "if-none-match", "if-modified-since", "accept-encoding", "icy-metadata")
 
-    fun isCredential(name: String): Boolean {
-        val lower = name.trim().lowercase()
-        if (lower in CREDENTIAL_NAMES || CREDENTIAL_WORDS.any { it in lower }) return true
-        return "user" in lower && lower != "user-agent"
-    }
+    fun isCredential(name: String): Boolean = StreamOrigin.isCredential(name)
 
     /**
      * One player client's header scope: the first request it sends is the addon's link, and its origin is the
@@ -44,6 +32,11 @@ internal object PlaybackStreamHeaders {
      */
     class HostScope(initial: HttpUrl? = null) {
         private val link = AtomicReference(initial)
+
+        companion object {
+            /** The scope of the addon's link [linkUrl] (#464); without one, the first request seen is taken as the link. */
+            fun of(linkUrl: String?): HostScope = HostScope(linkUrl?.trim()?.toHttpUrlOrNull())
+        }
 
         /**
          * [request] with the stream's login headers removed when it leaves the link's origin. With [streamHeaders]
@@ -53,13 +46,18 @@ internal object PlaybackStreamHeaders {
         fun apply(request: Request, streamHeaders: Headers? = null): Request {
             if (inOrigin(request.url)) return request
             val scope = link.get() ?: return request
-            val downgrade = StreamOrigin.isDowngrade(scope, request.url)
-            val names = request.headers.names().filter { name ->
-                (isCredential(name) || (downgrade && name.lowercase() in DOWNGRADE_NAMES)) &&
-                    (streamHeaders == null || request.header(name) in streamHeaders.values(name))
-            }
+            // Every value is judged on its own (#472): a header can repeat, e.g. the stream's Cookie beside a jar's.
+            val names = request.headers.names().filter { StreamOrigin.drops(scope, request.url, it) }
             if (names.isEmpty()) return request
-            return request.newBuilder().apply { names.forEach { removeHeader(it) } }.build()
+            val builder = request.newBuilder()
+            for (name in names) {
+                val values = request.headers(name)
+                val kept = if (streamHeaders == null) emptyList() else values.filter { it !in streamHeaders.values(name) }
+                if (kept.size == values.size) continue
+                builder.removeHeader(name)
+                kept.forEach { builder.addHeader(name, it) }
+            }
+            return builder.build()
         }
 
         /** Whether [url] is within the link's origin (the first url seen is the link). */
@@ -121,14 +119,24 @@ internal object PlaybackStreamHeaders {
         override fun intercept(chain: Interceptor.Chain): Response {
             val first = chain.call().request().url
             val hop = chain.request()
-            return chain.proceed(if (StreamOrigin.same(first, hop.url)) forUncheckedRetry(hop) else transportOnly(hop))
+            val stream = chain.call().request().headers
+            return chain.proceed(if (StreamOrigin.same(first, hop.url)) forUncheckedRetry(hop) else transportOnly(hop, stream))
         }
     }
 
-    private fun transportOnly(request: Request): Request {
+    /**
+     * [request] without the stream's headers ([stream]: the headers the caller set) and without login headers; the
+     * headers OkHttp adds itself (Host, Connection, ...) and the transport ones stay (#457: a request with no Host
+     * is answered 400). The User-Agent becomes the app's own.
+     */
+    private fun transportOnly(request: Request, stream: Headers = request.headers): Request {
         val builder = request.newBuilder()
+        val streamNames = stream.names().map { it.lowercase() }.toSet()
         request.headers.names()
-            .filter { it.lowercase() !in TRANSPORT_NAMES }
+            .filter { name ->
+                val lower = name.lowercase()
+                lower !in TRANSPORT_NAMES && (lower in streamNames || isCredential(name))
+            }
             .forEach { builder.removeHeader(it) }
         builder.header("User-Agent", PlayerMediaSourceFactory.DEFAULT_USER_AGENT)
         return builder.build()
@@ -160,5 +168,5 @@ internal object PlaybackStreamHeaders {
      * an earlier redirect led, and must not become the scope.
      */
     fun scoped(client: OkHttpClient, linkUrl: String? = null): OkHttpClient =
-        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope(linkUrl?.trim()?.toHttpUrlOrNull()))).build()
+        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope.of(linkUrl))).build()
 }

@@ -23,7 +23,7 @@ object OpenSubtitlesHasher {
     suspend fun compute(
         url: String,
         headers: Map<String, String>,
-        client: OkHttpClient = PlayerPlaybackNetworking.createHttpClient(headers)
+        client: OkHttpClient = PlayerPlaybackNetworking.createHttpClient(headers, linkUrl = url) // Fork #464
     ): Result? = withContext(Dispatchers.IO) {
         try {
             val fileSize = getContentLength(url, headers, client) ?: return@withContext null

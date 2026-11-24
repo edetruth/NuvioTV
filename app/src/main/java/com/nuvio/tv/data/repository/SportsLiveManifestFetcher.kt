@@ -17,7 +17,7 @@ import javax.inject.Singleton
  * Reads the start of a game's HLS manifest for the ended-game link check (#60 phase 2). Its own bare
  * client: no cache, and none of the app client's logging or breadcrumb interceptors, so a stream url
  * is never logged. Redirects are followed here, not by OkHttp ([nextHop]): never from https down to
- * http, and the stream's headers are not sent on to another host. Any failure is null (no verdict),
+ * http, and off the link's origin the stream's login headers stay behind ([StreamOrigin.headersFor], #463). Any failure is null (no verdict),
  * never a throw.
  */
 @Singleton
@@ -40,7 +40,8 @@ class SportsLiveManifestFetcher @Inject constructor() {
         maxBytes: Long = MAX_BYTES
     ): ManifestResponse? = withContext(Dispatchers.IO) {
         try {
-            var target = url.toHttpUrlOrNull() ?: return@withContext null
+            val link = url.toHttpUrlOrNull() ?: return@withContext null
+            var target = link
             var sent = headers
             repeat(MAX_REDIRECTS + 1) {
                 val request = Request.Builder().url(target).apply {
@@ -58,8 +59,8 @@ class SportsLiveManifestFetcher @Inject constructor() {
                         )
                     }
                 }
-                if (!hop.keepHeaders) sent = emptyMap()
-                target = hop.url
+                sent = StreamOrigin.headersFor(link, hop, headers)
+                target = hop
             }
             // Too many redirects: no verdict.
             null
@@ -77,9 +78,6 @@ class SportsLiveManifestFetcher @Inject constructor() {
             source.buffer.readUtf8(size)
         }
 
-    /** Where a redirect goes, and whether the stream's headers go with it. */
-    internal data class Hop(val url: HttpUrl, val keepHeaders: Boolean)
-
     internal companion object {
         const val TIMEOUT_S = 8L
         const val MAX_BYTES = 64L * 1024
@@ -87,12 +85,12 @@ class SportsLiveManifestFetcher @Inject constructor() {
 
         /**
          * The redirect from [from] to [location]: null (not followed, no verdict) when there is no usable
-         * location or it goes from https down to http; the headers only go on to the same origin ([StreamOrigin]).
+         * location or it goes from https down to http.
          */
-        fun nextHop(from: HttpUrl, location: String?): Hop? {
+        fun nextHop(from: HttpUrl, location: String?): HttpUrl? {
             val to = location?.let { from.resolve(it) } ?: return null
             if (from.isHttps && !to.isHttps) return null
-            return Hop(to, keepHeaders = StreamOrigin.same(from, to))
+            return to
         }
     }
 }

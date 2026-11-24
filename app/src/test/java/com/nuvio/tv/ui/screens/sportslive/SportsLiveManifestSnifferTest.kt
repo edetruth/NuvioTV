@@ -27,7 +27,7 @@ class SportsLiveManifestSnifferTest {
     private val media = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nseg1.ts\n"
 
     @Test
-    fun `a playlist redirected to another origin is read there without the stream's headers (P3)`() = runBlocking {
+    fun `a playlist redirected to another origin is read there without the stream's login headers (P3, #463)`() = runBlocking {
         link.enqueue(MockResponse().setResponseCode(302).addHeader("Location", other.url("/live/master.m3u8").toString()))
         other.enqueue(MockResponse().setBody(master))
         other.enqueue(MockResponse().setBody(media))
@@ -39,7 +39,10 @@ class SportsLiveManifestSnifferTest {
         // The variant resolves against where the master was finally read.
         assertEquals("/live/v/index.m3u8", variant.path)
         listOf(hop, variant).forEach { request ->
-            listOf("Authorization", "Referer", "X-Custom").forEach { assertNull(it, request.getHeader(it)) }
+            // #463: the login header stays behind; Referer and the rest go along, as the player sends them.
+            assertNull(request.getHeader("Authorization"))
+            assertEquals("v", request.getHeader("X-Custom"))
+            assertEquals("https://ref.invalid/", request.getHeader("Referer"))
         }
     }
 

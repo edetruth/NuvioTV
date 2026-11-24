@@ -176,7 +176,7 @@ class SportsLiveLiveCheckTest {
     }
 
     @Test
-    fun `a variant on another host is read without the stream's headers (#279)`() = runTest {
+    fun `a variant on another host is read without the stream's login headers (#279, #463)`() = runTest {
         val crossMaster = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttps://other.invalid/720/index.m3u8\n"
         val fetch = RecordingFetch(
             mapOf(
@@ -187,13 +187,13 @@ class SportsLiveLiveCheckTest {
         val check = SportsLiveLiveCheck(fetch::fetch, nowMs = { now }, wait = {})
         check.check(stream("https://h.invalid/master.m3u8", headers))
         assertEquals(headers, fetch.reads[0].second)
-        // The variant read and the undated playlist's second read both go without them.
+        // The variant read and the undated playlist's second read both go without the login header, with the rest.
         assertEquals(listOf("https://other.invalid/720/index.m3u8", "https://other.invalid/720/index.m3u8"), fetch.reads.drop(1).map { it.first })
-        assertTrue(fetch.reads.drop(1).all { it.second.isEmpty() })
+        assertTrue(fetch.reads.drop(1).all { it.second == mapOf("X-Custom" to "v") })
     }
 
     @Test
-    fun `a master redirected to another host sends no headers to its variants there (#279)`() = runTest {
+    fun `a master redirected to another host sends no login headers to its variants there (#279, #463)`() = runTest {
         val fetch = RecordingFetch(
             mapOf(
                 "https://h.invalid/master.m3u8" to ManifestResponse(200, master, finalUrl = "https://edge.invalid/live/master.m3u8"),
@@ -203,6 +203,6 @@ class SportsLiveLiveCheckTest {
         val check = SportsLiveLiveCheck(fetch::fetch, nowMs = { now }, wait = {})
         assertEquals(LiveVerdict.LIVE, check.check(stream("https://h.invalid/master.m3u8", headers)))
         assertEquals("https://edge.invalid/live/720/index.m3u8", fetch.reads[1].first)
-        assertTrue(fetch.reads[1].second.isEmpty())
+        assertEquals(mapOf("X-Custom" to "v"), fetch.reads[1].second)
     }
 }

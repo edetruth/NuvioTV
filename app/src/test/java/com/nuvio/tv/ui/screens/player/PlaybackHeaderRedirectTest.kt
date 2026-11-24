@@ -11,6 +11,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
 
@@ -59,6 +60,39 @@ class PlaybackHeaderRedirectTest {
     }
 
     @Test
+    fun `a stream client given the link sends no login headers when its first request goes elsewhere (#464)`() {
+        other.enqueue(MockResponse().setBody("ok"))
+        val client = PlayerPlaybackNetworking.createHttpClient(streamHeaders, linkUrl = link.url("/master").toString())
+        client.newCall(Request.Builder().url(other.url("/subtitle.srt")).build()).execute().close()
+        val first = take(other)
+        assertNoLogin(first)
+        assertEquals("https://ref.invalid/", first.getHeader("Referer"))
+    }
+
+    @Test
+    fun `the main player's data sources are scoped to the addon's link, the DRM licence factory to its licence url (#464)`() {
+        val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerMediaSourceFactory.kt").readText()
+        assertEquals(4, Regex("""linkUrl = url""").findAll(source).count())
+        assertTrue(source.contains("setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, linkUrl = it.licenseUrl))"))
+    }
+
+    @Test
+    fun `the licence server the addon named gets the stream's headers, a host it redirects to gets no login ones (#464)`() {
+        MockWebServer().use { beyond ->
+            // The licence server is another origin than the stream's link: the addon named it, so it gets them.
+            other.enqueue(MockResponse().setResponseCode(307).addHeader("Location", beyond.url("/licence").toString()))
+            beyond.enqueue(MockResponse().setBody("licence"))
+            val licenceUrl = other.url("/licence").toString()
+            val drm = PlayerPlaybackNetworking.createHttpClient(streamHeaders, linkUrl = licenceUrl)
+            drm.newCall(Request.Builder().url(licenceUrl).build()).execute().close()
+            assertEquals("Bearer t", take(other).getHeader("Authorization"))
+            val hop = beyond.takeRequest(5, TimeUnit.SECONDS)!!
+            assertNoLogin(hop)
+            assertEquals("https://ref.invalid/", hop.getHeader("Referer"))
+        }
+    }
+
+    @Test
     fun `a stream client with no headers of its own still scopes the ones a request sets (P8)`() {
         redirectToOther()
         PlayerPlaybackNetworking.createHttpClient(emptyMap()).newCall(streamRequest()).execute().close()
@@ -96,6 +130,9 @@ class PlaybackHeaderRedirectTest {
         assertNull(hop.getHeader("Referer"))
         assertNull(hop.getHeader("X-Custom"))
         assertEquals(PlayerMediaSourceFactory.DEFAULT_USER_AGENT, hop.getHeader("User-Agent"))
+        // #457: OkHttp's own headers stay; a request without Host is answered 400 by real servers.
+        assertEquals("127.0.0.1:${other.port}", hop.getHeader("Host"))
+        assertEquals("Keep-Alive", hop.getHeader("Connection"))
     }
 
     /** A client the way the parallel connections path builds it: headers set on the request, a cookie jar. */

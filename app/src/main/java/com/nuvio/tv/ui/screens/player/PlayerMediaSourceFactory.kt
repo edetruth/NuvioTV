@@ -238,7 +238,8 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                         context,
                         PlayerPlaybackNetworking.createHttpDataSourceFactory(
                             sanitizedHeaders,
-                            useLongReadTimeout = isLoopbackUrl(url)
+                            useLongReadTimeout = isLoopbackUrl(url),
+                            linkUrl = url // Fork #464
                         )
                     ),
                     subtitleConfigurations = subtitleConfigurations,
@@ -261,11 +262,12 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 PlayerPlaybackNetworking.createHttpDataSourceFactory(
                     sanitizedHeaders,
                     useLongReadTimeout = isLoopbackUrl(url),
+                    linkUrl = url, // Fork #464
                 ),
             )
             if (isHls) HlsParameterSetInitDataSource.Factory(adaptiveFactory) else adaptiveFactory
         } else {
-            PlayerPlaybackNetworking.createDataSourceFactory(context, sanitizedHeaders)
+            PlayerPlaybackNetworking.createDataSourceFactory(context, sanitizedHeaders, linkUrl = url) // Fork #464
         }.counted()
 
         val mediaItemBuilder = MediaItem.Builder().setUri(url)
@@ -277,12 +279,13 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         }
         mediaMetadata?.let(mediaItemBuilder::setMediaMetadata)
         // A DRM licence server the addon named for this link (#166): licensed playback through Media3's
-        // DefaultDrmSessionManager, with the stream's request headers on every licence request too.
+        // DefaultDrmSessionManager, with the stream's request headers on every licence request too. Fork #464 (user
+        // decision): the licence url the addon named is that factory's link; a host its redirects lead to gets no login headers.
         val licence = SportsLiveStreamLicences.forUrl(url)
         val drmProvider = licence?.let {
             mediaItemBuilder.setDrmConfiguration(sportsLiveDrmConfiguration(it, sanitizedHeaders))
             DefaultDrmSessionManagerProvider().apply {
-                setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders))
+                setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, linkUrl = it.licenseUrl))
             }
         }
 
@@ -335,7 +338,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 onResolvedUri = { resolved -> currentVodCacheResolvedUrl = resolved?.toString() }
             )
         } else if (directLoopback) {
-            PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, useLongReadTimeout = true)
+            PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, useLongReadTimeout = true, linkUrl = url) // Fork #464
         } else {
             httpDataSourceFactory
         }.let { if (it === httpDataSourceFactory) it else it.counted() }
