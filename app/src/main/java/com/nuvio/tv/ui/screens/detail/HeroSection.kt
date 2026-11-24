@@ -275,6 +275,8 @@ fun HeroContentSection(
                             }
                         )
 
+                        // Sports & Live S6 (#426): no Add to Library on a hidden replay.
+                        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveOffersLibrary(meta.id, isInLibrary)) {
                         ActionIconButton(
                             icon = if (isInLibrary) Icons.Default.Check else null,
                             painter = if (!isInLibrary) {
@@ -287,6 +289,7 @@ fun HeroContentSection(
                             onLongPress = onLibraryLongPress,
                             onFocused = onHeroActionFocused
                         )
+                        }
 
                         if (meta.isWatchedAsOneItem()) {
                             ActionIconButton(

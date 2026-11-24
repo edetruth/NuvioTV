@@ -97,6 +97,13 @@ internal fun sportsLiveHidesExtras(itemId: String?, metaId: String? = null): Boo
     SportsLiveExtraSources.isSpoilerSafe(itemId) || SportsLiveExtraSources.isSpoilerSafe(metaId)
 
 /**
+ * Whether the Detail page of [metaId] offers Add to Library (S6, #426): not for a hidden replay, which reopened from the
+ * Library would skip the mask; one already there keeps its button, so it can be removed. Any other title as before.
+ */
+internal fun sportsLiveOffersLibrary(metaId: String, isInLibrary: Boolean): Boolean =
+    isInLibrary || !sportsLiveHidesExtras(metaId)
+
+/**
  * [meta] with nothing that may carry a result (see [sportsLiveDetailMeta]): the one mask of an addon's meta. An allow-list
  * (F7-1): only what identifies and plays it (ids, type, default video), its sport (genres) and its title, score masked,
  * are kept; every other field, filled by the addon now or added by a later upstream, is left out.

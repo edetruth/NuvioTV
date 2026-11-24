@@ -326,6 +326,16 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a hidden replay's Detail page offers no Add to Library, other titles keep it`() {
+        // S6 (#426): reopened from the Library it would skip the mask; one already saved keeps its button to remove it.
+        assertTrue(sportsLiveOffersLibrary("movie-id", isInLibrary = false))
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        assertFalse(sportsLiveOffersLibrary("folder", isInLibrary = false))
+        assertTrue(sportsLiveOffersLibrary("folder", isInLibrary = true))
+        assertTrue(sportsLiveOffersLibrary("movie-id", isInLibrary = false))
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)
