@@ -16,7 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * (CH± lineup) and every live count, for Live now's "Other streams" group at the end of More live
  * ([SportsLiveMoreLive.OTHER_STREAMS]), still playable, never marked LIVE. A row is one when every source of it is:
  * - ESPN has no such game ([SportsLiveNoEspnGames]): its league's scoreboards for ESPN's day answered afresh, both its
- *   teams are that league's teams, and neither plays on them (the score repository decides; it fails open);
+ *   teams are that league's teams, and neither plays on them (the score repository decides; it fails open); a soccer row
+ *   with no competition is checked so against every soccer scoreboard polled and every loaded soccer list (live.28);
  * - or its title says so on its own ([isNotGameTitle]): a season ("2026-27"), a show after a colon (": The Match"), or a
  *   sport or league word as one side ("Kosárlabda vs NBA").
  * Never a channel (Live now lists one only with a live signal of its own), never a replay (not on Live now anyway), and

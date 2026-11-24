@@ -1249,14 +1249,20 @@ class LiveScoresRepository internal constructor(
      * - neither team plays on any fresh scoreboard at hand of the card's leagues, its own days (yesterday's too, for an
      *   undated card: a late game across Eastern midnight) and any other day polled (ESPN's tomorrow, for a later
      *   start): not by ESPN id, nor by any name the matcher reads ([ScoreMatcher.touches], even WEAK).
-     * The caller has checked that every one of [cardFeeds] answered afresh (no stale, failed or paused feed).
+     * The caller has checked that every one of [cardFeeds] answered afresh (no stale, failed or paused feed). An untagged
+     * soccer card ([NoEspnGame.isUntaggedSoccer], live.28) is read against every soccer scoreboard polled (no extra
+     * request), and fails open while any of ESPN's today among them has not answered afresh.
      */
     private fun hasNoEspnGame(card: ScoreCard, cardFeeds: List<ScoreFeed>, nowMs: Long): Boolean {
         if (espnStarts.startOf(card.key, nowMs) != null) return false
         val easternToday = Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate()
         val leagues = cardFeeds.map { it.league }.distinct()
-        val events = feeds.entries
-            .filter { (feed, state) -> feed.league in leagues && state.fetched && !state.paused && state.isFresh(nowMs) }
+        val untagged = NoEspnGame.isUntaggedSoccer(leagues)
+        val boards = feeds.entries.filter { (feed, _) -> feed.league in leagues || untagged && feed.league.sport == "soccer" }
+        fun FeedState.answered() = fetched && !paused && isFresh(nowMs)
+        if (untagged && boards.any { (feed, state) -> state.retiredAt == null && feed.date == easternToday && !state.answered() }) return false
+        val events = boards
+            .filter { (_, state) -> state.answered() }
             .flatMap { it.value.events }
             .distinctBy { it.eventId }
         // The rule itself is NoEspnGame's, shared with the nightly accuracy run.
