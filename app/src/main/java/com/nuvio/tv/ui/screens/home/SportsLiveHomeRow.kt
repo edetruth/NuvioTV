@@ -151,18 +151,31 @@ object SportsLiveHomeRow {
         tomorrowFormat: String,
         nowMs: Long,
         zone: ZoneId = ZoneId.systemDefault(),
-        locale: Locale = Locale.getDefault()
+        locale: Locale = Locale.getDefault(),
+        /** #375: games waiting for ESPN's first answer: their kickoff alone ("7:00 PM"), else [checkingWord]. */
+        awaiting: Set<String> = emptySet(),
+        checkingWord: String? = null,
+        /** #375: games Live Now shows Probably ended: [probablyEndedWord]. */
+        probablyEnded: Set<String> = emptySet(),
+        probablyEndedWord: String? = null
     ): Map<String, String> = items.mapNotNull { item ->
         val snapshot = scores[item.streamKey]
-        if (ScoreChips.matchedEvent(item, snapshot)?.state != ScoreState.PRE) return@mapNotNull null
-        val art = GameArt.of(item, snapshot) ?: return@mapNotNull null
-        val time = when (val pill = GameArt.kickoff(art, nowMs, zone, locale)) {
-            is SportsLivePillTime.Today -> pill.time
-            is SportsLivePillTime.Tomorrow -> String.format(tomorrowFormat, pill.time)
-            is SportsLivePillTime.Other -> pill.text
-            null -> return@mapNotNull null
+        if (probablyEndedWord != null && item.streamKey in probablyEnded) return@mapNotNull item.streamKey to probablyEndedWord
+        val pre = ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.PRE
+        val waiting = !pre && item.streamKey in awaiting
+        if (!pre && !waiting) return@mapNotNull null
+        val time = GameArt.of(item, snapshot)?.let { art ->
+            when (val pill = GameArt.kickoff(art, nowMs, zone, locale)) {
+                is SportsLivePillTime.Today -> pill.time
+                is SportsLivePillTime.Tomorrow -> String.format(tomorrowFormat, pill.time)
+                is SportsLivePillTime.Other -> pill.text
+                null -> null
+            }
         }
-        item.streamKey to String.format(startsFormat, time)
+        when {
+            pre -> time?.let { item.streamKey to String.format(startsFormat, it) }
+            else -> (time ?: checkingWord)?.let { item.streamKey to it }
+        }
     }.toMap()
 
     fun isLiveNowRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL

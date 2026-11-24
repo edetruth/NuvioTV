@@ -256,43 +256,73 @@ private fun SportsLiveHomeScores(
     val clockMs by rememberSportsLiveClockMs()
     val startsFormat = stringResource(R.string.sports_live_waiting_starts)
     val tomorrowFormat = stringResource(R.string.sports_live_tomorrow)
-    val starts = remember(items, current, clockMs, startsFormat, tomorrowFormat) {
-        SportsLiveHomeRow.starts(items, current, startsFormat, tomorrowFormat, clockMs)
-    }
-    LaunchedEffect(labels, tags, starts) { viewModel.setLiveNowScoreLabels(labels, tags, starts) }
     // Games ESPN shows final leave the row (#60), at once (l24 polish P1: in the postgame grace too, so a final never
     // reads "Live now"); an estimate never drops one.
     val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.finalKeys(items, current, clockMs) }
-    // #375: the games Live Now calls Probably ended (an estimate, overdue) are labelled so on their card, never hidden, and
-    // leave the "N live" count and the zap list as Live Now's strip does.
+    // #375: the games Live Now calls Probably ended (an estimate, overdue) are labelled so on their card and in the hero,
+    // never hidden, and leave the "N live" count and the zap list as Live Now's strip does. An ESPN-covered game reads its
+    // start, not "Live", until ESPN answers (at most SportsLiveScoreWait.MAX_WAIT_MS, then as before), as on Live Now; a game
+    // no feed covers and Scores Off are unchanged. One update at the wait's deadline.
     val unmatchedNow = unmatched.value
-    val gate = remember(mode, unmatchedNow) { SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatchedNow) }
-    val probablyEnded = remember(items, current, clockMs, gate) {
-        SportsLiveEndedGames.shared.probablyEndedKeys(viewModel.liveNowAllItems, current, clockMs, gate, viewModel.sportsLiveRepository::hasRecentLinks)
-    }
-    // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
-    val over = remember(items, current, clockMs, probablyEnded) {
-        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs) + probablyEnded
-    }
-    LaunchedEffect(ended, over) { viewModel.setLiveNowEnded(ended, over) }
-    // #375: an ESPN-covered game reads its start, not "● Live", until ESPN answers (at most SportsLiveScoreWait.MAX_WAIT_MS,
-    // then as before), as on Live Now; a game no feed covers and Scores Off are unchanged. One update at the deadline.
     val wait = remember { SportsLiveScoreWait() }
     var wake by remember { mutableStateOf(0) }
-    val waiting = remember(items, current, gate, mode, clockMs, wake) {
-        val tracked = if (mode == null) emptyList() else items.filter { it.isLive && !it.isChannel }
-        wait.awaiting(tracked, current, gate, System.currentTimeMillis())
+    val homeTruth = remember(items, current, mode, unmatchedNow, clockMs, wake) {
+        homeLiveTruth(
+            items, viewModel.liveNowAllItems, current, mode, unmatchedNow, System.currentTimeMillis(), wait,
+            SportsLiveEndedGames.shared, viewModel.sportsLiveRepository::hasRecentLinks
+        )
     }
-    val deadline = wait.deadline
-    LaunchedEffect(deadline) {
-        val at = deadline ?: return@LaunchedEffect
+    // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
+    val over = remember(items, current, clockMs, homeTruth) {
+        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs) + homeTruth.probablyEnded
+    }
+    LaunchedEffect(ended, over) { viewModel.setLiveNowEnded(ended, over) }
+    LaunchedEffect(homeTruth.deadline) {
+        val at = homeTruth.deadline ?: return@LaunchedEffect
         kotlinx.coroutines.delay((at - System.currentTimeMillis()).coerceAtLeast(0L) + 1)
         wake++
     }
-    SideEffect {
-        truth.awaiting.value = waiting
-        truth.probablyEnded.value = probablyEnded
+    // The hero's eyebrow says what the focused card says: its start while it waits, Probably ended, "Starts 7:00 PM".
+    val checkingWord = stringResource(R.string.sports_live_checking_score)
+    val probablyEndedWord = stringResource(R.string.sports_live_probably_ended)
+    val starts = remember(items, current, clockMs, startsFormat, tomorrowFormat, homeTruth, checkingWord, probablyEndedWord) {
+        SportsLiveHomeRow.starts(
+            items, current, startsFormat, tomorrowFormat, clockMs,
+            awaiting = homeTruth.awaiting, checkingWord = checkingWord,
+            probablyEnded = homeTruth.probablyEnded, probablyEndedWord = probablyEndedWord
+        )
     }
+    LaunchedEffect(labels, tags, starts) { viewModel.setLiveNowScoreLabels(labels, tags, starts) }
+    SideEffect {
+        truth.awaiting.value = homeTruth.awaiting
+        truth.probablyEnded.value = homeTruth.probablyEnded
+    }
+}
+
+/** #375: what Home's Live now row reads of the live truth: the cards waiting for ESPN, the Probably ended ones, the wait's deadline. */
+internal data class HomeLiveTruth(val awaiting: Set<String>, val probablyEnded: Set<String>, val deadline: Long?)
+
+/**
+ * #375: Home's Live now [items] (the row; [allItems] every live game, for the count) as Live Now reads them at [nowMs]: the
+ * games it shows Probably ended ([SportsLiveEndedGames.probablyEndedKeys]) and the ESPN-covered ones still waiting for
+ * ESPN ([SportsLiveScoreWait]; none while the Scores setting is unknown, [mode] null, or Off). Pure but for [wait]'s clock.
+ */
+internal fun homeLiveTruth(
+    items: List<SportsLiveItem>,
+    allItems: List<SportsLiveItem>,
+    scores: Map<String, ScoreSnapshot>,
+    mode: ScoresMode?,
+    unmatched: Set<String>,
+    nowMs: Long,
+    wait: SportsLiveScoreWait,
+    endedGames: SportsLiveEndedGames,
+    hasRecentLinks: (SportsLiveItem) -> Boolean
+): HomeLiveTruth {
+    val gate = SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched)
+    val probablyEnded = endedGames.probablyEndedKeys(allItems, scores, nowMs, gate, hasRecentLinks)
+    val tracked = if (mode == null) emptyList() else items.filter { it.isLive && !it.isChannel && it.streamKey !in probablyEnded }
+    val awaiting = wait.awaiting(tracked, scores, gate, nowMs)
+    return HomeLiveTruth(awaiting, probablyEnded, wait.deadline)
 }
 
 /** #375: Home's Live now cards' waiting and Probably ended keys, written by [SportsLiveHomeScores], read by each card. */
