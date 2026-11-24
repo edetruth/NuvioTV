@@ -33,9 +33,9 @@ object SportsLiveSafeAreaFrame {
 
 @Composable
 fun SportsLiveSafeAreaFrameLayer() {
-    if (!BuildConfig.DEBUG) return
+    if (!BuildConfig.IS_DEBUG_BUILD) return
     val on by SportsLiveSafeAreaFrame.shown.collectAsStateWithLifecycle()
-    if (!SportsLiveSafeAreaFrame.draws(BuildConfig.DEBUG, on)) return
+    if (!SportsLiveSafeAreaFrame.draws(BuildConfig.IS_DEBUG_BUILD, on)) return
     Canvas(modifier = Modifier.fillMaxSize()) {
         val side = SportsLiveSafeAreaFrame.sideDp.dp.toPx()
         val vertical = SportsLiveSafeAreaFrame.topBottomDp.dp.toPx()

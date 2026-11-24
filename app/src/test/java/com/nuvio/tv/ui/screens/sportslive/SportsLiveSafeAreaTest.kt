@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class SportsLiveSafeAreaTest {
 
@@ -14,6 +15,17 @@ class SportsLiveSafeAreaTest {
         assertFalse(SportsLiveSafeAreaFrame.draws(debugBuild = false, on = true))
         assertFalse(SportsLiveSafeAreaFrame.draws(debugBuild = true, on = false))
         assertTrue(SportsLiveSafeAreaFrame.draws(debugBuild = true, on = true))
+    }
+
+    @Test
+    fun `Sports and Live debug screens follow IS_DEBUG_BUILD - BuildConfig DEBUG is false on a normal debug build (review R4)`() {
+        val root = File("src/main/java/com/nuvio/tv/ui/screens/sportslive")
+        assertTrue("run from the app module", root.isDirectory)
+        val debugFlag = Regex("""BuildConfig\.DEBUG\b""")
+        val uses = root.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList().flatMap { file ->
+            file.readLines().mapIndexedNotNull { i, line -> "${file.name}:${i + 1}".takeIf { debugFlag.containsMatchIn(line) } }
+        }
+        assertEquals(uses.joinToString("\n"), 0, uses.size)
     }
 
     @Test
