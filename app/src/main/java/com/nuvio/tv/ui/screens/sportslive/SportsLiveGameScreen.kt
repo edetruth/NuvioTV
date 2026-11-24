@@ -168,6 +168,10 @@ fun SportsLiveGameScreen(
     // The first action, else More…: the header's first focus.
     val headerFirst = actions.firstOrNull()?.let(actionFocus::getValue) ?: moreFocus
     val selectedTab = section?.let(tabFocus::getValue)
+    // The failure card (#97): its Try again is the header's Down and the first focus while it shows (review R2).
+    val failureFocus = remember { FocusRequester() }
+    val failed = state.showsFailure
+    val failedNow by rememberUpdatedState(failed)
 
     // Back from a clip or a Player card: focus returns to what opened it (a highlight, Watch all, a performer).
     // The key stays (the element keeps its requester); [returnPending] says to use it once.
@@ -194,6 +198,18 @@ fun SportsLiveGameScreen(
         }
         // Opened on a section: its tab takes focus instead (below).
         if (state.openedOnSection && !sectionFocusPending) return@LaunchedEffect
+        runCatching { (if (failedNow) failureFocus else headerFirst).requestFocus() }
+    }
+    // Try again worked: the card that held focus is gone, so the header takes it, as on a first load.
+    var wasFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(failed) {
+        if (failed) {
+            wasFailed = true
+            return@LaunchedEffect
+        }
+        if (!wasFailed) return@LaunchedEffect
+        wasFailed = false
+        withFrameNanos { }
         runCatching { headerFirst.requestFocus() }
     }
     LaunchedEffect(selectedTab, showsScore) {
@@ -267,8 +283,8 @@ fun SportsLiveGameScreen(
             actions = actions,
             actionFocus = actionFocus,
             moreFocus = moreFocus,
-            // No tabs (scores hidden, or nothing to show): Down stays put.
-            downFocus = selectedTab,
+            // No tabs (scores hidden, or nothing to show): Down stays put; the failure card's Try again (review R2).
+            downFocus = if (failed) failureFocus else selectedTab,
             reminded = remindCard?.let { reminders.isReminded(it) } ?: remindEvent?.let { reminders.isReminded(it) } ?: false,
             // A replay's or a saved game's page (#151): "Reveal result".
             revealResult = state.spoilerProtected || state.spoilerSafe,
@@ -341,6 +357,7 @@ fun SportsLiveGameScreen(
                     onOpenTeam()
                 },
                 onRetry = viewModel::retry,
+                failureFocus = failureFocus,
                 standingRanks = standingRanks
             )
         }

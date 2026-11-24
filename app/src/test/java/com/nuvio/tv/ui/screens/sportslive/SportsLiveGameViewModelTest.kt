@@ -459,6 +459,32 @@ class SportsLiveGameViewModelTest {
     }
 
     @Test
+    fun `the failure card is what the page shows - its Try again takes the header's Down (review R2)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertTrue(vm.uiState.value.showsFailure)
+        // Trying: the card stays, so focus stays on its button.
+        nextLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
+        vm.retry()
+        assertTrue(vm.uiState.value.showsFailure)
+        runCurrent()
+        assertFalse(vm.uiState.value.showsFailure)
+    }
+
+    @Test
+    fun `a failed load under hidden scores shows the hidden card, not the failure card (review R2)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertTrue(vm.uiState.value.showsFailure)
+        assertFalse(vm.uiState.value.copy(settled = false).showsFailure)
+        assertFalse(vm.uiState.value.copy(spoilerProtected = true).showsFailure)
+    }
+
+    @Test
     fun `Try again does nothing unless the load failed (#97)`() = runTest(mainDispatcherRule.dispatcher) {
         val vm = viewModel(SportsLiveGameRequest(palaceGame))
         vm.setVisible(true)

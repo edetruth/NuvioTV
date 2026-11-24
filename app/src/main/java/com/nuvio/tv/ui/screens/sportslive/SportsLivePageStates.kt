@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -26,9 +27,19 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
  * does nothing; a second failure leaves the card as it is. A page's own Back needs no button of its own.
  */
 @Composable
-internal fun SportsLivePageFailure(title: String, retrying: Boolean, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+internal fun SportsLivePageFailure(
+    title: String,
+    retrying: Boolean,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** The page's own requester for Try again, so its header's Down can lead here (review R2). */
+    focus: FocusRequester = remember { FocusRequester() }
+) {
+    // After a frame, once the button is placed (review R2: a request in the first frame was lost to the header's).
+    LaunchedEffect(focus) {
+        withFrameNanos { }
+        runCatching { focus.requestFocus() }
+    }
     SportsLiveStateCard(
         title = title,
         line = stringResource(R.string.sports_live_page_failed_line),

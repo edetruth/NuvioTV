@@ -155,6 +155,13 @@ data class SportsLiveGameUiState(
         get() = if (showsScore) summary?.sections.orEmpty() else shownSummary?.sections.orEmpty().filter { it == GameSection.PREVIEW }
 
     val section: GameSection? get() = selected?.takeIf { it in sections } ?: sections.firstOrNull()
+
+    /**
+     * The body is the failure card (#97): the load failed with nothing to show, and neither the unsettled page nor the
+     * hidden-score card wins over it. Its Try again then takes the header's Down and the first focus (review R2).
+     */
+    val showsFailure: Boolean
+        get() = settled && (showsScore || section == GameSection.PREVIEW) && status == GameLoadStatus.FAILED && shownSummary == null
 }
 
 /**
