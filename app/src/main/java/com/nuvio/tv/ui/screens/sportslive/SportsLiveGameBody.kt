@@ -113,7 +113,9 @@ internal fun GameBody(
         // The Scores setting and spoiler protection not read yet (a frame or two): neither the hidden card nor stats.
         !state.settled -> Unit
         // An upcoming game's Preview is spoiler-neutral (#171): it shows with the score hidden too.
-        !state.showsScore && section != GameSection.PREVIEW -> HiddenGameBody(hasReplay = state.replay != null)
+        // #474: an upcoming game still loading its Preview (or failed) is no hidden game: skeleton or Try again below.
+        !state.showsScore && section != GameSection.PREVIEW && !(state.showsPreview && state.shownSummary == null) ->
+            HiddenGameBody(hasReplay = state.replay != null)
         state.showsFailure ->
             SportsLivePageFailure(
                 stringResource(R.string.sports_live_game_failed_title), state.retrying, onRetry, focus = failureFocus,
