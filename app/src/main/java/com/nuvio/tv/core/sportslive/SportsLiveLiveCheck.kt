@@ -162,10 +162,13 @@ class SportsLiveLiveCheck(
         val body = top.body?.takeIf { top.code in 200..299 } ?: return LiveVerdict.UNKNOWN
         if (!SportsLiveHlsPlaylist.isPlaylist(body)) return LiveVerdict.UNKNOWN
         var mediaUrl = url
+        var mediaHeaders = headers
         var mediaBody = body
         if (SportsLiveHlsPlaylist.isMaster(body)) {
-            mediaUrl = SportsLiveHlsPlaylist.firstVariant(body, url) ?: return LiveVerdict.NOT_LIVE
-            val variant = read(mediaUrl, headers) ?: return LiveVerdict.UNKNOWN
+            // #279: relative to where the master was finally read; the headers only go on to the link's own host.
+            mediaUrl = SportsLiveHlsPlaylist.firstVariant(body, top.finalUrl ?: url) ?: return LiveVerdict.NOT_LIVE
+            mediaHeaders = SportsLiveStreamHeaders.forFollowUp(url, mediaUrl, headers)
+            val variant = read(mediaUrl, mediaHeaders) ?: return LiveVerdict.UNKNOWN
             if (variant.code == 404) return LiveVerdict.NOT_LIVE
             mediaBody = variant.body?.takeIf { variant.code in 200..299 && SportsLiveHlsPlaylist.isPlaylist(it) }
                 ?: return LiveVerdict.UNKNOWN
@@ -175,7 +178,7 @@ class SportsLiveLiveCheck(
         val first = SportsLiveHlsPlaylist.media(mediaBody)
         SportsLiveHlsPlaylist.verdict(first, nowMs())?.let { return it }
         wait(((first.targetDurationS ?: DEFAULT_TARGET_S).coerceIn(MIN_WAIT_S, MAX_WAIT_S)) * 1_000L)
-        val again = read(mediaUrl, headers)?.body?.takeIf(SportsLiveHlsPlaylist::isPlaylist) ?: return LiveVerdict.UNKNOWN
+        val again = read(mediaUrl, mediaHeaders)?.body?.takeIf(SportsLiveHlsPlaylist::isPlaylist) ?: return LiveVerdict.UNKNOWN
         return if (SportsLiveHlsPlaylist.advanced(first, SportsLiveHlsPlaylist.media(again))) LiveVerdict.LIVE else LiveVerdict.NOT_LIVE
     }
 

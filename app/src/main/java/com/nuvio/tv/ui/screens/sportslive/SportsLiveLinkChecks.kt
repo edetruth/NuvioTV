@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveManifestDrm
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHeaders
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.util.findCause
 import com.nuvio.tv.domain.model.Stream
@@ -43,8 +44,9 @@ internal fun noteSportsLiveLinkError(stream: Stream?, url: String?, error: Playb
 
 /**
  * Reads a link's manifest to tell whether it needs a DRM licence (#166, [SportsLiveManifestDrm]): the
- * DASH MPD, or the HLS playlist and, for a multivariant one, its first variant. Every request carries
- * the stream's request headers. Never logs a url or a host.
+ * DASH MPD, or the HLS playlist and, for a multivariant one, its first variant (read relative to where the
+ * playlist was finally read, with the stream's request headers only on the link's own host, #279). Never logs a
+ * url or a host.
  */
 internal object SportsLiveManifestSniffer {
     private const val MAX_BYTES = 512L * 1024
@@ -73,26 +75,34 @@ internal object SportsLiveManifestSniffer {
     /** Whether [url]'s manifest needs a DRM licence. */
     suspend fun check(url: String, headers: Map<String, String>): Result = withContext(Dispatchers.IO) {
         val request = PlayerMediaSourceFactory.normalizePlaybackRequest(url, headers)
-        val (status, text) = fetch(request.url, request.headers) ?: return@withContext Result(null, null)
+        val (status, text, finalUrl) = fetch(request.url, request.headers) ?: return@withContext Result(null, null)
         if (text == null) return@withContext Result(null, status)
         if (SportsLiveManifestDrm.kindOf(text) == null) return@withContext Result(null, status)
         if (SportsLiveManifestDrm.isProtected(text)) return@withContext Result(true, status)
         val variant = SportsLiveManifestDrm.firstVariantUri(text) ?: return@withContext Result(false, status)
-        val variantUrl = request.url.toHttpUrlOrNull()?.resolve(variant)?.toString()
+        val variantUrl = finalUrl.toHttpUrlOrNull()?.resolve(variant)?.toString()
             ?: return@withContext Result(false, status)
-        val inner = fetch(variantUrl, request.headers)?.second ?: return@withContext Result(null, status)
+        val variantHeaders = SportsLiveStreamHeaders.forFollowUp(request.url, variantUrl, request.headers)
+        val inner = fetch(variantUrl, variantHeaders)?.second ?: return@withContext Result(null, status)
         Result(SportsLiveManifestDrm.isProtected(inner), status)
     }
 
-    /** The response status and, when it succeeded, up to [MAX_BYTES] of its body; null when the request failed. */
-    private fun fetch(url: String, headers: Map<String, String>): Pair<Int, String?>? = try {
+    /**
+     * The response status, up to [MAX_BYTES] of its body when it succeeded, and the url it was finally read from
+     * (after redirects); null when the request failed.
+     */
+    private fun fetch(url: String, headers: Map<String, String>): Triple<Int, String?, String>? = try {
         val client = PlayerPlaybackNetworking.createHttpClient(headers)
         val builder = Request.Builder().url(url)
         if (headers.none { it.key.equals("User-Agent", ignoreCase = true) }) {
             builder.header("User-Agent", PlayerMediaSourceFactory.DEFAULT_USER_AGENT)
         }
         client.newCall(builder.build()).execute().use { response ->
-            response.code to (if (response.isSuccessful) response.peekBody(MAX_BYTES).string() else null)
+            Triple(
+                response.code,
+                if (response.isSuccessful) response.peekBody(MAX_BYTES).string() else null,
+                response.request.url.toString()
+            )
         }
     } catch (e: CancellationException) {
         throw e

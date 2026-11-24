@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.domain.model.ProxyHeaders
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.domain.model.StreamBehaviorHints
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -137,5 +139,70 @@ class SportsLiveLiveCheckTest {
         val outcome = checker(FakeFetch(emptyMap())).firstLive(listOf(stream("magnet:?xt=urn:btih:abc"), stream("https://h.invalid/x.m3u8", "B")))
         assertNull(outcome.live)
         assertFalse(outcome.checkable)
+    }
+
+    private val headers = mapOf("Authorization" to "Bearer t", "X-Custom" to "v")
+
+    private fun stream(url: String, headers: Map<String, String>) = stream(url).copy(
+        behaviorHints = StreamBehaviorHints(
+            notWebReady = null, bingeGroup = null, countryWhitelist = null,
+            proxyHeaders = ProxyHeaders(request = headers, response = null)
+        )
+    )
+
+    /** Each read's url and the headers it carried. */
+    private class RecordingFetch(private val pages: Map<String, ManifestResponse>) {
+        val reads = ArrayList<Pair<String, Map<String, String>>>()
+
+        suspend fun fetch(url: String, headers: Map<String, String>): ManifestResponse? {
+            reads += url to headers
+            return pages[url]
+        }
+    }
+
+    @Test
+    fun `a redirected master resolves its variant against where it was finally read (#279)`() = runTest {
+        val fetch = RecordingFetch(
+            mapOf(
+                "https://h.invalid/master.m3u8" to ManifestResponse(200, master, finalUrl = "https://h.invalid/edge/live/master.m3u8"),
+                "https://h.invalid/edge/live/720/index.m3u8" to ManifestResponse(200, media(10, 3, dated = now))
+            )
+        )
+        val check = SportsLiveLiveCheck(fetch::fetch, nowMs = { now }, wait = {})
+        assertEquals(LiveVerdict.LIVE, check.check(stream("https://h.invalid/master.m3u8", headers)))
+        assertEquals(listOf("https://h.invalid/master.m3u8", "https://h.invalid/edge/live/720/index.m3u8"), fetch.reads.map { it.first })
+        // Same host as the addon's link: the headers go with the variant read.
+        assertEquals(headers, fetch.reads[1].second)
+    }
+
+    @Test
+    fun `a variant on another host is read without the stream's headers (#279)`() = runTest {
+        val crossMaster = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttps://other.invalid/720/index.m3u8\n"
+        val fetch = RecordingFetch(
+            mapOf(
+                "https://h.invalid/master.m3u8" to ManifestResponse(200, crossMaster),
+                "https://other.invalid/720/index.m3u8" to ManifestResponse(200, media(10, 3))
+            )
+        )
+        val check = SportsLiveLiveCheck(fetch::fetch, nowMs = { now }, wait = {})
+        check.check(stream("https://h.invalid/master.m3u8", headers))
+        assertEquals(headers, fetch.reads[0].second)
+        // The variant read and the undated playlist's second read both go without them.
+        assertEquals(listOf("https://other.invalid/720/index.m3u8", "https://other.invalid/720/index.m3u8"), fetch.reads.drop(1).map { it.first })
+        assertTrue(fetch.reads.drop(1).all { it.second.isEmpty() })
+    }
+
+    @Test
+    fun `a master redirected to another host sends no headers to its variants there (#279)`() = runTest {
+        val fetch = RecordingFetch(
+            mapOf(
+                "https://h.invalid/master.m3u8" to ManifestResponse(200, master, finalUrl = "https://edge.invalid/live/master.m3u8"),
+                "https://edge.invalid/live/720/index.m3u8" to ManifestResponse(200, media(10, 3, dated = now))
+            )
+        )
+        val check = SportsLiveLiveCheck(fetch::fetch, nowMs = { now }, wait = {})
+        assertEquals(LiveVerdict.LIVE, check.check(stream("https://h.invalid/master.m3u8", headers)))
+        assertEquals("https://edge.invalid/live/720/index.m3u8", fetch.reads[1].first)
+        assertTrue(fetch.reads[1].second.isEmpty())
     }
 }

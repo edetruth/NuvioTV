@@ -45,7 +45,11 @@ class SportsLiveManifestFetcher @Inject constructor() {
                         nextHop(target, response.header("Location"))
                             ?: return@withContext null
                     } else {
-                        return@withContext ManifestResponse(response.code, if (response.isSuccessful) bodyStart(response) else null)
+                        return@withContext ManifestResponse(
+                            response.code,
+                            if (response.isSuccessful) bodyStart(response) else null,
+                            finalUrl = target.toString()
+                        )
                     }
                 }
                 if (!hop.keepHeaders) sent = emptyMap()

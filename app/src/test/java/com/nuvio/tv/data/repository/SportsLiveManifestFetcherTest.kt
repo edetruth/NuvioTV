@@ -1,6 +1,9 @@
 package com.nuvio.tv.data.repository
 
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -29,5 +32,25 @@ class SportsLiveManifestFetcherTest {
         assertTrue(same.keepHeaders)
         val elsewhere = SportsLiveManifestFetcher.nextHop(from, "https://edge.invalid/live/index.m3u8")!!
         assertFalse(elsewhere.keepHeaders)
+    }
+
+    @Test
+    fun `a manifest read after a redirect says where it was finally read (#279)`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", "/edge/live/master.m3u8"))
+            server.enqueue(MockResponse().setBody("#EXTM3U\n"))
+            val answer = SportsLiveManifestFetcher().fetch(server.url("/master.m3u8").toString(), emptyMap())!!
+            assertEquals(200, answer.code)
+            assertEquals(server.url("/edge/live/master.m3u8").toString(), answer.finalUrl)
+        }
+    }
+
+    @Test
+    fun `a manifest read straight away says its own link (#279)`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("#EXTM3U\n"))
+            val url = server.url("/master.m3u8").toString()
+            assertEquals(url, SportsLiveManifestFetcher().fetch(url, emptyMap())!!.finalUrl)
+        }
     }
 }
