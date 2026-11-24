@@ -2904,6 +2904,7 @@ class MetaDetailsViewModel @Inject constructor(
         if (isServerItem) return
         if (trailerHandoffActive) return
         val meta = _uiState.value.meta ?: return
+        if (com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.isSpoilerSafe(meta.id)) return // Sports & Live F7: no highlights found by title
 
         trailerFetchJob?.cancel()
         trailerFetchJob = viewModelScope.launch {

@@ -71,6 +71,25 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a hidden replay's Detail page shows no status, awards, release date or running time`() {
+        // F7: the hero draws an unknown status as a badge ("FT 2-1") and the date when there is no release info; a
+        // running time tells extra time.
+        val replay = folder.copy(
+            status = "FT 2-1", awards = "Man of the match", released = "2026-11-22T20:00:00Z", runtime = "128 min",
+            videos = listOf(episode.copy(runtime = 128))
+        )
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        val shown = sportsLiveDetailMeta("folder", replay)
+        assertNull(shown.status)
+        assertNull(shown.awards)
+        assertNull(shown.released)
+        assertNull(shown.runtime)
+        assertNull(shown.videos.single().runtime)
+        // An episode's own date only orders the list; it stays.
+        assertEquals(episode.released, shown.videos.single().released)
+    }
+
+    @Test
     fun `a single replay opened from More Details with its result hidden has its title masked`() {
         val replay = folder.copy(id = "replay", type = ContentType.MOVIE, rawType = "movie", name = "Team A 2-1 Team B", videos = emptyList())
         SportsLiveExtraSources.markSpoilerSafe("replay", true)

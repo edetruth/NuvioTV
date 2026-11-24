@@ -63,9 +63,10 @@ internal fun sportsLiveOpenDetail(item: SportsLiveItem, hidden: Boolean, open: (
 
 /**
  * [meta] as the Detail page for [itemId] shows it (#240, #243): a spoiler-safe replay's ([sportsLiveOpenDetail]) with any
- * score masked in its title and its videos' titles and links, and no description, date, artwork, trailer or episode
- * summary, any of which may carry the result; its videos become spoiler-safe too, so an episode's Stream screen and
- * player mask as the replay does. Any other title's as is.
+ * score masked in its title and its videos' titles and links, and no description, release info or date, status, awards,
+ * running time (it tells extra time), artwork, trailer or episode summary, any of which may carry the result (F7); an
+ * episode keeps its date, which only orders the list. Its videos become spoiler-safe too, so an episode's Stream screen
+ * and player mask as the replay does. Any other title's as is.
  */
 internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
     val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
@@ -74,6 +75,10 @@ internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
         name = spoilerSafeLinkText(meta.name) ?: meta.name,
         description = null,
         releaseInfo = null,
+        released = null,
+        status = null,
+        awards = null,
+        runtime = null,
         poster = null,
         background = null,
         landscapePoster = null,
@@ -86,6 +91,7 @@ internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
             video.copy(
                 title = spoilerSafeLinkText(video.title) ?: video.title,
                 overview = null,
+                runtime = null,
                 thumbnail = null,
                 seasonPoster = null,
                 streams = video.streams.map(::spoilerSafeReplayStream)
