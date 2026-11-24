@@ -564,7 +564,8 @@ class SportsLiveZapViewModel internal constructor(
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
             val allSplit = if (list === panelList.all) split else splitOf(panelList.all)
             // F4: a dropped game (past its drop time) is in no group either: it counts as finished too.
-            val splitFinished = allSplit.overKeys(panelList.all)
+            // L5: a postponed or cancelled game is no live game either, under every chip.
+            val splitFinished = allSplit.overKeys(panelList.all) + SportsLiveEndedGames.postponedKeys(panelList.all, scores)
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             // Spoiler protection (#151): a kept Just ended final is stamped too, as on Live Now's board.
             val protection = liveScores.protection.value
@@ -1311,7 +1312,8 @@ class SportsLiveZapViewModel internal constructor(
 
     // The panel's Just ended games, with every source of each (M11): never offered for dual screen.
     private fun panelEndedKeys(): Set<String> =
-        panel.value?.rows.orEmpty().filter { it.group == ZapPanelGroup.JUST_ENDED }.flatMapTo(HashSet()) { it.item.sourceKeys() }
+        // L5: by the Scoreboard section, which files a postponed game under Just ended too (its panel group is Other).
+        panel.value?.rows.orEmpty().filter { it.section == ScoreboardGroup.JUST_ENDED }.flatMapTo(HashSet()) { it.item.sourceKeys() }
 
     private inline fun dualPick(
         items: (SportsLiveZapSession) -> List<SportsLiveItem>,

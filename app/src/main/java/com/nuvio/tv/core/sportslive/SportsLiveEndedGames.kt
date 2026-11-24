@@ -436,6 +436,17 @@ class SportsLiveEndedGames {
                 (listOf(item) + item.alternates).all { EspnLeagueMap.leaguesFor(it).isEmpty() }
         }
 
+        /**
+         * L5 (#357): ESPN has [item]'s strictly matched game postponed or cancelled (not suspended or delayed, which may
+         * resume): no live game on any surface (Live now, Home, the panel, Results, the dual picker). Never a channel.
+         */
+        fun isPostponed(item: SportsLiveItem, snapshot: ScoreSnapshot?): Boolean =
+            !item.isChannel && ScoreChips.matchedEvent(item, snapshot)?.let { it.state == ScoreState.OFF && !it.mayResume } == true
+
+        /** The card keys of [items] that are [isPostponed] by [scores] (the delayed snapshots by card key). */
+        fun postponedKeys(items: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>): Set<String> =
+            items.filter { isPostponed(it, scores[it.streamKey]) }.mapTo(HashSet()) { it.streamKey }
+
         fun isFinalWithScore(event: ScoreSnapshot): Boolean =
             event.state == ScoreState.POST && event.isFinal && event.homeScore != null && event.awayScore != null
 

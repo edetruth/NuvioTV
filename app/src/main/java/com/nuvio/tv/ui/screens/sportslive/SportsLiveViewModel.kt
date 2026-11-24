@@ -1730,9 +1730,7 @@ class SportsLiveViewModel internal constructor(
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
                 finals = split.finals.keys
                 // #357: a game ESPN has postponed or cancelled (not one that may resume) is no live game to count.
-                postponed = split.live.filter { item ->
-                    ScoreChips.matchedEvent(item, scores[item.streamKey])?.let { it.state == ScoreState.OFF && !it.mayResume } == true
-                }.mapTo(HashSet()) { it.streamKey }
+                postponed = SportsLiveEndedGames.postponedKeys(split.live, scores)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 // #275: one past its estimate whose every lookup found no stream has no link to check: "Probably ended" too.
@@ -1954,6 +1952,7 @@ class SportsLiveViewModel internal constructor(
             justEnded = justEnded,
             noStreams = noStreams,
             awaitingScore = awaitingScore,
+            postponed = postponed,
             nowMs = now,
             whyTags = whyTags,
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.

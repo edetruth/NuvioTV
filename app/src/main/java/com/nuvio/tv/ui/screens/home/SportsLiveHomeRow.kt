@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -157,9 +158,15 @@ object SportsLiveHomeRow {
         checkingWord: String? = null,
         /** #375: games Live Now shows Probably ended: [probablyEndedWord]. */
         probablyEnded: Set<String> = emptySet(),
-        probablyEndedWord: String? = null
+        probablyEndedWord: String? = null,
+        /** L5: a game ESPN has postponed or cancelled reads ESPN's word ("Canceled"), else this ("Postponed"), never Live now. */
+        postponedWord: String? = null
     ): Map<String, String> = items.mapNotNull { item ->
         val snapshot = scores[item.streamKey]
+        if (postponedWord != null && SportsLiveEndedGames.isPostponed(item, snapshot)) {
+            val text = ScoreChips.matchedEvent(item, snapshot)?.clockText?.takeIf { it.isNotBlank() } ?: postponedWord
+            return@mapNotNull item.streamKey to text
+        }
         if (probablyEndedWord != null && item.streamKey in probablyEnded) return@mapNotNull item.streamKey to probablyEndedWord
         val pre = ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.PRE
         val waiting = !pre && item.streamKey in awaiting

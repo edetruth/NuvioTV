@@ -70,6 +70,17 @@ class SportsLiveHomeLiveTruthTest {
     }
 
     @Test
+    fun `L5 - a postponed game's hero eyebrow reads ESPN's word, never Live now`() {
+        val off = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+            .copy(state = ScoreState.OFF, isFinal = false, clockText = "Canceled", mayResume = false)
+        val starts = SportsLiveHomeRow.starts(
+            listOf(covered), mapOf(covered.streamKey to off), "Starts %1\$s", "Tomorrow %1\$s", nowMs, ZoneOffset.UTC, Locale.US,
+            postponedWord = "Postponed"
+        )
+        assertEquals(mapOf(covered.streamKey to "Canceled"), starts)
+    }
+
+    @Test
     fun `the hero's eyebrow follows the card - its start while it waits, Probably ended, Checking score with no start`() {
         val time = (SportsLivePillTime.of(covered.startMs!!, true, nowMs, ZoneOffset.UTC, Locale.US) as SportsLivePillTime.Today).time
         val untimed = item("untimed", "Boston Celtics at New York Knicks", "Basketball", null)

@@ -2318,6 +2318,10 @@ class SportsLiveViewModelTest {
         val viewModel = newViewModel(scores = mapOf(off.streamKey to postponed))
         advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.filterCounts[null])
+        // L5: Results' "N games live now", the tab count and Watch with another game agree.
+        assertEquals(1, viewModel.uiState.value.liveGameCount)
+        assertEquals(1, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+        assertEquals(setOf(off.streamKey), viewModel.uiState.value.postponed)
 
         val suspended = postponed.copy(clockText = "Suspended", mayResume = true)
         val resuming = newViewModel(scores = mapOf(off.streamKey to suspended))

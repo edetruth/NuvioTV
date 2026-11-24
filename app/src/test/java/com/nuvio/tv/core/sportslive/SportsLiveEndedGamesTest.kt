@@ -547,6 +547,17 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `L5 - postponed or cancelled is no live game, suspended may resume, channels never`() {
+        val card = item()
+        val postponed = live(pacersFinal).copy(state = ScoreState.OFF, clockText = "Postponed", mayResume = false)
+        assertTrue(SportsLiveEndedGames.isPostponed(card, postponed))
+        assertTrue(!SportsLiveEndedGames.isPostponed(card, postponed.copy(mayResume = true)))
+        assertTrue(!SportsLiveEndedGames.isPostponed(card, live(pacersFinal)))
+        assertTrue(!SportsLiveEndedGames.isPostponed(item(isChannel = true), postponed))
+        assertEquals(setOf(card.streamKey), SportsLiveEndedGames.postponedKeys(listOf(card, item(id = "x", name = "Team A vs Team B")), mapOf(card.streamKey to postponed)))
+    }
+
+    @Test
     fun `F4 - what live counts leave out - Just ended, dropped and finals in their grace`() {
         val games = SportsLiveEndedGames()
         val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)

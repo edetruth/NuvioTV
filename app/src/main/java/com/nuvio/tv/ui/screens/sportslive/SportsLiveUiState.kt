@@ -67,6 +67,8 @@ data class SportsLiveUiState(
      * by card key: they read their start time, not LIVE, in place. Empty on other tabs.
      */
     val awaitingScore: Set<String> = emptySet(),
+    /** L5 (#357): Live now games ESPN has postponed or cancelled, by card key: never counted or offered as live. */
+    val postponed: Set<String> = emptySet(),
     /** The view model's clock when this state was built (it ticks while the list is watched). */
     val nowMs: Long = 0L,
     /** Live now's excitement badges (#43, V2) by card key, with scores shown only; empty otherwise. */
@@ -137,12 +139,12 @@ data class SportsLiveUiState(
      * now" line counts, so both use one live definition (QA pass 3).
      */
     val liveGameCount: Int
-        get() = tabs[SportsLiveTab.LIVE_NOW].orEmpty().count { !it.isChannel && it.streamKey !in justEnded }
+        get() = tabs[SportsLiveTab.LIVE_NOW].orEmpty().count { !it.isChannel && it.streamKey !in justEnded && it.streamKey !in postponed }
 
     /** How many cards [tab] counts: Live now leaves its Just ended strip out. */
     fun countOf(tab: SportsLiveTab): Int {
         val items = tabs[tab].orEmpty()
-        return if (tab == SportsLiveTab.LIVE_NOW) items.count { it.streamKey !in justEnded } else items.size
+        return if (tab == SportsLiveTab.LIVE_NOW) items.count { it.streamKey !in justEnded && it.streamKey !in postponed } else items.size
     }
 
     companion object {
@@ -182,7 +184,7 @@ internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: S
         selectedTab.offersDual()
     } else {
         selectedTab == SportsLiveTab.LIVE_NOW && selectedTab.offersDual() && item.kind == SportsLiveKind.EVENTS &&
-            endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot)
+            endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot) && !SportsLiveEndedGames.isPostponed(item, snapshot)
     }
 
 /**
@@ -240,7 +242,10 @@ internal fun SportsLiveUiState.watchWithSession(
  */
 internal fun SportsLiveUiState.finishedKeys(scores: Map<String, ScoreSnapshot>): Set<String> =
     tabs[SportsLiveTab.LIVE_NOW].orEmpty()
-        .filter { it.streamKey in justEnded || SportsLiveEndedGames.isEspnFinal(it, scores[it.streamKey]) }
+        .filter {
+            it.streamKey in justEnded || SportsLiveEndedGames.isEspnFinal(it, scores[it.streamKey]) ||
+                SportsLiveEndedGames.isPostponed(it, scores[it.streamKey])
+        }
         .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
 
 /**

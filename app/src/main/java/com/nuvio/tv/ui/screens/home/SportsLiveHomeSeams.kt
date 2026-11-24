@@ -274,7 +274,9 @@ private fun SportsLiveHomeScores(
     }
     // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
     val over = remember(items, current, clockMs, homeTruth) {
-        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs) + homeTruth.probablyEnded
+        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs) + homeTruth.probablyEnded +
+            // L5: a game ESPN has postponed or cancelled is no live game in the count or the zap list either.
+            SportsLiveEndedGames.postponedKeys(viewModel.liveNowAllItems, current)
     }
     LaunchedEffect(ended, over) { viewModel.setLiveNowEnded(ended, over) }
     LaunchedEffect(homeTruth.deadline) {
@@ -285,11 +287,12 @@ private fun SportsLiveHomeScores(
     // The hero's eyebrow says what the focused card says: its start while it waits, Probably ended, "Starts 7:00 PM".
     val checkingWord = stringResource(R.string.sports_live_checking_score)
     val probablyEndedWord = stringResource(R.string.sports_live_probably_ended)
-    val starts = remember(items, current, clockMs, startsFormat, tomorrowFormat, homeTruth, checkingWord, probablyEndedWord) {
+    val postponedWord = stringResource(R.string.sports_live_chip_postponed)
+    val starts = remember(items, current, clockMs, startsFormat, tomorrowFormat, homeTruth, checkingWord, probablyEndedWord, postponedWord) {
         SportsLiveHomeRow.starts(
             items, current, startsFormat, tomorrowFormat, clockMs,
             awaiting = homeTruth.awaiting, checkingWord = checkingWord,
-            probablyEnded = homeTruth.probablyEnded, probablyEndedWord = probablyEndedWord
+            probablyEnded = homeTruth.probablyEnded, probablyEndedWord = probablyEndedWord, postponedWord = postponedWord
         )
     }
     LaunchedEffect(labels, tags, starts) { viewModel.setLiveNowScoreLabels(labels, tags, starts) }
