@@ -511,6 +511,29 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `F9 - a game ESPN strictly matches is never overdue, scheduled or postponed too`() {
+        val games = SportsLiveEndedGames()
+        val late = item(id = "late", startMs = START - 4 * HOUR)
+        val scheduled = live(pacersFinal).copy(state = ScoreState.PRE)
+        assertTrue(games.moreEnds(listOf(late), mapOf(late.streamKey to scheduled), START, emptySet()) { false }.moved.isEmpty())
+        val postponed = live(pacersFinal).copy(state = ScoreState.OFF)
+        assertTrue(games.moreEnds(listOf(late), mapOf(late.streamKey to postponed), START, emptySet()) { false }.moved.isEmpty())
+        // No ESPN game: overdue as before.
+        assertEquals(setOf(late.streamKey), games.moreEnds(listOf(late), emptyMap(), START, emptySet()) { false }.moved)
+    }
+
+    @Test
+    fun `#354 - an overdue card past its drop time is moved out but shown nowhere`() {
+        val games = SportsLiveEndedGames()
+        val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)
+        val more = games.moreEnds(listOf(old), emptyMap(), START, emptySet()) { false }
+        assertEquals(setOf(old.streamKey), more.moved)
+        assertTrue(more.ended.isEmpty())
+        val split = games.split(listOf(old), emptyMap(), START) { false }.with(more)
+        assertTrue(split.live.isEmpty() && split.justEnded.isEmpty())
+    }
+
+    @Test
     fun `a stored time is reused only for the same ESPN event and while younger than 6 h`() {
         val card = item()
         val endedAt = START + 2 * HOUR

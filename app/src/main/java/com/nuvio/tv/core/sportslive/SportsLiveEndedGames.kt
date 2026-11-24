@@ -189,7 +189,7 @@ class SportsLiveEndedGames {
      * The end rules Live now adds to [split]'s, shared with the player's panel (#354), over [live] (a split's live cards)
      * at [nowMs], each a "Probably ended" estimate, playable, never hidden while in the strip:
      * - live far longer than its sport runs ([SportsLiveLiveDuration.isOverdue]), unless links were found lately
-     *   ([hasRecentLinks]) or ESPN shows it in play: dated at its start plus that longest run;
+     *   ([hasRecentLinks]) or ESPN strictly matches it (whatever its state): dated at its start plus that longest run;
      * - #275: past its estimated end, ESPN not deciding ([linkCheckEnd]), and every lookup found no stream ([noStreams],
      *   card keys as [SportsLiveItem.hasEnded] reads them): dated at its estimated end.
      * A card whose drop time has passed is moved but not in [MoreEnds.ended]. Dead links stay Live now's own (its checker).
@@ -206,8 +206,9 @@ class SportsLiveEndedGames {
         for (item in live) {
             val key = item.streamKey
             val snapshot = scores[key]
+            // F9: a strict ESPN match decides alone (in play, scheduled, postponed or a final in its grace): never overdue.
             val verdict = if (SportsLiveLiveDuration.isOverdue(item, nowMs) && !hasRecentLinks(item) &&
-                ScoreChips.matchedEvent(item, snapshot)?.state != ScoreState.IN
+                ScoreChips.matchedEvent(item, snapshot) == null
             ) {
                 moved += key
                 timedStart(item)?.let { start -> EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport)) }
