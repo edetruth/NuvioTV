@@ -29,9 +29,34 @@ object SportsLiveLiveDuration {
     )
 
     /** The longest a game of [sport] (an item's sport, genre or catalog name) plausibly stays live. */
-    fun maxLiveMs(sport: String?): Long =
-        bySport.firstOrNull { (keywords, _) -> SportsLiveKeywords.containsKeyword(sport, keywords) }?.second
-            ?: DEFAULT_MAX_MS
+    fun maxLiveMs(sport: String?): Long {
+        val table = bySport.firstOrNull { (keywords, _) -> SportsLiveKeywords.containsKeyword(sport, keywords) }?.second ?: DEFAULT_MAX_MS
+        // A bare "Football" may be American football: the longer floor (unsure means longer).
+        val kind = if (isBareFootball(sport)) SportsLiveSportKind.FOOTBALL else SportsLiveSportKind.of(sport)
+        return limit(table, kind)
+    }
+
+    /** #454: past a game's expected length and late start ([SportsLiveGameLength]), this much more before it is overdue. */
+    const val OVERDUE_BUFFER_MS = 30 * 60 * 1000L
+
+    /**
+     * #454, the one formula: a sport's overdue limit is never below its expected length plus the late start plus
+     * [OVERDUE_BUFFER_MS] (basketball and hockey 3 h 50, soccer 3 h 45, an unknown sport 4 h 50); a longer [table] value
+     * (tennis, golf, fight cards) stands.
+     */
+    fun limit(table: Long, kind: SportsLiveSportKind?): Long = maxOf(table, floorOf(kind))
+
+    /** #454: expected length + late start + [OVERDUE_BUFFER_MS] for [kind] (an unknown sport's length when no team sport). */
+    fun floorOf(kind: SportsLiveSportKind?): Long = SportsLiveGameLength.ofEspnSport(espnSportOf(kind)) + OVERDUE_BUFFER_MS
+
+    private fun espnSportOf(kind: SportsLiveSportKind?): String = when (kind) {
+        SportsLiveSportKind.SOCCER -> "soccer"
+        SportsLiveSportKind.BASKETBALL -> "basketball"
+        SportsLiveSportKind.HOCKEY -> "hockey"
+        SportsLiveSportKind.FOOTBALL -> "football"
+        SportsLiveSportKind.BASEBALL -> "baseball"
+        else -> ""
+    }
 
     /**
      * #358: the longest [item] plausibly stays live, by the sport the app infers for it
@@ -45,7 +70,7 @@ object SportsLiveLiveDuration {
             // nothing else saying soccer, the longer (American football) limit.
             if (kind == SportsLiveSportKind.SOCCER && saysBareFootball(item, card) && !saysSoccer(item, card)) SportsLiveSportKind.FOOTBALL else kind
         }
-        return kind?.let(byKind::get) ?: maxLiveMs(item.sport ?: card.sport)
+        return kind?.let { limit(byKind[it] ?: DEFAULT_MAX_MS, it) } ?: maxLiveMs(item.sport ?: card.sport)
     }
 
     // "Football" itself is no soccer clue (it is the ambiguous word); "Football League" counts only by its other words.

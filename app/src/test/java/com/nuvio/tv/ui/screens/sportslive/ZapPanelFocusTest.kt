@@ -161,7 +161,7 @@ class ZapPanelFocusTest {
             assertEquals(listOf("a", "b"), viewModel.panel.value!!.items.map { it.id })
             assertEquals(now - HOUR / 2, viewModel.panel.value!!.items.first().startMs)
             // A new game arrives: last, tagged New.
-            // Two and a half hours in: well inside a basketball game's longest run (3 h), never overdue on a slow clock.
+            // Two and a half hours in: well inside a basketball game's longest run (3 h 50), never overdue on a slow clock.
             val c = item("c", now - 150 * 60_000L)
             latest.value = SportsLiveLoad(listOf(a.copy(startMs = now - HOUR / 2), b, c), emptyList(), 2L, setOf(CATALOG))
             runCurrent()
