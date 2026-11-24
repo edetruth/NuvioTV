@@ -32,6 +32,9 @@ object SportsLiveAlertCards {
     /** A passive card's (Full time): it only informs. */
     const val PASSIVE_MS = 6_000L
 
+    /** The passive kickoff card over a playing movie (#91). */
+    const val PASSIVE_KICKOFF_MS = 8_000L
+
     /** An OK pressed this soon after a card appeared was on its way already: it goes to the screen underneath. */
     const val OK_GRACE_MS = 800L
 
@@ -49,7 +52,12 @@ object SportsLiveAlertCards {
      * switch to). A kickoff watches (the no-stream note reminds in 10 min); a score, a lead change and a close finish
      * watch; Full time with the result hidden (review M1) plays the replay from the start.
      */
-    fun actionable(alert: SportsLiveAlert): Boolean = alert !is SportsLiveAlert.FullTime || alert.resultHidden
+    fun actionable(alert: SportsLiveAlert): Boolean = when (alert) {
+        is SportsLiveAlert.FullTime -> alert.resultHidden
+        // Over a playing movie it only informs (#91): OK is the viewer's pause key.
+        is SportsLiveAlert.Kickoff -> !alert.passive
+        else -> true
+    }
 
     /**
      * Which alert wins when several wait (lower first): my team's kickoff, then my team's score or lead change, then
@@ -70,6 +78,7 @@ object SportsLiveAlertCards {
     fun durationMs(alert: SportsLiveAlert, recommended: (Long, Boolean) -> Long = { ms, _ -> ms }): Long {
         val actionable = actionable(alert)
         val base = when {
+            alert is SportsLiveAlert.Kickoff && alert.passive -> PASSIVE_KICKOFF_MS
             !actionable -> PASSIVE_MS
             alert is SportsLiveAlert.ScoreChange && alert.leadChange -> LEAD_CHANGE_MS
             else -> ACTIONABLE_MS

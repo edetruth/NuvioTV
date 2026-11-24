@@ -59,7 +59,12 @@ data class SportsLiveWatching(
      * A Sports & Live screen is on (the section, a Game page), not dual screen or the player: no close finish there,
      * the rows already say "Close late" (live.24).
      */
-    val sportsLiveScreen: Boolean = false
+    val sportsLiveScreen: Boolean = false,
+    /**
+     * The movie or show in the full player is paused (#91; the player says so once it stayed paused a moment): the viewer
+     * is free to be asked, so the kickoff card may take OK.
+     */
+    val moviePaused: Boolean = false
 )
 
 /** A game on screen as alerts match it: its two sides, canonical and sorted ([sides]), and its start when known. */
@@ -95,8 +100,9 @@ enum class KickoffStyle {
     FULL,
 
     /**
-     * In the player, over a Sports & Live stream or a movie or show: the small kickoff card, the same keys. Over a movie
-     * OK switches to the game too, after the countdown, the movie's place saved (live.24: no more dead end).
+     * In the player, over a Sports & Live stream or a movie or show: the small kickoff card. Over a Sports & Live stream,
+     * or a paused movie, OK switches to the game, after the countdown, the movie's place saved (live.24). Over a movie
+     * that plays the card is passive (#91): it takes no key, because OK is the key that pauses.
      */
     COMPACT
 }
@@ -113,7 +119,14 @@ sealed interface SportsLiveAlert {
         override val item: SportsLiveItem,
         val snapshot: ScoreSnapshot?,
         val again: Boolean = false,
-        val noStreamYet: Boolean = false
+        val noStreamYet: Boolean = false,
+        /**
+         * Over a movie that plays (#91): the card only informs ("Pause to watch it"), takes no key, and is stamped when it
+         * shows ([SportsLiveAlertEngine.kickoffPassive]). When it ends the game's one deferred offer is kept.
+         */
+        val passive: Boolean = false,
+        /** The one deferred offer (#91): the viewer paused or left the movie while the game is live. */
+        val deferred: Boolean = false
     ) : SportsLiveAlert
 
     /**
@@ -171,7 +184,14 @@ sealed interface SportsLiveAlert {
  *   seen before changes is announced (a first look never alerts).
  */
 class SportsLiveAlertEngine {
-    private class Prompt(var shown: Boolean = false, var laterAt: Long? = null, var laterUsed: Boolean = false, var done: Boolean = false)
+    private class Prompt(
+        var shown: Boolean = false,
+        var laterAt: Long? = null,
+        var laterUsed: Boolean = false,
+        var done: Boolean = false,
+        /** A passive card ran its time over a movie (#91): one actionable offer waits for the viewer to be free. */
+        var deferred: Boolean = false
+    )
 
     private class Seen(val state: ScoreState, val home: Int?, val away: Int?)
 
@@ -196,7 +216,7 @@ class SportsLiveAlertEngine {
         val alerts = ArrayList<SportsLiveAlert>()
         for (game in games.distinctBy { gameKey(it.item) }) {
             val playing = isPlaying(game.item, watching, game.snapshot)
-            if (game.reminded) kickoff(game, nowMs, playing, holding = settling || watching.dual)?.let(alerts::add)
+            if (game.reminded) kickoff(game, nowMs, playing, holding = settling || watching.dual, watching = watching)?.let(alerts::add)
             // A score kept from before the app closed (live.23) is old: no change is measured from it.
             val event = game.snapshot?.takeIf { !it.kept } ?: continue
             val before = seen[event.eventId]
@@ -231,7 +251,16 @@ class SportsLiveAlertEngine {
         prompts.getOrPut(gameKey(item)) { Prompt() }.done = true
     }
 
-    private fun kickoff(game: AlertGame, nowMs: Long, playing: Boolean, holding: Boolean): SportsLiveAlert.Kickoff? {
+    /**
+     * A passive kickoff card ran out over a playing movie (#91): the game is not answered; its one offer waits until the
+     * viewer pauses or leaves the movie while the game is still live ([kickoff]).
+     */
+    fun deferOffer(item: SportsLiveItem) {
+        val prompt = prompts.getOrPut(gameKey(item)) { Prompt(shown = true) }
+        if (!prompt.done) prompt.deferred = true
+    }
+
+    private fun kickoff(game: AlertGame, nowMs: Long, playing: Boolean, holding: Boolean, watching: SportsLiveWatching): SportsLiveAlert.Kickoff? {
         val prompt = prompts.getOrPut(gameKey(game.item)) { Prompt() }
         if (prompt.done) return null
         val event = game.snapshot
@@ -241,6 +270,13 @@ class SportsLiveAlertEngine {
             return null
         }
         if (holding) return null
+        if (prompt.deferred) {
+            // The deferred offer (#91): once, while the game is listed live and not over, when the viewer is free. It is not
+            // held for a link again and not bound to the 20 minute window, so pausing 40 minutes into a movie still offers it.
+            if (!liveNow(game) || !viewerFree(watching)) return null
+            prompt.deferred = false
+            return SportsLiveAlert.Kickoff(game.item, event, again = true, deferred = true)
+        }
         val laterAt = prompt.laterAt
         if (laterAt != null) {
             if (nowMs < laterAt) return null
@@ -250,6 +286,13 @@ class SportsLiveAlertEngine {
         if (prompt.shown || !kickedOff(game, nowMs)) return null
         prompt.shown = true
         return SportsLiveAlert.Kickoff(game.item, event)
+    }
+
+    /** The game is listed live and ESPN has not said it is over (Scores Off has no ESPN game: the listing alone). */
+    private fun liveNow(game: AlertGame): Boolean = when (game.snapshot?.state) {
+        ScoreState.IN -> true
+        null -> game.item.isLive
+        else -> false
     }
 
     private fun kickedOff(game: AlertGame, nowMs: Long): Boolean {
@@ -347,6 +390,19 @@ class SportsLiveAlertEngine {
         }
 
         /** Full outside the player, small in it (over a sports stream, a movie or a show). */
+        /** A movie or show plays in the full player (not Sports & Live content). */
+        fun overMovie(watching: SportsLiveWatching): Boolean = watching.inPlayer && !watching.sportsPlayback
+
+        /**
+         * #91: [alert] shows passive when it would take OK from a movie that plays: no keys, "Pause to watch it". Not for
+         * the deferred offer, nor the no-stream note; not over a paused movie, a Sports & Live stream or any other screen.
+         */
+        fun kickoffPassive(alert: SportsLiveAlert.Kickoff, watching: SportsLiveWatching): Boolean =
+            !alert.deferred && !alert.noStreamYet && overMovie(watching) && !watching.moviePaused
+
+        /** The viewer is free to be asked about a game: they left the movie, or paused it (#91). */
+        fun viewerFree(watching: SportsLiveWatching): Boolean = !overMovie(watching) || watching.moviePaused
+
         fun kickoffStyle(watching: SportsLiveWatching): KickoffStyle =
             if (watching.inPlayer) KickoffStyle.COMPACT else KickoffStyle.FULL
 

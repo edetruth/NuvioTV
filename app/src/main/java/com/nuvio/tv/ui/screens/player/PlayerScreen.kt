@@ -2438,6 +2438,11 @@ fun PlayerScreen(
                         // The end card (#161) and the waiting card (#162) hold OK.
                         sportsLiveZap.endCard.value?.toastOnly == false || viewModel.uiState.value.sportsWaiting != null
                 },
+                // #91: over a paused movie the kickoff card shows over the controls and the pause screen.
+                isBusyBesidesPause = {
+                    alertOverlayUp || sportsLiveZap.panelOpen.value || sportsLivePlayerOverlayUp(viewModel.uiState.value, ignoringPause = true) ||
+                        sportsLiveZap.endCard.value?.toastOnly == false || viewModel.uiState.value.sportsWaiting != null
+                },
                 exoPlayer = {
                     viewModel.exoPlayer?.takeIf {
                         viewModel.controller.currentInternalPlayerEngine == com.nuvio.tv.data.local.InternalPlayerEngine.EXOPLAYER
@@ -2447,7 +2452,10 @@ fun PlayerScreen(
                 openDual = openDualFromAlert
             )
         }
-        RegisterSportsLiveAlertSurface(alertSurface)
+        RegisterSportsLiveAlertSurface(
+            alertSurface,
+            paused = !uiState.isPlaying && !uiState.isBuffering && !uiState.playbackEnded && uiState.error == null
+        )
         // Toasts over the player take its bottom left corner, above its Sports & Live cards (live.19 QA F8) and its controls.
         com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsOverVideo(controlsUp = playerControlsVisible || seekOverlayVisible)
 
@@ -2487,8 +2495,8 @@ fun PlayerScreen(
 }
 
 /** The player's own overlays an alert card must leave OK to (#136): controls, panels, dialogs, an error. */
-internal fun sportsLivePlayerOverlayUp(state: PlayerUiState): Boolean =
-    state.showControls || state.showPauseOverlay || state.showEpisodesPanel || state.showSourcesPanel ||
+internal fun sportsLivePlayerOverlayUp(state: PlayerUiState, ignoringPause: Boolean = false): Boolean =
+    (!ignoringPause && (state.showControls || state.showPauseOverlay)) || state.showEpisodesPanel || state.showSourcesPanel ||
         state.showPartyPanel || state.showChaptersPanel || state.showAudioOverlay || state.showSubtitleOverlay ||
         state.showSubtitleStylePanel || state.showSpeedDialog || state.showSubtitleDelayOverlay ||
         state.showSubtitleTimingDialog || state.showMoreDialog || state.postPlayMode is PostPlayMode.StillWatching ||

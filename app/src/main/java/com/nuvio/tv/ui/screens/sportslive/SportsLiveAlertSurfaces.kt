@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.TrackSelectionParameters
@@ -18,6 +19,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualAvailable
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveSecondDecoders
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +37,12 @@ internal interface SportsLiveAlertSurface {
      * them (live.24), so whenever a card shows, OK is free to be its.
      */
     fun busy(): Boolean
+
+    /**
+     * [busy] without the controls and the pause screen: over a paused movie the kickoff card shows over them (#91), as
+     * pausing is what frees the viewer to be asked. Other overlays (a panel, a dialog) still hold it.
+     */
+    fun busyBesidesPause(): Boolean = busy()
 
     /** The full player, which could peek (#136; no alert offers it since live.24); null elsewhere. */
     val peek: SportsLivePeekHost?
@@ -86,6 +94,15 @@ internal object SportsLiveAlertSurfaces {
 
     fun setDualPanes(panes: DualPanes?) {
         _dualPanes.value = panes
+    }
+
+    private val _playerPaused = MutableStateFlow(false)
+
+    /** The full player's video has stayed paused (#91): a movie paused is the moment to ask about a live game. */
+    val playerPaused: StateFlow<Boolean> = _playerPaused.asStateFlow()
+
+    fun setPlayerPaused(paused: Boolean) {
+        _playerPaused.value = paused
     }
 
     private val _promptUp = MutableStateFlow(false)
@@ -173,14 +190,27 @@ internal interface AlertKeyHandler {
     fun onAction(action: AlertKeyAction)
 }
 
-/** Registers [surface] while this composable is shown. */
+/**
+ * Registers [surface] while this composable is shown. [paused]: the full player's video is paused (not buffering, not
+ * ended, no error); it is told to the alerts once it stayed paused [PAUSE_SETTLE_MS], so a seek's blip is not a pause (#91).
+ */
 @Composable
-internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface) {
+internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, paused: Boolean = false) {
     DisposableEffect(surface) {
         SportsLiveAlertSurfaces.register(surface)
-        onDispose { SportsLiveAlertSurfaces.unregister(surface) }
+        onDispose {
+            SportsLiveAlertSurfaces.unregister(surface)
+            SportsLiveAlertSurfaces.setPlayerPaused(false)
+        }
+    }
+    LaunchedEffect(paused) {
+        if (paused) delay(PAUSE_SETTLE_MS)
+        SportsLiveAlertSurfaces.setPlayerPaused(paused)
     }
 }
+
+/** How long the player stays paused before the alerts treat it as a viewer's pause (#91). */
+internal const val PAUSE_SETTLE_MS = 1_500L
 
 /**
  * The full player as an alert surface (#136): OK zaps to the card's game as a panel pick does ([zap]); a
@@ -191,6 +221,8 @@ internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface) {
 internal fun sportsLivePlayerAlertSurface(
     zap: SportsLiveZapViewModel,
     isBusy: () -> Boolean,
+    /** [isBusy] without the controls and the pause screen (#91); defaults to [isBusy]. */
+    isBusyBesidesPause: () -> Boolean = isBusy,
     exoPlayer: () -> ExoPlayer?,
     partyActive: () -> Boolean,
     /** Opens dual screen over this player; null where it cannot open. */
@@ -210,6 +242,8 @@ internal fun sportsLivePlayerAlertSurface(
     }
 
     override fun busy(): Boolean = isBusy()
+
+    override fun busyBesidesPause(): Boolean = isBusyBesidesPause()
 
     override val peek: SportsLivePeekHost = object : SportsLivePeekHost {
         /** The track selection from before the peek, given back as it was. */

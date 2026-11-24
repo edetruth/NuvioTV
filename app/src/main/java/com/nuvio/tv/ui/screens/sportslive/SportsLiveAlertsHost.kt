@@ -203,12 +203,14 @@ fun SportsLiveAlertsHost(
     val streamStartedAt = remember(entry?.id) { if (inPlayer) System.currentTimeMillis() else null }
     val playerContentId = entry?.arguments?.getString("contentId")?.takeIf { inPlayer }
     val playerTitle = entry?.arguments?.getString("title")?.takeIf { inPlayer }
+    // #91: the movie in the full player stayed paused (the player's own word), so the viewer is free to be asked.
+    val playerPaused by SportsLiveAlertSurfaces.playerPaused.collectAsState()
     val miniItem = (miniState as? SportsLiveMiniState.Playing)?.item
     val dualPanes by SportsLiveAlertSurfaces.dualPanes.collectAsState()
     val panes = dualPanes?.takeIf { dualRoute }
     // Live.28: the player learns its game's ESPN event id after it opens; the games on screen are read again then.
     val watchedEventIds by SportsLiveGameWatch.shared.eventIds.collectAsState()
-    LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route, panes, watchedEventIds) {
+    LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route, panes, watchedEventIds, playerPaused) {
         // Every game on screen (the full player's, both dual panes', the mini player's) is watched: none of them
         // alerts, matched by card, game identity or ESPN event, never by title.
         val playerItem = playerContentId?.let { id -> SportsLiveZapSessions.activeFor(id)?.current ?: SportsLiveGameWatch.shared.item(id) }
@@ -226,7 +228,8 @@ fun SportsLiveAlertsHost(
                 dual = dualRoute,
                 miniPlaying = miniItem != null,
                 playingTitle = playerTitle,
-                sportsLiveScreen = isSportsLiveScreen(route)
+                sportsLiveScreen = isSportsLiveScreen(route),
+                moviePaused = playerPaused && inPlayer && !SportsLiveExtraSources.isSportsPlayback(playerContentId)
             )
         )
     }
@@ -304,7 +307,12 @@ fun SportsLiveAlertsHost(
 
     /** The screen's own overlays are up (the guide, controls, a menu, a dialog): a card waits under them. */
     fun screenBusy(): Boolean =
-        currentSurface?.busy() == true || !windowInfo.isWindowFocused || SportsLiveHoldOk.sheet.value != null ||
+        // Over a paused movie a kickoff card shows over the controls and the pause screen (#91).
+        (if (currentCard?.alert is SportsLiveAlert.Kickoff && currentWatching.moviePaused && SportsLiveAlertEngine.overMovie(currentWatching)) {
+            currentSurface?.busyBesidesPause()
+        } else {
+            currentSurface?.busy()
+        }) == true || !windowInfo.isWindowFocused || SportsLiveHoldOk.sheet.value != null ||
             // Audit G34: never in the picture-in-picture window; a card waits there as under an overlay.
             SportsLivePip.inPip.value
 
@@ -581,6 +589,8 @@ fun SportsLiveAlertsHost(
                             // A time only when it is the real kickoff (F11: never "12:00 AM").
                             kickoffLabel = kickoffLabelOf(alert.item.copy(isLive = false))
                                 .takeIf { sportsLiveKickoffShowsTime(alert.item.startMs, alert.item.startHasTimeOfDay, System.currentTimeMillis()) },
+                            passive = kickoff.passive,
+                            pausedMovie = SportsLiveAlertEngine.overMovie(watching) && watching.moviePaused,
                             timeLeft = timeLine,
                             modifier = Modifier
                         )
@@ -691,6 +701,10 @@ private fun KickoffToast(
     streamReady: Boolean,
     watchingTitle: String?,
     kickoffLabel: String?,
+    /** Over a movie that plays (#91): line one, the matchup and "Pause to watch it"; no key is the card's. */
+    passive: Boolean,
+    /** Over a paused movie (#91): "OK Watch · Back Keep watching the movie". */
+    pausedMovie: Boolean,
     timeLeft: (() -> Float)?,
     modifier: Modifier
 ) {
@@ -741,7 +755,9 @@ private fun KickoffToast(
             )
             logos?.let { TeamLogoSlot(it.second, it.shown, logoSize) }
         }
-        val details = if (noStreamYet) {
+        val details = if (passive) {
+            emptyList()
+        } else if (noStreamYet) {
             listOf(stringResource(R.string.sports_live_alert_no_stream_line))
         } else {
             listOfNotNull(
@@ -759,7 +775,7 @@ private fun KickoffToast(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (!noStreamYet) {
+        if (!noStreamYet && !passive) {
             // live.20 1b wording, kept: a verified link held, or not yet.
             Text(
                 text = stringResource(if (streamReady) R.string.sports_live_kickoff_stream_ready_short else R.string.sports_live_kickoff_waiting_stream),
@@ -771,7 +787,14 @@ private fun KickoffToast(
         }
         // Its keys, named (research 4): OK is the card's while it shows.
         Text(
-            text = stringResource(if (noStreamYet) R.string.sports_live_alert_hint_ok_remind else R.string.sports_live_alert_hint_ok_watch),
+            text = stringResource(
+                when {
+                    passive -> R.string.sports_live_alert_hint_passive
+                    noStreamYet -> R.string.sports_live_alert_hint_ok_remind
+                    pausedMovie -> R.string.sports_live_alert_hint_ok_watch_movie
+                    else -> R.string.sports_live_alert_hint_ok_watch
+                }
+            ),
             style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
             color = SportsLiveTokens.Alert.Hint,
             maxLines = 1,
