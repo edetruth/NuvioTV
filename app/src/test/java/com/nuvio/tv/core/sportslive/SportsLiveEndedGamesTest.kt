@@ -443,6 +443,18 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `F3 - a remembered final never applies to a card with no timed start, which it would hide untracked`() {
+        val endedAt = START + 2 * HOUR
+        val games = SportsLiveEndedGames()
+        games.install(mapOf(item().streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt + HOUR) { }
+        val untimed = item(startMs = null, timed = false)
+        assertNull(games.verdict(untimed, null, endedAt + HOUR, canEstimate = false))
+        val split = games.split(listOf(untimed), emptyMap(), endedAt + HOUR) { false }
+        assertEquals(listOf(untimed), split.live)
+        assertNull(games.verdict(item(timed = false), null, endedAt + HOUR, canEstimate = false))
+    }
+
+    @Test
     fun `F1 - ESPN showing the game scheduled clears a remembered final too`() {
         val card = item()
         val endedAt = START + 2 * HOUR

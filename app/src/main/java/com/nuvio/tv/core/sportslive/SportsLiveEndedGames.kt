@@ -331,13 +331,16 @@ class SportsLiveEndedGames {
     /**
      * #267: [item]'s final as remembered from an earlier run ([install]) when no snapshot is in hand: the score feeds have
      * not answered since the restart, so the list would otherwise call a game already seen over LIVE. With no ESPN game in
-     * hand it carries no event (no score to show). Never for a card whose timed start is after that final (an addon
-     * reusing its id for a later game), nor past [FORGET_AFTER_MS]; a snapshot in play or scheduled clears it ([forget]).
+     * hand it carries no event (no score to show). Only for a card with a timed start no later than that final (never an
+     * addon reusing its id for a later or untimed game), never past [FORGET_AFTER_MS]; a snapshot in play or scheduled
+     * clears it ([forget]).
      */
     private fun remembered(item: SportsLiveItem, key: String, nowMs: Long): EndedGame? {
         val time = times[key]?.takeIf { nowMs - it.atMs in 0..FORGET_AFTER_MS } ?: return null
-        val start = timedStart(item)
-        if (start != null && start > time.atMs) return null
+        // F3: only a card with a timed start no later than that final: one with none could be a later game under a reused
+        // key, and a dropped card is no longer tracked, so no snapshot would ever clear it.
+        val start = timedStart(item) ?: return null
+        if (start > time.atMs) return null
         // F1: no grace. With no ESPN game in hand there is no final to show in place, and a final in its grace stays in
         // the live list, where a surface with no snapshot reads it LIVE: straight to Just ended.
         return EndedGame(EndedSignal.FINAL, time.atMs, event = null, graced = false)
