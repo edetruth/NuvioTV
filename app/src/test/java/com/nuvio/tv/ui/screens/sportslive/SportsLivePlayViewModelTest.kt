@@ -340,6 +340,22 @@ class SportsLivePlayViewModelTest {
     }
 
     @Test
+    fun `a spoiler-safe card the user picks for keeps its links masked on its Stream screen`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // #479 (F12): the Let me choose path to the Stream screen passes the card's spoiler safety on, as the others do.
+            SportsLiveExtraSources.reset()
+            openGame.value = SportsLiveOpenGame.LET_ME_CHOOSE
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+            viewModel.playCard(SINGLE, spoilerSafe = true) { null }
+            advanceUntilIdle()
+            assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE, manualSelection = true)), events)
+            assertTrue(SportsLiveExtraSources.isSpoilerSafe(SINGLE.id))
+            openGame.value = SportsLiveOpenGame.PLAY_BEST
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
     fun `OK on a card takes over its playing preview only when the stored setting plays the best stream`() =
         runTest(mainDispatcherRule.dispatcher) {
             // Stored before the view model exists: the very first OK must honour it.

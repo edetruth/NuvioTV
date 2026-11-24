@@ -507,7 +507,7 @@ class SportsLivePlayViewModel @Inject constructor(
         val openGame = openGame()
         val mode = playerSettingsDataStore.playerSettings.first().streamAutoPlayMode
         when (sportsLivePlayAction(item, mode, openGame, choose)) {
-            SportsLivePlayAction.STREAM_SCREEN -> openStreamScreen(item, manualSelection = true)
+            SportsLivePlayAction.STREAM_SCREEN -> openStreamScreen(item, manualSelection = true, spoilerSafe = spoilerSafe)
             SportsLivePlayAction.PLAY_BEST -> {
                 _state.value = SportsLivePlayState.Resolving(item)
                 // The zap's lookup: reliability order, the user's filters, junk dropped, cached.
