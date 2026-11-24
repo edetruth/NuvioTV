@@ -138,10 +138,10 @@ class SportsLiveScoreCadenceTest {
     fun `football early is halftime and the end of the 3rd, a late field goal within two scores shows`() {
         val game = Game()
         game.see(nfl(14, 7, "5:00 - 2nd"))
-        // A touchdown in the 2nd quarter waits for halftime.
-        assertEquals(emptyList<Any>(), game.see(nfl(21, 7, "2:00 - 2nd")))
-        assertEquals(listOf(ScoreMoment.PERIOD_BREAK), game.see(nfl(21, 10, "Halftime")).moments())
-        assertEquals(emptyList<Any>(), game.see(nfl(21, 10, "10:00 - 3rd")))
+        // A field goal in the 2nd quarter waits for halftime (the lead stays under the comeback size).
+        assertEquals(emptyList<Any>(), game.see(nfl(17, 7, "2:00 - 2nd")))
+        assertEquals(listOf(ScoreMoment.PERIOD_BREAK), game.see(nfl(17, 10, "Halftime")).moments())
+        assertEquals(emptyList<Any>(), game.see(nfl(17, 10, "10:00 - 3rd")))
         assertEquals(listOf(ScoreMoment.PERIOD_BREAK), game.see(nfl(24, 17, "End of 3rd")).moments())
         assertEquals(emptyList<Any>(), game.see(nfl(24, 17, "4:00 - 4th")))
         val fieldGoal = game.see(nfl(24, 20, "1:50 - 4th")).single()
