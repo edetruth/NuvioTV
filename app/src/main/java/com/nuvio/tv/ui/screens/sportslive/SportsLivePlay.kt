@@ -192,30 +192,46 @@ internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiv
 internal fun sportsLiveCardToPlay(item: SportsLiveItem, hidden: Boolean, title: () -> String): SportsLiveItem =
     if (hidden) spoilerSafeReplay(item, spoilerSafeLinkText(title()).orEmpty()) else item
 
-/** How a game that went past normal time is tagged in brackets: "AET", "a.e.t.", "pens", "on penalties", "p", "OT", "SO". */
+/**
+ * How a game that went past normal time is tagged in brackets: "AET", "a.e.t.", "pens", "on penalties", "p", "OT", "2OT",
+ * "SO".
+ */
 private const val EXTRA_TIME_TAG =
-    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|p|o\.?t\.?|s\.?o\.?)"""
+    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|p|\d*\s?o\.?t\.?|s\.?o\.?)"""
 
-/** The same tags standing alone after a score ("1-1 aet", "3-2 OT"): no single letter, OT and SO in capitals only. */
+/** The same tags standing alone after a score ("1-1 aet", "3-2 OT", "2OT"): no single letter, OT and SO in capitals only. */
 private const val BARE_EXTRA_TIME_TAG =
-    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens\.?|(?:on\s+)?penalties|(?-i:OT|SO))"""
+    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|(?-i:\d*OT|SO))"""
+
+/** Inside the brackets after a score: a shoot-out's score and tag either way round ("4-2 pens", "pens 4-2"), or tags ("AET, 4-2 pens"). */
+private const val SCORE_ENDING_IN_BRACKETS =
+    """(?:\d{1,2}\s*[-–—:]\s*\d{1,2}\s*,?\s*$EXTRA_TIME_TAG?|$EXTRA_TIME_TAG(?:\s*,?\s*\d{1,2}\s*[-–—:]\s*\d{1,2}(?:\s*$EXTRA_TIME_TAG)?)?)"""
 
 /**
- * What follows a score and tells how it ended (#244): a shoot-out's score and tag ("(4-2 pens)"), a tag in brackets
- * ("(AET)") or alone ("aet", "OT"). Masked with the score: "pens" or "AET" beside a hidden score still says it was a draw.
+ * What follows a score and tells how it ended (#244, F6): a shoot-out's score and tag ("(4-2 pens)", "[AET]"), or a tag
+ * alone ("aet", "OT"). Masked with the score: "pens" or "AET" beside a hidden score still says it was a draw.
  */
 private const val SCORE_ENDING =
-    """(?:\s*\(\s*(?:\d{1,2}\s*[-–—:]\s*\d{1,2}\s*$EXTRA_TIME_TAG?|$EXTRA_TIME_TAG)\s*\)|\s+$BARE_EXTRA_TIME_TAG(?!\w))*"""
+    """(?:\s*[(\[]\s*$SCORE_ENDING_IN_BRACKETS\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w))*"""
 
-/** A shoot-out's goals in brackets beside each side's score: the "(4)" of "1 (4) - (2) 1". */
-private const val PENALTY_GOALS = """\(\s*\d{1,2}\s*\)"""
+/** A shoot-out's goals in brackets beside a side's score: the "(4)" of "1 (4) - (2) 1" or "1 (4) - 1 (2)". */
+private const val PENALTY_GOALS = """[(\[]\s*\d{1,2}\s*[)\]]"""
 
 /**
- * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0", "1 (4) - (2) 1", with how it ended ([SCORE_ENDING]); not
- * part of a date ("2026-11-22", "22-11-2026") or a picture's aspect ratio ("16:9").
+ * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0", "1 (4) - (2) 1", "1 (4) - 1 (2)", with how it ended
+ * ([SCORE_ENDING]); not part of a date ("2026-11-22", "22-11-2026") or a picture's aspect ratio ("16:9").
  */
 private val SCORE_IN_LINK_TEXT = Regex(
-    """(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}(?:\s*$PENALTY_GOALS)?\s*[-–—:]\s*(?:$PENALTY_GOALS\s*)?\d{1,3}\b(?![-–—:/.]\d)$SCORE_ENDING""",
+    """(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}(?:\s*$PENALTY_GOALS)?\s*[-–—:]\s*(?:$PENALTY_GOALS\s*)?\d{1,3}\b(?:\s*$PENALTY_GOALS)?(?![-–—:/.]\d)$SCORE_ENDING""",
+    RegexOption.IGNORE_CASE
+)
+
+/**
+ * An extra-time tag away from the score, once a score was masked (F6): "Arsenal 1-1 Chelsea (AET)", "Leafs 3-2 Bruins SO".
+ * In brackets any tag; bare only in capitals and at the end or before a separator, so words stay.
+ */
+private val LOOSE_EXTRA_TIME_TAG = Regex(
+    """\s*[(\[]\s*$EXTRA_TIME_TAG(?:\s*,?\s*$EXTRA_TIME_TAG)*\s*[)\]]|\s+(?-i:\d*OT|SO|AET|PENS?)(?=\s*$|\s*[-|,·•])""",
     RegexOption.IGNORE_CASE
 )
 
@@ -227,8 +243,11 @@ private val SPLIT_SCORE_IN_LINK_TEXT =
  * [text] with any score in it masked ("Arsenal 2-1 Chelsea highlights" → "Arsenal – Chelsea highlights"): live.26 shorter
  * paths (#223, review gap 1), a replay's link names often carry its result.
  */
-internal fun spoilerSafeLinkText(text: String?): String? =
-    text?.replace(SPLIT_SCORE_IN_LINK_TEXT, "–")?.replace(SCORE_IN_LINK_TEXT, "–")
+internal fun spoilerSafeLinkText(text: String?): String? {
+    text ?: return null
+    val masked = text.replace(SPLIT_SCORE_IN_LINK_TEXT, "–").replace(SCORE_IN_LINK_TEXT, "–")
+    return if (masked == text) text else masked.replace(LOOSE_EXTRA_TIME_TAG, "")
+}
 
 /**
  * Whether [item]'s links are named with any score masked where the user lists or plays them outside Watch replay

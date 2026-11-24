@@ -163,6 +163,33 @@ class SportsLiveWatchReplayRowTest {
     }
 
     @Test
+    fun `more ways a link tells extra time or a shoot-out are masked with its score`() {
+        // F6: shoot-out goals after each score, multi-overtime, square brackets, a bare pen, tags inside brackets first.
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1 (4) - 1 (2) Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 120-118 (2OT) Team B"))
+        assertEquals("Lakers – Celtics", spoilerSafeLinkText("Lakers 120-118 2OT Celtics"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 [AET] Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 pen Team B"))
+        assertEquals("Team A –", spoilerSafeLinkText("Team A 1-1 (pens 4-2)"))
+        assertEquals("Team A –", spoilerSafeLinkText("Team A 1-1 (AET, 4-2 pens)"))
+    }
+
+    @Test
+    fun `an extra-time tag after the team names goes too once the score was masked`() {
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (AET)"))
+        assertEquals("Lakers – Celtics", spoilerSafeLinkText("Lakers 115-112 Celtics (OT)"))
+        assertEquals("Leafs – Bruins", spoilerSafeLinkText("Leafs 3-2 Bruins SO"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 Team B AET"))
+        // No score masked: the words stay (nothing to give away beside a score that is not there).
+        assertEquals("Arsenal vs Chelsea (AET)", spoilerSafeLinkText("Arsenal vs Chelsea (AET)"))
+        assertEquals("Team A vs Team B SO", spoilerSafeLinkText("Team A vs Team B SO"))
+        // Other brackets stay.
+        assertEquals("Team A – Team B (Full Match)", spoilerSafeLinkText("Team A 2-1 Team B (Full Match)"))
+        assertEquals("Team A – Team B [1080p]", spoilerSafeLinkText("Team A 2-1 Team B [1080p]"))
+        assertEquals("Team A – Team B (2)", spoilerSafeLinkText("Team A 2-1 Team B (2)"))
+    }
+
+    @Test
     fun `words after a score that are not how it ended stay`() {
         assertEquals("Team A – Team B part 2", spoilerSafeLinkText("Team A 2-1 Team B part 2"))
         assertEquals("Team A – Team B (pt 1)", spoilerSafeLinkText("Team A 2-1 Team B (pt 1)"))
