@@ -200,8 +200,9 @@ class SportsLiveAlerts @Inject constructor(
                 }
                 // The passive kickoff card over a movie (#91): the viewer paused or left it, so the card asks now, as a new
                 // card. It is the game's one deferred offer.
-                alert.passive && SportsLiveAlertEngine.viewerFree(now) ->
+                alert.passive && SportsLiveAlertEngine.viewerFree(now) -> {
                     currentFlow.value = AlertCard(++cardCount, alert.copy(passive = false, deferred = true), nowMs)
+                }
                 // The movie plays again while the card asks (review R1): OK is the movie's again, so the card goes. The
                 // deferred offer was the one offer (answered); a first kickoff keeps its one offer for the next pause.
                 !alert.passive && SportsLiveAlertEngine.moviePlays(now) -> {
@@ -209,6 +210,7 @@ class SportsLiveAlerts @Inject constructor(
                     currentFlow.value = null
                     showNextLocked(nowMs)
                 }
+                else -> Unit
             }
         }
     }
