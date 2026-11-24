@@ -551,8 +551,14 @@ class SportsLiveZapViewModel internal constructor(
             // #354: Live now's further end rules too (overdue, no stream at all past the estimate), so the panel never calls
             // LIVE a game Live now shows as Probably ended. Dead-link checks stay Live now's.
             // F8: no #275 rule here: the panel's list already leaves out every game whose lookups found no stream.
+            // The game playing here streams now: never "overdue" in its own panel, whatever its listed start (a long watch
+            // outlives the resolve cache that hasRecentLinks reads; an addon's start can be days old).
+            val playingKey = SportsLiveZapSessions.current()?.current?.streamKey
+            val streaming: (SportsLiveItem) -> Boolean = { item ->
+                item.streamKey == playingKey || item.alternates.any { it.streamKey == playingKey } || repo.hasRecentLinks(item)
+            }
             fun splitOf(items: List<SportsLiveItem>) = SportsLiveEndedGames.shared.split(items, scores, nowMs, canEstimate).let { split ->
-                split.with(SportsLiveEndedGames.shared.moreEnds(split.live, scores, nowMs, emptySet(), repo::hasRecentLinks))
+                split.with(SportsLiveEndedGames.shared.moreEnds(split.live, scores, nowMs, emptySet(), streaming))
             }
             val split = splitOf(list)
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
