@@ -240,6 +240,17 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a sports replay's player offers no post-play recommendations`() {
+        // S3: hidden or not, a sports replay (and a spoiler-safe one opened from its Detail page) gets none.
+        assertFalse(sportsLiveSkipsPostPlayRecommendations("movie-id"))
+        sportsLiveOpenDetail(folderCard, hidden = false) {}
+        assertTrue(sportsLiveSkipsPostPlayRecommendations("folder"))
+        SportsLiveExtraSources.reset()
+        SportsLiveExtraSources.markSpoilerSafe("replay", true)
+        assertTrue(sportsLiveSkipsPostPlayRecommendations("replay"))
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)

@@ -577,3 +577,11 @@ internal fun honoursAutoPlayFilters(settings: PlayerSettings): Boolean =
  * MotoGP). Live streams have no duration, so they also saved a fake 5%. Sports has its own resume and replay places.
  */
 fun sportsLiveKeepsWatchProgress(contentId: String?): Boolean = !SportsLiveExtraSources.isSportsPlayback(contentId)
+
+/**
+ * Whether the player for [contentId] offers no post-play recommendations (S3): a Sports & Live game or replay, or any
+ * spoiler-safe replay. Their lookups (the addon's raw meta, More like this, trailers) may show the result, and a film
+ * after a match is no next step.
+ */
+fun sportsLiveSkipsPostPlayRecommendations(contentId: String?): Boolean =
+    SportsLiveExtraSources.isSportsPlayback(contentId) || SportsLiveExtraSources.isSpoilerSafe(contentId)

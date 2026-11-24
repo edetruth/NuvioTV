@@ -262,7 +262,9 @@ internal class PostPlayRecommendationController(
             enabled = snapshot.postPlayRecommendationsEnabled
         )
         // The end of a disc extra is not the item's.
-        if (!shouldUseRecommendation || snapshot.hasError || snapshot.isPlayingDiscExtra) {
+        if (!shouldUseRecommendation || snapshot.hasError || snapshot.isPlayingDiscExtra ||
+            com.nuvio.tv.ui.screens.sportslive.sportsLiveSkipsPostPlayRecommendations(snapshot.identity.contentId) // Sports & Live S3
+        ) {
             if (_uiState.value.recommendation != null ||
                 _uiState.value.isVisible ||
                 _uiState.value.isLoadingRecommendation ||
