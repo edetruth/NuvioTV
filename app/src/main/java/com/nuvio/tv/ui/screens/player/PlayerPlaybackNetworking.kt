@@ -92,6 +92,7 @@ internal object PlayerPlaybackNetworking {
             .followRedirects(true)
             .followSslRedirects(true)
             .retryOnConnectionFailure(true)
+            .addNetworkInterceptor(PlaybackStreamHeaders.CallOriginGuard) // Fork P5: login headers stay on the call's origin.
             .addInterceptor { chain ->
                 val request = chain.request()
                 try {

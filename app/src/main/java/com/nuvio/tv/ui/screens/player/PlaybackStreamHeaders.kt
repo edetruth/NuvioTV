@@ -40,8 +40,8 @@ internal object PlaybackStreamHeaders {
      * One player client's header scope: the first request it sends is the addon's link, and its origin is the
      * scope. A request elsewhere has the stream's login headers removed.
      */
-    class HostScope {
-        private val link = AtomicReference<HttpUrl?>(null)
+    class HostScope(initial: HttpUrl? = null) {
+        private val link = AtomicReference(initial)
 
         /**
          * [request] with the stream's login headers removed when it leaves the link's origin. With [streamHeaders]
@@ -65,6 +65,18 @@ internal object PlaybackStreamHeaders {
             link.compareAndSet(null, url)
             val scope = link.get() ?: return true
             return StreamOrigin.same(scope, url)
+        }
+    }
+
+    /**
+     * Every playback client's base guard (P5): helpers that set a stream's headers on their own requests (frame-rate
+     * and MIME probes, Blu-ray probes, subtitle indexing, the speed test) send the login values of a call's first
+     * request to that request's origin only, also across redirects.
+     */
+    object CallOriginGuard : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val first = chain.call().request()
+            return chain.proceed(HostScope(first.url).apply(chain.request(), first.headers))
         }
     }
 

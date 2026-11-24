@@ -65,6 +65,18 @@ class PlaybackHeaderRedirectTest {
         assertNoLogin(take(other))
     }
 
+    @Test
+    fun `a helper on the shared playback client sends no login headers to a redirect target (P5)`() {
+        redirectToOther()
+        // As the frame-rate probe and subtitle indexing build theirs: the shared client, headers on the request.
+        val helper = PlayerPlaybackNetworking.playbackHttpClient.newBuilder().build()
+        helper.newCall(streamRequest()).execute().close()
+        assertEquals("k", take(link).getHeader("X-Api-Key"))
+        val hop = take(other)
+        assertNoLogin(hop)
+        assertEquals("v", hop.getHeader("X-Custom"))
+    }
+
     /** A client the way the parallel connections path builds it: headers set on the request, a cookie jar. */
     private fun parallelClient(jar: CookieJar) = PlaybackStreamHeaders.scoped(
         PlayerPlaybackNetworking.playbackHttpClient.newBuilder().cookieJar(jar).build()
