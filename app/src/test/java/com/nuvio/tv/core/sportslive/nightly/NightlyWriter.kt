@@ -43,7 +43,12 @@ internal class NightlyWriter(
         NightlyText.label(listOf(check.verdict.code, check.label, NightlyAccuracy.titleOf(check.row).lowercase(), check.espn?.eventId.orEmpty()).joinToString("|"))
             .removePrefix("addon-")
 
-    fun write(checks: List<Check>, dupes: List<SportsLiveDupes.Suspect>, nearMisses: List<Pair<SportsLiveItem, SportsLiveItem>>): String {
+    fun write(
+        checks: List<Check>,
+        dupes: List<SportsLiveDupes.Suspect>,
+        nearMisses: List<Pair<SportsLiveItem, SportsLiveItem>>,
+        appLive: NightlyText.AppLive
+    ): String {
         val disagreements = checks.filter { it.verdict.disagreement }
         val seen = previousKeys()
         val fresh = disagreements.filter { keyOf(it) !in seen }
@@ -51,7 +56,7 @@ internal class NightlyWriter(
         val stats = sources.map { source -> source.label to Stats.of(checks.filter { it.label == source.label }) }
         appendReliability(stats)
         val rolling = rollingReliability()
-        val summary = summary(checks, disagreements, fresh, dupes, nearMisses)
+        val summary = summary(checks, disagreements, fresh, dupes, nearMisses, appLive)
         val report = buildString {
             appendLine("# Nightly accuracy run $runId")
             appendLine()
@@ -145,13 +150,15 @@ internal class NightlyWriter(
         disagreements: List<Check>,
         fresh: List<Check>,
         dupes: List<SportsLiveDupes.Suspect>,
-        nearMisses: List<Pair<SportsLiveItem, SportsLiveItem>>
+        nearMisses: List<Pair<SportsLiveItem, SportsLiveItem>>,
+        appLive: NightlyText.AppLive
     ): String {
         val all = Stats.of(checks)
         val live = disagreements.filter { it.live }
         val caught = live.count { it.appCatches }
         val upcoming = checks.filter { !it.live }
         return listOf(
+            NightlyText.appLiveLine(appLive),
             "Listed live: ${all.listedLive} games from ${sources.size} addons; ESPN knows ${all.verified}: in play ${all.inPlay}, starting soon ${all.soon}, " +
                 "scheduled later ${all.later}, final ${all.ended}, postponed/cancelled ${all.off} (reliability ${NightlyText.percent(all.inPlay + all.soon, all.verified)}).",
             "Live disagreements: ${live.size} (the app corrects $caught, NOT ${live.size - caught}); new since earlier runs: ${fresh.size}.",

@@ -1253,25 +1253,14 @@ class LiveScoresRepository internal constructor(
      */
     private fun hasNoEspnGame(card: ScoreCard, cardFeeds: List<ScoreFeed>, nowMs: Long): Boolean {
         if (espnStarts.startOf(card.key, nowMs) != null) return false
-        val directory = logos.directory
         val easternToday = Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate()
         val leagues = cardFeeds.map { it.league }.distinct()
-        val ids = HashSet<String>()
-        for (league in leagues) {
-            if (league == EspnLeagueMap.SOCCER_ALL || cardFeeds.none { it.league == league && it.date == easternToday }) continue
-            val home = directory.teamId(league, card.teams.home) ?: continue
-            val away = directory.teamId(league, card.teams.away) ?: continue
-            if (home == away) continue
-            ids += home
-            ids += away
-        }
-        if (ids.isEmpty()) return false
         val events = feeds.entries
             .filter { (feed, state) -> feed.league in leagues && state.fetched && !state.paused && state.isFresh(nowMs) }
             .flatMap { it.value.events }
             .distinctBy { it.eventId }
-        if (events.any { it.home.id in ids || it.away.id in ids }) return false
-        return !matcher.touches(card, events)
+        // The rule itself is NoEspnGame's, shared with the nightly accuracy run.
+        return NoEspnGame.hasNone(card, leagues, { league -> cardFeeds.any { it.league == league && it.date == easternToday } }, logos.directory, events, matcher)
     }
 
     private fun markUnmatched(key: String) {

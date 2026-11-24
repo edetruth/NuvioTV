@@ -136,6 +136,22 @@ internal object NightlyText {
             }
     }
 
+    /**
+     * What the app shows as LIVE after the Other streams split and the ESPN check (live.28), beside the raw source count:
+     * [games] shown LIVE (no channel, no Other stream, none the app corrects), of which ESPN knows [espnKnows] and
+     * [unscored] have no score; [raw] listed-live rows from [addons] addons.
+     */
+    class AppLive(
+        val games: Int, val channels: Int, val otherStreams: Int, val corrected: Int,
+        val espnKnows: Int, val unscored: Int, val raw: Int, val addons: Int
+    )
+
+    /** The summary line `tools/nightly/tripwire.py` reads: keep its first sentence's shape. */
+    fun appLiveLine(app: AppLive): String =
+        "App-level live: ${app.games} games shown LIVE, ESPN knows ${app.espnKnows}, unscored ${app.unscored} " +
+            "(channels ${app.channels}; Other streams ${app.otherStreams}; corrected by the app ${app.corrected}; " +
+            "raw ${app.raw} listed live from ${app.addons} addons)."
+
     /** Share of [agreed] in [verified] as a whole percent, or "-" when nothing was verified. */
     fun percent(agreed: Int, verified: Int): String = if (verified == 0) "-" else "${(agreed * 100 + verified / 2) / verified}%"
 
