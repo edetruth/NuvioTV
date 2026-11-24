@@ -66,11 +66,27 @@ data class LiveNowSplit(
      * [scores] plus, for an ESPN-final card ([finals] or [ended]) with no snapshot now, the final it was
      * found on: a surface grouping by the event then never takes a finished game for a live one.
      */
+    /** This split with [more]'s cards ([SportsLiveEndedGames.moreEnds], #354) out of [live]: in the strip after its own, or gone. */
+    fun with(more: MoreEnds): LiveNowSplit {
+        if (more.moved.isEmpty()) return this
+        return copy(
+            live = live.filter { it.streamKey !in more.moved },
+            justEnded = justEnded + live.filter { it.streamKey in more.ended },
+            ended = ended + more.ended
+        )
+    }
+
     fun scoresWithFinals(scores: Map<String, ScoreSnapshot>): Map<String, ScoreSnapshot> {
         val missing = (finals + ended).filter { (key, game) -> key !in scores && game.event != null }
         return if (missing.isEmpty()) scores else scores + missing.mapValues { it.value.event!! }
     }
 }
+
+/**
+ * The end rules beyond ESPN's and the estimate's ([SportsLiveEndedGames.moreEnds], #354): [moved] holds every card they
+ * take out of the live list; [ended] those still shown in the strip ("Probably ended"), in list order.
+ */
+data class MoreEnds(val moved: Set<String>, val ended: Map<String, EndedGame>)
 
 /**
  * Detects ended Live now games (#60) from data already at hand, with no request of its own.
@@ -167,6 +183,42 @@ class SportsLiveEndedGames {
         if (key in seenUnfinished || key in finals || remembered(item, key, nowMs) != null) return null
         if (ScoreChips.matchedEvent(item, snapshot) != null) return null
         return estimate(item, nowMs)?.endedAtMs
+    }
+
+    /**
+     * The end rules Live now adds to [split]'s, shared with the player's panel (#354), over [live] (a split's live cards)
+     * at [nowMs], each a "Probably ended" estimate, playable, never hidden while in the strip:
+     * - live far longer than its sport runs ([SportsLiveLiveDuration.isOverdue]), unless links were found lately
+     *   ([hasRecentLinks]) or ESPN shows it in play: dated at its start plus that longest run;
+     * - #275: past its estimated end, ESPN not deciding ([linkCheckEnd]), and every lookup found no stream ([noStreams],
+     *   card keys as [SportsLiveItem.hasEnded] reads them): dated at its estimated end.
+     * A card whose drop time has passed is moved but not in [MoreEnds.ended]. Dead links stay Live now's own (its checker).
+     */
+    fun moreEnds(
+        live: List<SportsLiveItem>,
+        scores: Map<String, ScoreSnapshot>,
+        nowMs: Long,
+        noStreams: Set<String>,
+        hasRecentLinks: (SportsLiveItem) -> Boolean
+    ): MoreEnds {
+        val moved = HashSet<String>()
+        val ended = LinkedHashMap<String, EndedGame>()
+        for (item in live) {
+            val key = item.streamKey
+            val snapshot = scores[key]
+            val verdict = if (SportsLiveLiveDuration.isOverdue(item, nowMs) && !hasRecentLinks(item) &&
+                ScoreChips.matchedEvent(item, snapshot)?.state != ScoreState.IN
+            ) {
+                moved += key
+                timedStart(item)?.let { start -> EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport)) }
+            } else if (key in noStreams) {
+                linkCheckEnd(item, snapshot, nowMs)?.let { end -> moved += key; EndedGame(EndedSignal.ESTIMATE, end) }
+            } else {
+                null
+            }
+            if (verdict != null && nowMs < verdict.dropsAtMs) ended[key] = verdict
+        }
+        return MoreEnds(moved, ended)
     }
 
     /**

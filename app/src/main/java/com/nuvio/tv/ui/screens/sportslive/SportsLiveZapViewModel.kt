@@ -517,9 +517,16 @@ class SportsLiveZapViewModel internal constructor(
             val nowMs = System.currentTimeMillis()
             // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
             val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
-            val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
+            // #354: Live now's further end rules too (overdue, no stream at all past the estimate), so the panel never calls
+            // LIVE a game Live now shows as Probably ended. Dead-link checks stay Live now's.
+            val noStreamKeys = repo.endedKeys.value
+            fun splitOf(items: List<SportsLiveItem>) = SportsLiveEndedGames.shared.split(items, scores, nowMs, canEstimate).let { split ->
+                val noStreams = split.live.filter { it.hasEnded(noStreamKeys) }.mapTo(HashSet()) { it.streamKey }
+                split.with(SportsLiveEndedGames.shared.moreEnds(split.live, scores, nowMs, noStreams, repo::hasRecentLinks))
+            }
+            val split = splitOf(list)
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
-            val allSplit = if (list === panelList.all) split else SportsLiveEndedGames.shared.split(panelList.all, scores, nowMs, canEstimate)
+            val allSplit = if (list === panelList.all) split else splitOf(panelList.all)
             val splitFinished = allSplit.ended.keys + allSplit.finals.keys
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             // Spoiler protection (#151): a kept Just ended final is stamped too, as on Live Now's board.

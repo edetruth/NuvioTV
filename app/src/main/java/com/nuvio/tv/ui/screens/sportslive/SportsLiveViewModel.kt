@@ -11,7 +11,6 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
-import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.LinkCheckRequest
 import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
@@ -19,7 +18,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
-import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
@@ -1712,15 +1710,11 @@ class SportsLiveViewModel internal constructor(
                 awaitingScore = scoreWait.awaiting(split.live, scores, inputs.canEstimate, now)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
-                val (overdue, notOverdue) = split.live.partition {
-                    SportsLiveLiveDuration.isOverdue(it, now) && !repo.hasRecentLinks(it) &&
-                        ScoreChips.matchedEvent(it, scores[it.streamKey])?.state != ScoreState.IN
-                }
-                val overdueEnded = overdue.mapNotNull { item ->
-                    val start = SportsLiveEndedGames.timedStart(item) ?: return@mapNotNull null
-                    val ended = EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport))
-                    (item to ended).takeIf { now < ended.dropsAtMs }
-                }
+                // #275: one past its estimate whose every lookup found no stream has no link to check: "Probably ended" too.
+                // Shared with the player's panel (#354): SportsLiveEndedGames.moreEnds.
+                val more = endedGames.moreEnds(split.live, scores, now, noStreams, repo::hasRecentLinks)
+                val notOverdue = split.live.filter { it.streamKey !in more.moved }
+                val moreEnded = split.live.filter { it.streamKey in more.ended }
                 // #60 phase 2: a game past its estimated end that ESPN does not decide has its freshly resolved
                 // link looked at, while Live now is on screen; a dead link moves it to the strip as "Probably
                 // ended" (playable, never hidden). The verdict goes when fresh links come back (a later
@@ -1728,15 +1722,8 @@ class SportsLiveViewModel internal constructor(
                 // Checks go on under Scores Off: they make no ESPN request, only the stream host's.
                 val linkEnded = ArrayList<SportsLiveItem>()
                 val toCheck = ArrayList<LinkCheckRequest>()
-                // #275: one whose every lookup found no stream at all has no link to check: "Probably ended" at its
-                // estimated end, the same way; a lookup finding streams again brings it back.
-                val noLinksEnded = ArrayList<Pair<SportsLiveItem, EndedGame>>()
                 val live = notOverdue.filter { item ->
-                    val estimatedEnd = endedGames.linkCheckEnd(item, scores[item.streamKey], now) ?: return@filter true
-                    if (item.streamKey in noStreams) {
-                        EndedGame(EndedSignal.ESTIMATE, estimatedEnd).takeIf { now < it.dropsAtMs }?.let { noLinksEnded += item to it }
-                        return@filter false
-                    }
+                    if (endedGames.linkCheckEnd(item, scores[item.streamKey], now) == null) return@filter true
                     val request = linkCheckOf(item)
                     val superseded = request != null && linkChecker?.clearIfSuperseded(request) == true
                     if (item.streamKey in linkDead && !superseded) {
@@ -1750,8 +1737,7 @@ class SportsLiveViewModel internal constructor(
                 if (toCheck.isNotEmpty() && screenVisible && selection.tab == SportsLiveTab.LIVE_NOW) {
                     linkChecker?.offer(toCheck, viewModelScope)
                 }
-                justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended } +
-                    noLinksEnded.associate { (item, ended) -> item.streamKey to ended } +
+                justEnded = split.ended + more.ended +
                     linkEnded.associate { it.streamKey to SportsLiveEndedGames.linkDead(linkDead.getValue(it.streamKey).atMs) }
                 // The excitement badge (#43, V2): shown with the scores only, and it never re-orders the list.
                 if (mode == ScoresMode.SHOW) {
@@ -1769,7 +1755,7 @@ class SportsLiveViewModel internal constructor(
                 // Here, before the calm step (J1), not on the board: a match landing later never moves a shown row; the
                 // order is applied on the first build, a thaw ("N new") and a re-rank.
                 val ranked = SportsLiveLineup.order(live, mySports, scores, mode)
-                val built = ranked + split.justEnded + overdueEnded.map { it.first } + noLinksEnded.map { it.first } + linkEnded
+                val built = ranked + split.justEnded + moreEnded + linkEnded
                 lastBuiltLiveNow = built
                 lastBuiltLiveCount = ranked.size
                 // The focused card is never taken from under the user: kept in place until focus moves on. While Live now

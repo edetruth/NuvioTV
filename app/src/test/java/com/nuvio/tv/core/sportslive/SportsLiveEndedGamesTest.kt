@@ -447,6 +447,33 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `Live now's further end rules are one shared rule set the panel takes too (#354)`() {
+        val games = SportsLiveEndedGames()
+        // Soccer runs at most 3 h 15 live: this one started 4 h ago, no ESPN game, no recent links.
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "over", startMs = START - 4 * HOUR)
+        // Past its estimate (4 h 05), before its longest run (4 h 30), and every lookup found no stream (#275).
+        val noLinks = item(name = "New England Patriots at New York Jets", sport = "NFL", id = "nolinks", startMs = START - 4 * HOUR - 10 * MINUTE)
+        val onAir = item(id = "on", startMs = START - HOUR)
+        val alive = item(name = "Team C vs Team D", sport = "Soccer", id = "alive", startMs = START - 4 * HOUR)
+        val live = listOf(overdue, noLinks, onAir, alive)
+        val noStreams = setOf(noLinks.streamKey, onAir.streamKey)
+        val more = games.moreEnds(live, emptyMap(), START, noStreams) { it.id == "alive" }
+        assertEquals(setOf(overdue.streamKey, noLinks.streamKey), more.moved)
+        assertEquals(START - 4 * HOUR + SportsLiveLiveDuration.maxLiveMs("Soccer"), more.ended.getValue(overdue.streamKey).endedAtMs)
+        assertEquals(START - 4 * HOUR - 10 * MINUTE + SportsLiveGameLength.of(noLinks)!!, more.ended.getValue(noLinks.streamKey).endedAtMs)
+        assertTrue(more.ended.values.all { it.signal == EndedSignal.ESTIMATE })
+        // A game ESPN shows in play is never overdue.
+        val playing = item(id = "p", startMs = START - 4 * HOUR)
+        assertTrue(games.moreEnds(listOf(playing), mapOf(playing.streamKey to live(pacersFinal)), START, emptySet()) { false }.moved.isEmpty())
+
+        // The split, with them: out of the live list, into the strip after its own cards.
+        val split = games.split(live, emptyMap(), START) { false }.with(more)
+        assertEquals(listOf(onAir, alive), split.live)
+        assertEquals(listOf(overdue, noLinks), split.justEnded)
+        assertEquals(setOf(overdue.streamKey, noLinks.streamKey), split.ended.keys)
+    }
+
+    @Test
     fun `a stored time is reused only for the same ESPN event and while younger than 6 h`() {
         val card = item()
         val endedAt = START + 2 * HOUR
