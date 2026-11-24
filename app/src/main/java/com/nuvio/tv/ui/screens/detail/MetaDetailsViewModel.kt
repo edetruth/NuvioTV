@@ -1205,6 +1205,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun supportsComments(meta: Meta?): Boolean {
         if (meta == null || isServerItem) return false
+        if (com.nuvio.tv.ui.screens.sportslive.sportsLiveHidesExtras(itemId, meta.id)) return false // Sports & Live S5: no section, no dead toggles
         return when (meta.type) {
             ContentType.MOVIE -> true
             ContentType.SERIES, ContentType.TV -> true
