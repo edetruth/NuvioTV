@@ -295,6 +295,20 @@ class SportsLiveMovieKickoffTest {
     }
 
     @Test
+    fun `a deferred offer that never showed (a panel over the paused movie) waits for the next pause - never a second card over the movie (review R8)`() {
+        val alerts = newAlerts()
+        alerts.setWatching(paused)
+        alerts.enqueue(listOf(kickoff(deferred = true)), System.currentTimeMillis())
+        val offer = alerts.current.value!!
+        // The host closes a card that went stale under an overlay with LATER.
+        alerts.close(offer, AlertAnswer.LATER)
+        assertEquals(emptyList<SportsLiveAlert>(), alerts.engine.look(START + 30 * MINUTE, live(10, 8), playing))
+        val again = alerts.engine.look(START + 31 * MINUTE, live(10, 8), paused)
+        assertEquals(1, again.size)
+        assertTrue((again.single() as SportsLiveAlert.Kickoff).deferred)
+    }
+
+    @Test
     fun `a seek while paused is not a resume - the player's pause holds until it plays`() {
         // Paused, then buffering for a seek (neither paused nor playing): still paused.
         assertTrue(sportsLivePausedNow(paused = false, playing = false, wasPaused = true))

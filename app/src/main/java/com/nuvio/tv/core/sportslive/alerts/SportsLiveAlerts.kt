@@ -496,6 +496,10 @@ class SportsLiveAlerts @Inject constructor(
         if (alert is SportsLiveAlert.Kickoff && alert.passive) {
             // Over a movie that plays (#91): not answered; its one offer waits for the viewer to pause or leave.
             engine.deferOffer(alert.item)
+        } else if (alert is SportsLiveAlert.Kickoff && alert.deferred && answer == AlertAnswer.LATER) {
+            // The deferred offer went stale unseen (a panel over the paused movie, review R8): it waits for the next pause,
+            // never as Later's re-ask, which would come over the playing movie.
+            engine.deferOffer(alert.item)
         } else if (alert is SportsLiveAlert.Kickoff && alert.noStreamYet) {
             // The note (#162): Remind me in 10 min probes once more then; anything else, done.
             engine.answered(alert.item)
