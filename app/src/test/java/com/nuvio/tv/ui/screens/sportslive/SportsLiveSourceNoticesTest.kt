@@ -76,7 +76,7 @@ class SportsLiveSourceNoticesTest {
         assertEquals(info.url, masked.url)
 
         // Another title's link, or the same item played as a game, keeps its name.
-        assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info.copy(videoId = "game-id")).streamName)
+        assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info.copy(videoId = "game-id", contentId = "game-id")).streamName)
         SportsLiveExtraSources.markSpoilerSafe("replay-id", false)
         assertEquals("Team A 2-1 Team B", sportsLiveSpoilerSafePlayback(info).streamName)
     }
@@ -100,7 +100,7 @@ class SportsLiveSourceNoticesTest {
         assertNull(safe.logo)
         assertNull(safe.releaseInfo)
         assertEquals(listOf("Soccer"), safe.genres)
-        assertEquals(meta.poster, sportsLiveStreamScreenMeta("game-id", meta).poster)
+        assertEquals(meta.poster, sportsLiveStreamScreenMeta("game-id", meta.copy(id = "game-id")).poster)
     }
 
     private fun stream(name: String, url: String) = Stream(

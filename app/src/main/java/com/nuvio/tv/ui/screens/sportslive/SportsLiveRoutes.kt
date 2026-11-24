@@ -45,11 +45,14 @@ internal fun sportsLiveLocalStamps(context: Context, text: String?): String? {
 
 /**
  * [meta], the addon's meta the Stream screen fills its missing artwork and year from and hands the player its next
- * videos from, as it may use it for [videoId]: a spoiler-safe replay's (#223) masked as its Detail page shows it
- * ([spoilerMaskedMeta]: no artwork, release info, summaries; F2: its videos too); any other title's as is.
+ * videos from, as it may use it for [videoId]: a spoiler-safe replay's (#223), the video or its content ([meta]'s id, a
+ * folder opened straight on its Stream screen: S4), masked as its Detail page shows it ([sportsLiveDetailMeta]: its
+ * videos registered and masked too); any other title's as is.
  */
-internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta =
-    if (!SportsLiveExtraSources.isSpoilerSafe(videoId)) meta else spoilerMaskedMeta(meta)
+internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta {
+    val id = listOf(videoId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
+    return sportsLiveDetailMeta(id, meta)
+}
 
 /**
  * Opens [item]'s Detail page (a replay team folder's episodes, More… > Details; #240, #243): a replay whose result is

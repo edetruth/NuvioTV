@@ -56,7 +56,8 @@ internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>
  * names it: for a spoiler-safe replay (#223) its link name and description with any score masked; any other as is.
  */
 internal fun sportsLiveSpoilerSafePlayback(info: StreamPlaybackInfo): StreamPlaybackInfo =
-    if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId)) info
+    // By its video, or its content (S4: an episode of a hidden folder not registered yet).
+    if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId) && !SportsLiveExtraSources.isSpoilerSafe(info.contentId)) info
     else info.copy(
         streamName = spoilerSafeLinkText(info.streamName) ?: info.streamName,
         streamDescription = spoilerSafeLinkText(info.streamDescription)

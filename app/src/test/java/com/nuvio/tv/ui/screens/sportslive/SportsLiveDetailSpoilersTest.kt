@@ -251,6 +251,26 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a hidden folder opened straight on its Stream screen masks its next episode too`() {
+        // S4: no Detail page ran; the Stream screen's meta read registers the folder's videos, and the link handed to
+        // the player is masked by its content (the folder) when its video is not known yet.
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        val next = episode.copy(id = "folder:ep2")
+        sportsLiveStreamScreenMeta("folder", folder.copy(videos = listOf(episode, next)))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe(next.id))
+        SportsLiveExtraSources.reset()
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        // The Stream screen of an episode not seen yet: its meta is the folder's (meta.id), so it masks and registers.
+        assertNull(sportsLiveStreamScreenMeta(next.id, folder).poster)
+        val info = streamPlaybackInfoFor(
+            stream = scored, title = "Team A replays", year = null, contentId = "folder", contentType = "series",
+            contentName = "Team A replays", poster = null, backdrop = null, logo = null, videoId = "folder:ep9", season = 1,
+            episode = 9, episodeTitle = null, profileId = 1, contentLanguage = null
+        )
+        assertEquals("Team A – Team B", sportsLiveSpoilerSafePlayback(info).streamName)
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)
