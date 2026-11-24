@@ -295,7 +295,14 @@ class SportsLiveDetailSpoilersTest {
         // S7: the file name stays as is for playback (type, episode matching); only the shown text is masked.
         assertEquals("Arsenal.2-1.Chelsea.1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal.2-1.Chelsea.1080p.mkv"))
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
-        assertEquals("Arsenal.–.Chelsea.1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal.2-1.Chelsea.1080p.mkv"))
+        // Read as words (R4-F2): dots, underscores and URL encoding are no word breaks to the masking.
+        assertEquals("Arsenal – Chelsea 1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal.2-1.Chelsea.1080p.mkv"))
+        assertEquals("Arsenal – Chelsea 1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal_2-1_Chelsea_1080p.mkv"))
+        assertEquals("Lakers – Celtics.mp4", SportsLiveExtraSources.spoilerSafeText("folder", "Lakers%20102-99%20Celtics.mp4"))
+        assertEquals("Arsenal – Chelsea 1080p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Arsenal.1-1.Chelsea.AET.1080p.mkv"))
+        // Nothing to mask: the file name as it is, HDR10+ and all.
+        assertEquals("Match.Day.HDR10+.2160p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Match.Day.HDR10+.2160p.mkv"))
+        assertEquals("Bad%ZZname.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Bad%ZZname.mkv"))
     }
 
     @Test

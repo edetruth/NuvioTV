@@ -308,9 +308,39 @@ object SportsLiveExtraSources {
     fun spoilerSafeStream(contentId: String?, stream: Stream): Stream =
         if (!isSpoilerSafe(contentId)) stream else spoilerSafeReplayStream(stream)
 
-    /** [text] about a link of [contentId] (its file name in Stream info, S7): a spoiler-safe replay's with any score masked. */
-    fun spoilerSafeText(contentId: String?, text: String?): String? =
-        if (!isSpoilerSafe(contentId)) text else spoilerSafeLinkText(text)
+    /**
+     * [text] about a link of [contentId] (its file name in Stream info, S7): a spoiler-safe replay's with any score masked.
+     * A file name is read as words (R4-F2): URL encoding decoded, dots and underscores as spaces, its extension kept; it
+     * shows that way only when something was masked, else as it is.
+     */
+    fun spoilerSafeText(contentId: String?, text: String?): String? {
+        if (text == null || !isSpoilerSafe(contentId)) return text
+        val extension = FILE_EXTENSION.find(text)?.value.orEmpty()
+        val words = percentDecoded(text.removeSuffix(extension)).replace('_', ' ').replace('.', ' ')
+        val masked = spoilerSafeLinkText(words) ?: words
+        return if (masked == words) text else masked + extension
+    }
+
+    private val FILE_EXTENSION = Regex("""\.[A-Za-z0-9]{2,4}$""")
+
+    /** [text] with its %XX escapes decoded as UTF-8 ("+" stays: "HDR10+"); as it is when it is not valid encoding. */
+    private fun percentDecoded(text: String): String {
+        if ('%' !in text) return text
+        val bytes = java.io.ByteArrayOutputStream()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '%' && i + 2 <= text.lastIndex) {
+                val byte = text.substring(i + 1, i + 3).toIntOrNull(16) ?: return text
+                bytes.write(byte)
+                i += 3
+            } else {
+                bytes.write(c.toString().toByteArray(Charsets.UTF_8))
+                i++
+            }
+        }
+        return bytes.toString(Charsets.UTF_8.name())
+    }
 
     /** [streams] of [contentId] as its lists name them: a spoiler-safe replay's with any score masked. */
     fun spoilerSafeStreams(contentId: String?, streams: List<Stream>): List<Stream> =
