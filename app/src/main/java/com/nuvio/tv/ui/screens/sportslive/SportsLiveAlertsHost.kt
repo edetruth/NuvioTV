@@ -300,6 +300,8 @@ fun SportsLiveAlertsHost(
     val currentSurface by rememberUpdatedState(surface)
     val currentWatching by rememberUpdatedState(watching)
     var ui by remember { mutableStateOf(CardUi(cardId = -1L)) }
+    // The card before is still fading out (#101, Gemini RC F8): the new one neither takes keys nor starts its time yet.
+    val swap = remember { CardSwap() }
     fun uiFor(shown: AlertCard): CardUi = ui.takeIf { it.cardId == shown.id } ?: CardUi(shown.id)
 
     /** [item] plays here: [on]'s own way (a zap, the highlighted pane), else as Watch on a kickoff. */
@@ -384,7 +386,8 @@ fun SportsLiveAlertsHost(
             expanded = countdown != null,
             canBoth = canBoth(),
             needsFocus = SportsLiveAlertKeys.needsFocus(currentWatching),
-            focused = state.focused
+            focused = state.focused,
+            replacing = swap.replacing
         )
     }
     val keyHandler = remember {
@@ -435,7 +438,7 @@ fun SportsLiveAlertsHost(
                             return@repeatOnLifecycle
                         }
                     } else {
-                        state = state.copy(clock = state.clock.step(nowMs, screenBusy()))
+                        state = state.copy(clock = state.clock.step(nowMs, SportsLiveAlertKeys.cardWaits(screenBusy(), swap.replacing)))
                         if (state.clock.shownAtMs != null && !state.autoTried) {
                             // "At tip-off: Switch automatically" (opt-in, browsing only): straight into a 10 s countdown.
                             val kickoff = shown.alert as? SportsLiveAlert.Kickoff
@@ -497,6 +500,7 @@ fun SportsLiveAlertsHost(
         }
     }
     val leaving = card == null || outgoing != null
+    swap.replacing = outgoing != null
     val current = outgoing ?: card ?: held.card?.takeIf { it.id != goneId && it.id != cutId } ?: return
     LaunchedEffect(leaving, current.id) {
         if (leaving) {
@@ -956,6 +960,12 @@ private fun AlertCardView(
 }
 
 /** The card shown last, kept composed while it fades out (#101). */
+/** Whether a card on screen is fading out while the next one waits to show (Gemini RC F8); set as the host composes. */
+private class CardSwap {
+    @Volatile
+    var replacing: Boolean = false
+}
+
 private class HeldCard {
     var card: AlertCard? = null
     /** [card] was on screen when last drawn: replaced, it fades out before the next one shows (review R11). */

@@ -228,9 +228,11 @@ object SportsLiveAlertKeys {
         canBoth: Boolean = false,
         /** Over a movie ([needsFocus]): OK and Back are the movie's until the card has focus ([focused]). */
         needsFocus: Boolean = false,
-        focused: Boolean = false
+        focused: Boolean = false,
+        /** The card before is still fading out (Gemini RC F8): this one is not on screen yet, so it takes nothing. */
+        replacing: Boolean = false
     ): AlertKeyContext {
-        if (card == null || shownAtMs == null) return AlertKeyContext()
+        if (card == null || shownAtMs == null || replacing) return AlertKeyContext()
         if (expanded) return AlertKeyContext(expanded = true, canBoth = canBoth)
         val actionable = SportsLiveAlertCards.actionable(card.alert)
         if (needsFocus) {
@@ -287,6 +289,12 @@ object SportsLiveAlertKeys {
      * (RC review decision for #91: OK is the pause and resume key there). Elsewhere a card keeps its OK after its grace.
      */
     fun needsFocus(watching: SportsLiveWatching): Boolean = SportsLiveAlertEngine.overMovie(watching)
+
+    /**
+     * A card waits (its clock and OK grace stand still, [AlertCardClock.step]) under the screen's overlays ([screenBusy])
+     * and while the card it replaces fades out ([replacing], Gemini RC F8): its time starts when it shows.
+     */
+    fun cardWaits(screenBusy: Boolean, replacing: Boolean): Boolean = screenBusy || replacing
 
     fun isOk(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER

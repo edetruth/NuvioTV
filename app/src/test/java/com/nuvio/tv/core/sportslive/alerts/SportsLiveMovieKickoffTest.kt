@@ -404,4 +404,18 @@ class SportsLiveMovieKickoffTest {
         assertFalse(SportsLiveAlertKeys.needsFocus(sportsStream))
         assertFalse(SportsLiveAlertKeys.needsFocus(browsing))
     }
+
+    @Test
+    fun `a card waiting for the one before to fade out takes no key and its clock waits (Gemini RC F8)`() {
+        val alerts = newAlerts()
+        alerts.setWatching(sportsStream)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        val card = alerts.current.value!!
+        val waiting = SportsLiveAlertKeys.context(card, shownAtMs = 0L, nowMs = 60_000L, replacing = true)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, waiting))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, waiting))
+        // Its time on screen starts only once it shows.
+        assertEquals(AlertCardClock(), AlertCardClock().step(1_000L, busy = SportsLiveAlertKeys.cardWaits(screenBusy = false, replacing = true)))
+        assertFalse(SportsLiveAlertKeys.cardWaits(screenBusy = false, replacing = false))
+    }
 }
