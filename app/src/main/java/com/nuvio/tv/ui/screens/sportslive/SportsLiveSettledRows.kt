@@ -93,7 +93,10 @@ internal fun SportsLiveBoard.settledOn(previous: SportsLiveBoard?): SportsLiveBo
  */
 internal fun sportsLiveGroupCounts(rows: List<ScoreboardRow>): Map<ScoreboardGroup, Int> =
     // #373: a game still waiting for ESPN keeps its place under LIVE but is not counted there until it reads LIVE.
-    rows.filterNot { it.endedInPlace || it.awaitingScore }.groupingBy { it.group }.eachCount()
+    // F7: under LIVE only rows that read LIVE count: not one settled there that ESPN has as scheduled or postponed.
+    rows.filterNot {
+        it.endedInPlace || (it.group == ScoreboardGroup.LIVE && (it.awaitingScore || it.status !is GameStatus.Live))
+    }.groupingBy { it.group }.eachCount()
 
 /**
  * OK on a Live now card ([row]: its shown row, null when none; [ended]: its Just ended verdict): a game ESPN says ended
