@@ -217,7 +217,9 @@ class SportsLiveGameWatch(
     @Synchronized
     fun watch(item: SportsLiveItem) {
         val entry = games[item.id]
-        if (entry == null || entry.item.streamKey != item.streamKey) games[item.id] = Entry(item, entry?.snapshot)
+        // #278 (C1): another addon's game under the same raw id is another game: it never inherits this one's ESPN
+        // snapshot (its score, its final). The same source watched again keeps its entry.
+        if (entry == null || entry.item.streamKey != item.streamKey) games[item.id] = Entry(item, null)
         lastWatched = item.id
         while (games.size > MAX_GAMES) games.remove(games.keys.first())
     }

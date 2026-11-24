@@ -114,6 +114,23 @@ class SportsLiveGameEndTest {
         assertEquals(GameEndReason.STREAM_ENDED, watch.failureIsEnd(game.id))
     }
 
+    @Test
+    fun `#278 - another addon's game under the same raw id never inherits the watched game's ESPN snapshot`() {
+        val watch = SportsLiveGameWatch(SportsLiveEndedGames(), nowMs = { START + 30 * MINUTE })
+        val first = item(id = "event-1", addonId = "a")
+        val other = item(name = "Lakers @ Suns", id = "event-1", addonId = "b")
+        watch.watch(first)
+        watch.note(first.id, final(99, 101))
+        assertEquals(GameEndReason.FINAL, watch.failureIsEnd(first.id))
+        watch.watch(other)
+        assertNull(watch.snapshot(other.id))
+        assertEquals(other.streamKey, watch.item(other.id)?.streamKey)
+        // The same source watched again keeps what was noted for it.
+        watch.note(other.id, live(50, 50))
+        watch.watch(other)
+        assertEquals(live(50, 50), watch.snapshot(other.id))
+    }
+
     // #162: "Waiting for the stream to start…"
 
     @Test
