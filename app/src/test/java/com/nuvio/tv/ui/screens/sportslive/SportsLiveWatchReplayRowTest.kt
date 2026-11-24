@@ -214,6 +214,24 @@ class SportsLiveWatchReplayRowTest {
     }
 
     @Test
+    fun `a hidden replay's names also mask score forms with no separator and result words`() {
+        // #467 (F11): two numbers standing alone in one name, as a score split by a team name, and words that say who won.
+        assertEquals("Arsenal – Chelsea –", hiddenReplayText("Arsenal 2 Chelsea 1"))
+        assertEquals("Arsenal (–) v Chelsea (–)", hiddenReplayText("Arsenal (2) v Chelsea (1)"))
+        assertEquals("Lakers W –, L –", hiddenReplayText("Lakers W 3, L 2"))
+        assertEquals("Arsenal – highlights", hiddenReplayText("Arsenal win highlights"))
+        assertEquals("Arsenal – Chelsea", hiddenReplayText("Arsenal beat Chelsea"))
+        assertEquals("Chelsea – at home", hiddenReplayText("Chelsea lost at home"))
+        // One number alone, and numbers that are part of a date, a ratio, a codec or a quality, stay.
+        assertEquals("Lakers vs Celtics Game 7", hiddenReplayText("Lakers vs Celtics Game 7"))
+        assertEquals("Match 1080p H.265 5.1 16:9 2026-11-22", hiddenReplayText("Match 1080p H.265 5.1 16:9 2026-11-22"))
+        assertEquals("Round 2 vs 3rd seed", hiddenReplayText("Round 2 vs 3rd seed"))
+        assertEquals("Window seat", hiddenReplayText("Window seat"))
+        // A live game's link names (the Sources panel) keep their channel numbers.
+        assertEquals("Sky Sports 1 HD 2", spoilerSafeLinkText("Sky Sports 1 HD 2"))
+    }
+
+    @Test
     fun `words after a score that are not how it ended stay`() {
         assertEquals("Team A – Team B part 2", spoilerSafeLinkText("Team A 2-1 Team B part 2"))
         assertEquals("Team A – Team B (pt 1)", spoilerSafeLinkText("Team A 2-1 Team B (pt 1)"))

@@ -190,7 +190,7 @@ internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiv
  * (the card's own, when no ESPN game matches) has any score in it masked too.
  */
 internal fun sportsLiveCardToPlay(item: SportsLiveItem, hidden: Boolean, title: () -> String): SportsLiveItem =
-    if (hidden) spoilerSafeReplay(item, spoilerSafeLinkText(title()).orEmpty()) else item
+    if (hidden) spoilerSafeReplay(item, hiddenReplayText(title()).orEmpty()) else item
 
 /**
  * How a game that went past normal time is tagged in brackets: "AET", "a.e.t.", "pens", "on penalties", "p", "OT", "2OT",
@@ -257,6 +257,27 @@ internal fun spoilerSafeLinkText(text: String?): String? {
 }
 
 /**
+ * [text], a hidden replay's name or link name, as its lists, Detail page and player show it (#467): any score masked
+ * ([spoilerSafeLinkText]), and also two numbers standing alone in one name (a score split by a team name: "Arsenal 2
+ * Chelsea 1", "(2) v (1)", "W 3, L 2") and words that say who won ("Arsenal win"). Over-masking a hidden replay's
+ * name costs little; a live game's link names ([sportsLiveLinkLabel]) keep their channel numbers.
+ */
+internal fun hiddenReplayText(text: String?): String? {
+    val scored = spoilerSafeLinkText(text) ?: return null
+    val numbers = if (LONE_NUMBER.findAll(scored).take(2).count() < 2) scored else scored.replace(LONE_NUMBER, "–")
+    return numbers.replace(RESULT_WORD, "–")
+}
+
+/** A number of up to three digits standing alone: not part of a word, a date, a time, a ratio, a codec or a quality. */
+private val LONE_NUMBER = Regex("""(?<![\w.:/%+–—-])\d{1,3}(?![\w.:/%+–—-])""")
+
+/** A word that says who won (#467): "Arsenal win", "Arsenal beat Chelsea", "Chelsea lost". */
+private val RESULT_WORD = Regex(
+    """\b(?:wins?|won|beats?|beaten|defeats?|defeated|edges?|edged|thrash(?:es|ed)?|crush(?:es|ed)?|routs?|routed|loses?|lost|draws?|drew|victory|triumphs?|triumphed)\b""",
+    RegexOption.IGNORE_CASE
+)
+
+/**
  * Whether [item]'s links are named with any score masked where the user lists or plays them outside Watch replay
  * (Choose stream, a merged replay's picker, OK on a replay card; #223): when its result is hidden exactly as its Results
  * row hides it ([resultHiddenReason], #241: the Scores setting [mode] (null: not read yet), Results' [revealed] event ids,
@@ -296,9 +317,9 @@ internal fun sportsLiveReplayFolderHides(mode: ScoresMode?, protection: SpoilerP
 
 /** [stream] of a replay as the player names it: its name, title and description with any score masked. */
 internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(
-    name = spoilerSafeLinkText(stream.name),
-    title = spoilerSafeLinkText(stream.title),
-    description = spoilerSafeLinkText(stream.description)
+    name = hiddenReplayText(stream.name),
+    title = hiddenReplayText(stream.title),
+    description = hiddenReplayText(stream.description)
 )
 
 sealed interface SportsLivePlayEvent {

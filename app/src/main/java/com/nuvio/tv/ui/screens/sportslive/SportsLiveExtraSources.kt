@@ -345,7 +345,7 @@ object SportsLiveExtraSources {
         if (text == null || !isSpoilerSafe(contentId)) return text
         val extension = FILE_EXTENSION.find(text)?.value.orEmpty()
         val words = percentDecoded(text.removeSuffix(extension)).replace('_', ' ').replace('.', ' ')
-        val masked = spoilerSafeLinkText(words) ?: words
+        val masked = hiddenReplayText(words) ?: words
         return if (masked == words) text else masked + extension
     }
 

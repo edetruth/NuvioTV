@@ -112,7 +112,7 @@ private fun spoilerMaskedMeta(meta: Meta): Meta = Meta(
     id = meta.id,
     type = meta.type,
     rawType = meta.rawType,
-    name = spoilerSafeLinkText(meta.name) ?: meta.name,
+    name = hiddenReplayText(meta.name) ?: meta.name,
     poster = null,
     posterShape = meta.posterShape,
     background = null,
@@ -137,7 +137,7 @@ private fun spoilerMaskedMeta(meta: Meta): Meta = Meta(
 /** [video] as a hidden replay's lists show it: its ids, place and date, title and links score-masked; nothing else. */
 private fun spoilerMaskedVideo(video: Video): Video = Video(
     id = video.id,
-    title = spoilerSafeLinkText(video.title) ?: video.title,
+    title = hiddenReplayText(video.title) ?: video.title,
     released = video.released,
     thumbnail = null,
     streams = video.streams.map(::spoilerSafeReplayStream),

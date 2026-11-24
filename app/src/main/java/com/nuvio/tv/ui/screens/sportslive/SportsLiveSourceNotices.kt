@@ -63,8 +63,8 @@ internal fun sportsLiveSpoilerSafePlayback(info: StreamPlaybackInfo): StreamPlay
     // By its video, or its content (S4: an episode of a hidden folder not registered yet).
     if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId) && !SportsLiveExtraSources.isSpoilerSafe(info.contentId)) info
     else info.copy(
-        streamName = spoilerSafeLinkText(info.streamName) ?: info.streamName,
-        streamDescription = spoilerSafeLinkText(info.streamDescription)
+        streamName = hiddenReplayText(info.streamName) ?: info.streamName,
+        streamDescription = hiddenReplayText(info.streamDescription)
     )
 
 /**
