@@ -1,7 +1,16 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.MINUTE
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.START
+import com.nuvio.tv.core.sportslive.scores.FinalNote
+import com.nuvio.tv.core.sportslive.scores.ResultRow
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,18 +64,65 @@ class SportsLiveWatchReplayRowTest {
         assertNull(spoilerSafeLinkText(null))
     }
 
+    // #241: a replay card's links follow the Results row's own rule, reveals read by ESPN event id.
+    private val replayNow = START + 3 * 60 * MINUTE
+    private val final = AlertFixtures.final(101, 99)
+    private val replay = AlertFixtures.item(name = "Pacers @ 76ers", id = "replay").copy(kind = SportsLiveKind.REPLAY)
+    private val sixers = listOf(FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
+
+    private fun hides(
+        mode: ScoresMode?,
+        match: ScoreSnapshot? = final,
+        revealed: Set<String> = emptySet(),
+        protection: SpoilerProtection = SpoilerProtection(nowMs = replayNow),
+        item: SportsLiveItem = replay,
+        isReplay: Boolean = true
+    ): Boolean = sportsLiveHidesReplayLinks(item, isReplay, mode, match, revealed, protection)
+
     @Test
     fun `a replay's links are masked wherever its result is hidden for the user, never under Show with nothing hidden`() {
-        val post = ScoreState.POST
-        assertFalse(sportsLiveHidesReplayLinks(true, ScoresMode.SHOW, post, revealed = false, spoilerProtected = false))
-        assertFalse("no ESPN game", sportsLiveHidesReplayLinks(true, ScoresMode.SHOW, null, revealed = false, spoilerProtected = false))
-        assertTrue("saved for later", sportsLiveHidesReplayLinks(true, ScoresMode.SHOW, post, revealed = false, spoilerProtected = true))
-        assertTrue(sportsLiveHidesReplayLinks(true, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = false, spoilerProtected = false))
-        assertTrue("no ESPN game", sportsLiveHidesReplayLinks(true, ScoresMode.HIDE_UNTIL_FOCUSED, null, revealed = false, spoilerProtected = false))
-        assertFalse("revealed", sportsLiveHidesReplayLinks(true, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = true, spoilerProtected = false))
-        assertTrue(sportsLiveHidesReplayLinks(true, ScoresMode.OFF, post, revealed = true, spoilerProtected = false))
-        assertTrue("setting not read yet", sportsLiveHidesReplayLinks(true, null, post, revealed = false, spoilerProtected = false))
-        assertFalse("not a replay", sportsLiveHidesReplayLinks(false, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = false, spoilerProtected = true))
+        assertFalse(hides(ScoresMode.SHOW))
+        assertFalse("no ESPN game", hides(ScoresMode.SHOW, match = null))
+        val saved = SpoilerProtection(games = SpoilerProtection.saved(emptyList(), final, replayNow), nowMs = replayNow)
+        assertTrue("saved for later", hides(ScoresMode.SHOW, protection = saved))
+        assertTrue("saved for later, no ESPN match: by its sides", hides(ScoresMode.SHOW, match = null, protection = saved))
+        assertTrue(hides(ScoresMode.HIDE_UNTIL_FOCUSED))
+        assertTrue("no ESPN game", hides(ScoresMode.HIDE_UNTIL_FOCUSED, match = null))
+        assertTrue(hides(ScoresMode.OFF, revealed = setOf(final.eventId)))
+        assertTrue("setting not read yet", hides(null))
+        assertFalse("not a replay", hides(ScoresMode.HIDE_UNTIL_FOCUSED, protection = saved, isReplay = false))
+    }
+
+    @Test
+    fun `a result revealed on Results unmasks its replay's links, read by the ESPN event id and not the card key`() {
+        assertFalse(hides(ScoresMode.HIDE_UNTIL_FOCUSED, revealed = setOf(final.eventId)))
+        // The card's own key is not an ESPN event: it reveals nothing (the old check compared the two).
+        assertTrue(hides(ScoresMode.HIDE_UNTIL_FOCUSED, revealed = setOf(replay.streamKey)))
+    }
+
+    @Test
+    fun `a replay card's links hide exactly when its Results row hides the score`() {
+        val cases = listOf(
+            SpoilerProtection(nowMs = replayNow),
+            SpoilerProtection(myTeamsResults = true, followed = sixers, nowMs = replayNow),
+            SpoilerProtection(myTeamsResults = true, followed = sixers, nowMs = replayNow, games = SpoilerProtection.ended(emptyList(), final, replayNow)),
+            SpoilerProtection(games = SpoilerProtection.saved(emptyList(), final, replayNow), nowMs = replayNow)
+        )
+        for (mode in ScoresMode.entries) for (protection in cases) for (revealed in listOf(emptySet(), setOf(final.eventId))) {
+            val row = ResultRow(final, followed = protection.followed.isNotEmpty(), note = FinalNote.FT)
+            val rowHides = !SportsLiveResultsUiState(mode = mode, revealed = revealed, protection = protection).showsScore(row)
+            assertEquals("$mode $protection $revealed", rowHides, hides(mode, revealed = revealed, protection = protection))
+        }
+    }
+
+    @Test
+    fun `a followed team's replay with no ESPN match is masked under my teams' protection`() {
+        assertTrue(hides(ScoresMode.SHOW, match = null, protection = SpoilerProtection(myTeamsResults = true, followed = sixers, nowMs = replayNow)))
+        assertTrue(hides(ScoresMode.SHOW, match = null, protection = SpoilerProtection(myTeams = true, followed = sixers, nowMs = replayNow)))
+        // Another team's replay, or protection off, keeps its names under Show.
+        val celtics = listOf(FollowedTeam(name = "Boston Celtics", sport = "Basketball"))
+        assertFalse(hides(ScoresMode.SHOW, match = null, protection = SpoilerProtection(myTeamsResults = true, followed = celtics, nowMs = replayNow)))
+        assertFalse(hides(ScoresMode.SHOW, match = null, protection = SpoilerProtection(followed = sixers, nowMs = replayNow)))
     }
 
     @Test

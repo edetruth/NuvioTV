@@ -9,11 +9,11 @@ import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
-import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
-import com.nuvio.tv.core.sportslive.scores.SpoilerContext
-import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
-import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
@@ -231,21 +231,31 @@ internal fun spoilerSafeLinkText(text: String?): String? =
     text?.replace(SPLIT_SCORE_IN_LINK_TEXT, "–")?.replace(SCORE_IN_LINK_TEXT, "–")
 
 /**
- * Whether a replay's links are named with any score masked where the user lists or plays them outside Watch replay
- * (Choose stream, a merged replay's picker, OK on a replay card; #223): when its result is hidden for the user as a
- * Results row hides it ([SpoilerPolicy]: the Scores setting [mode], [revealed], the game's protection
- * [spoilerProtected]; [eventState] null, no ESPN game, counts as a result). Under Show with nothing hidden, names stay
- * as the addon gives them; anything not a [replay] keeps them too.
+ * Whether [item]'s links are named with any score masked where the user lists or plays them outside Watch replay
+ * (Choose stream, a merged replay's picker, OK on a replay card; #223): when its result is hidden exactly as its Results
+ * row hides it ([resultHiddenReason], #241: the Scores setting [mode] (null: not read yet), Results' [revealed] event ids,
+ * [protection]), for [match], its strict ESPN game. With no ESPN game nothing can reveal it: hidden unless Show, and under
+ * Show when it is a saved game's replay (by its sides) or a followed team's under my teams' protection. Under Show with
+ * nothing hidden, names stay as the addon gives them; anything not a [replay] keeps them too.
  */
 internal fun sportsLiveHidesReplayLinks(
+    item: SportsLiveItem,
     replay: Boolean,
     mode: ScoresMode?,
-    eventState: ScoreState?,
-    revealed: Boolean,
-    spoilerProtected: Boolean
-): Boolean = replay && !SpoilerPolicy.visibility(
-    mode, revealed, SpoilerContext(SpoilerSurface.RESULTS, eventState = eventState, spoilerProtected = spoilerProtected)
-).showsScore
+    match: ScoreSnapshot?,
+    revealed: Set<String>,
+    protection: SpoilerProtection
+): Boolean {
+    if (!replay) return false
+    mode ?: return true
+    if (protection.savedReplayKeys(listOf(item), match?.let { mapOf(item.streamKey to it) }.orEmpty()).isNotEmpty()) return true
+    if (match != null) {
+        val followed = protection.followed.any { SportsResults.follows(it, match) }
+        return resultHiddenReason(match, followed, mode, revealed, protection) != null
+    }
+    val followed = item.followed || protection.followed.any { SportsLiveTeams.follows(it, item) }
+    return mode != ScoresMode.SHOW || (followed && (protection.myTeams || protection.myTeamsResults))
+}
 
 /** [stream] of a replay as the player names it: its name, title and description with any score masked. */
 internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(

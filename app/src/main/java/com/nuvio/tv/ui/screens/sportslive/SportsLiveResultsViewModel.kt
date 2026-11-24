@@ -147,6 +147,30 @@ data class ResultsNotPlayed(
 )
 
 /**
+ * Why [event]'s result is hidden for the viewer, or null when it shows: the one rule for a finished game's result, read
+ * by a Results row ([SportsLiveResultsUiState.hiddenReason]) and by its replay's link names ([sportsLiveHidesReplayLinks],
+ * #241). [followed]: a followed team played; [revealed]: Results' reveals, by ESPN event id.
+ */
+internal fun resultHiddenReason(
+    event: ScoreSnapshot,
+    followed: Boolean,
+    mode: ScoresMode,
+    revealed: Set<String>,
+    protection: SpoilerProtection
+): ResultHiddenReason? {
+    val id = event.eventId
+    return when {
+        protection.protects(event) -> if (protection.isSaved(id)) ResultHiddenReason.SAVED else ResultHiddenReason.YOUR_TEAM
+        mode == ScoresMode.OFF -> ResultHiddenReason.SETTING
+        // "Hide my teams' results until I reveal" (M2: its own key, on until set) holds a followed row; off, it follows
+        // the Scores setting like any other.
+        followed && protection.myTeamsResults -> if (protection.revealed(id)) null else ResultHiddenReason.YOUR_TEAM
+        ResultSpoilerReveal.showsScore(mode, revealed, id) -> null
+        else -> ResultHiddenReason.SETTING
+    }
+}
+
+/**
  * [notPlayed] as Results shows it (live.23 review S4): a team whose last final is still hidden for the profile (Scores
  * Off, or with Hide my teams' results on a followed team's result not revealed or watched, as
  * [SportsLiveResultsUiState.hiddenReason]) loses its
@@ -204,18 +228,7 @@ data class SportsLiveResultsUiState(
      * or watched ([SpoilerProtection.revealed]), never on focus; the
      * rest follow the Scores setting ([ResultSpoilerReveal.showsScore]).
      */
-    fun hiddenReason(row: ResultRow): ResultHiddenReason? {
-        val id = row.event.eventId
-        return when {
-            protection.protects(row.event) -> if (protection.isSaved(id)) ResultHiddenReason.SAVED else ResultHiddenReason.YOUR_TEAM
-            mode == ScoresMode.OFF -> ResultHiddenReason.SETTING
-            // "Hide my teams' results until I reveal" (M2: its own key, on until set) holds a followed row; off, it follows
-            // the Scores setting like any other.
-            row.followed && protection.myTeamsResults -> if (protection.revealed(id)) null else ResultHiddenReason.YOUR_TEAM
-            ResultSpoilerReveal.showsScore(mode, revealed, id) -> null
-            else -> ResultHiddenReason.SETTING
-        }
-    }
+    fun hiddenReason(row: ResultRow): ResultHiddenReason? = resultHiddenReason(row.event, row.followed, mode, revealed, protection)
 
     /**
      * The "N games live now" line: on Today, once loaded, while [liveGames] (Live now's own live games,

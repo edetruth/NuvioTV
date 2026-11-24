@@ -281,17 +281,17 @@ fun SportsLiveScreen(
         val saved = protection.savedReplayKeys(replaysTabItems, replayMatches)
         viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed, protection, saved, replayMatches))
     }
-    // A replay whose result is hidden for the user lists and plays its links with the score masked (#223), as a Results
-    // row hides it: the Scores setting, Reveal and the game's protection (saved for later, my teams).
+    // A replay whose result is hidden for the user lists and plays its links with the score masked (#223), as its Results
+    // row hides it (#241: the same rule, Results' reveals by ESPN event id): the Scores setting, Reveal and the game's
+    // protection (saved for later, my teams).
     val hidesReplayLinks: (SportsLiveItem) -> Boolean = { item ->
-        val match = replayMatches[item.streamKey]
         sportsLiveHidesReplayLinks(
+            item = item,
             replay = item.kind == SportsLiveKind.REPLAY || uiState.selectedTab == SportsLiveTab.REPLAYS,
             mode = scoresMode,
-            eventState = match?.state,
-            revealed = match != null && match.eventId in revealed,
-            spoilerProtected = (match != null && protection.protects(match)) ||
-                protection.savedReplayKeys(listOf(item), replayMatches).isNotEmpty()
+            match = replayMatches[item.streamKey],
+            revealed = resultsState.revealed,
+            protection = protection
         )
     }
     // ... and opens its Stream screen and player as Watch replay does: under ESPN's matchup (as Results names it), with
