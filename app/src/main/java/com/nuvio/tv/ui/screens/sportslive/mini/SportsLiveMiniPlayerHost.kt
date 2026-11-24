@@ -628,7 +628,7 @@ fun SportsLiveMiniPlayerHost(
             }
             else -> Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = SportsLiveMiniGeometry.EDGE_DP.dp, bottom = SportsLiveMiniGeometry.EDGE_DP.dp)
+                .padding(end = SportsLiveMiniGeometry.EDGE_END_DP.dp, bottom = SportsLiveMiniGeometry.EDGE_BOTTOM_DP.dp)
                 .width(maxWidth * SportsLiveMiniGeometry.CORNER_WIDTH_FRACTION)
         }
         Column(

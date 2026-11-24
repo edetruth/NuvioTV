@@ -210,8 +210,9 @@ object SportsLiveMiniGeometry {
     /** True when a caption [top]..[bottom] px inside a video [height] px tall stays clear of its scorebug band. */
     fun clearOfScorebug(top: Float, bottom: Float, height: Float): Boolean = top >= 0f && bottom <= height * (1f - SCOREBUG_SHARE)
 
-    /** Its distance from the window's right and bottom edges. */
-    const val EDGE_DP = 24f
+    /** Its distance from the window's right and bottom edges (#259: the 48 / 27 dp safe area). */
+    const val EDGE_END_DP = 48f
+    const val EDGE_BOTTOM_DP = 27f
 
     /**
      * The chip's widest on a page (coordinator 2026-11-20): the room right of a Game or Team page header's second logo
@@ -243,5 +244,5 @@ object SportsLiveMiniGeometry {
      * distance and a gap, less that padding. Its buttons then never sit under the video.
      */
     fun cornerReserveBottomDp(windowWidthDp: Float, screenBottomPaddingDp: Float): Float =
-        (heightDp(windowWidthDp) + EDGE_DP + GAP_DP - screenBottomPaddingDp).coerceAtLeast(0f)
+        (heightDp(windowWidthDp) + EDGE_BOTTOM_DP + GAP_DP - screenBottomPaddingDp).coerceAtLeast(0f)
 }

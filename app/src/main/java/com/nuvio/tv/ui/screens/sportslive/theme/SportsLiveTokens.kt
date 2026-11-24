@@ -182,7 +182,12 @@ object SportsLiveTokens {
         val StageGap = 24.dp
 
         /** The in-player panel (#140): 560 px wide (29 % of 1080p), one-line rows 44 px tall, 4 px apart. */
-        val PanelWidth = 280.dp
+        val PanelWidth = 320.dp
+        /**
+         * The in-player panel's content inset (#259): its scrim starts at x = 0 (backgrounds bleed), the rows' text
+         * starts on the 48 dp safe line, the top and bottom on the 27 dp one.
+         */
+        val PanelContentStart = 48.dp
         val PanelLine = 22.dp
         val PanelLineGap = 2.dp
         /** A matched panel row's team logos or flags: 36 px, beside the abbreviations. */

@@ -1035,4 +1035,6 @@
     <string name="sports_live_results_hidden_your_team">Your team: hidden until you watch. More… › Reveal result shows it.</string>
     <string name="sports_live_results_hidden_setting">Hidden by your Scores setting. Rest on the game in the list to reveal it.</string>
     <string name="sports_live_results_reveal_day">Reveal all for this day</string>
+    <string name="sports_live_debug_safe_area_title">Safe-area frame</string>
+    <string name="sports_live_debug_safe_area_subtitle">Draws a red frame at 48 dp left and right and 27 dp top and bottom over every screen, to spot text near the screen edge.</string>
 </resources>
