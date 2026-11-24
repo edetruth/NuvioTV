@@ -35,7 +35,11 @@ sealed interface GameStatus {
     data class Final(val event: ScoreSnapshot) : GameStatus
 
     /** Postponed, cancelled, suspended or delayed (ESPN's [text]). */
-    data class Postponed(val text: String?) : GameStatus
+    data class Postponed(
+        val text: String?,
+        /** Suspended or delayed: it may resume ([com.nuvio.tv.core.sportslive.scores.ScoreSnapshot.mayResume]); postponed or cancelled: not. */
+        val mayResume: Boolean = false
+    ) : GameStatus
 
     /** A 24/7 channel with no game ESPN places. */
     data object Channel : GameStatus
@@ -69,7 +73,7 @@ sealed interface GameStatus {
                 ScoreState.IN -> Live(event)
                 ScoreState.PRE -> notStarted()
                 ScoreState.POST -> if (item.isChannel) Channel else Final(event)
-                ScoreState.OFF -> Postponed(event.clockText?.takeIf { it.isNotBlank() })
+                ScoreState.OFF -> Postponed(event.clockText?.takeIf { it.isNotBlank() }, event.mayResume)
                 ScoreState.UNKNOWN, null -> when {
                     item.isChannel -> Channel
                     start != null && start > nowMs -> notStarted()

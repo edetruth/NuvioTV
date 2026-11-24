@@ -1696,6 +1696,7 @@ class SportsLiveViewModel internal constructor(
         var noStreams = emptySet<String>()
         var awaitingScore = emptySet<String>()
         var finals = emptySet<String>()
+        var postponed = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         var otherEvents = emptyList<SportsLiveItem>()
@@ -1728,6 +1729,10 @@ class SportsLiveViewModel internal constructor(
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
                 finals = split.finals.keys
+                // #357: a game ESPN has postponed or cancelled (not one that may resume) is no live game to count.
+                postponed = split.live.filter { item ->
+                    ScoreChips.matchedEvent(item, scores[item.streamKey])?.let { it.state == ScoreState.OFF && !it.mayResume } == true
+                }.mapTo(HashSet()) { it.streamKey }
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 // #275: one past its estimate whose every lookup found no stream has no link to check: "Probably ended" too.
@@ -1867,7 +1872,7 @@ class SportsLiveViewModel internal constructor(
         // The chips' counts (#79): Live now counts live, zappable games (#145), as the player's panel and CH banner
         // do: its Just ended strip, finals in their grace and "no streams yet" games are left out.
         fun counted(items: List<SportsLiveItem>) = if (selection.tab == SportsLiveTab.LIVE_NOW) {
-            items.filter { it.streamKey !in justEnded && it.streamKey !in finals && it.streamKey !in noStreams }
+            items.filter { it.streamKey !in justEnded && it.streamKey !in finals && it.streamKey !in noStreams && it.streamKey !in postponed }
         } else {
             items
         }

@@ -2310,6 +2310,22 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `#357 - a game ESPN has postponed is not counted live, one suspended (may resume) still is`() = runTest {
+        val pacers = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val off = item("off", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - HOUR)
+        nextLoad = load(listOf(off, stillOn))
+        val postponed = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Postponed", mayResume = false)
+        val viewModel = newViewModel(scores = mapOf(off.streamKey to postponed))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.filterCounts[null])
+
+        val suspended = postponed.copy(clockText = "Suspended", mayResume = true)
+        val resuming = newViewModel(scores = mapOf(off.streamKey to suspended))
+        advanceUntilIdle()
+        assertEquals(2, resuming.uiState.value.filterCounts[null])
+    }
+
+    @Test
     fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
         // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
         // estimate with no stream yet stays live, dimmed (#145).

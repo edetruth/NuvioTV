@@ -306,7 +306,8 @@ internal fun scoreboardTwoSided(art: GameArt?, matched: Boolean): Boolean =
 /**
  * The Scoreboard group of [item] with [status] on [tab]: a channel always sits under CHANNELS; on Live
  * now (whose games are all listed live) a game ESPN still has as later counts as starting soon and a
- * postponed one stays with the live games, as there is no LATER group there.
+ * suspended or delayed one stays with the live games (#357: a postponed or cancelled one goes to Just ended), as there is
+ * no LATER group there.
  */
 internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: SportsLiveTab = SportsLiveTab.LIVE_NOW): ScoreboardGroup {
     if (item.isChannel) return ScoreboardGroup.CHANNELS
@@ -316,7 +317,13 @@ internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: Sp
         is GameStatus.StartingSoon -> ScoreboardGroup.STARTING_SOON
         is GameStatus.Final, is GameStatus.JustEnded -> ScoreboardGroup.JUST_ENDED
         is GameStatus.Upcoming -> if (liveNow) ScoreboardGroup.STARTING_SOON else ScoreboardGroup.LATER
-        is GameStatus.Postponed -> if (liveNow) ScoreboardGroup.LIVE else ScoreboardGroup.LATER
+        // #357: on Live now a suspended or delayed game stays with the live ones (it may resume); a postponed or cancelled
+        // one leaves LIVE at once for the Just ended strip, reading "Postponed" there.
+        is GameStatus.Postponed -> when {
+            !liveNow -> ScoreboardGroup.LATER
+            status.mayResume -> ScoreboardGroup.LIVE
+            else -> ScoreboardGroup.JUST_ENDED
+        }
         GameStatus.Channel -> ScoreboardGroup.CHANNELS
     }
 }
