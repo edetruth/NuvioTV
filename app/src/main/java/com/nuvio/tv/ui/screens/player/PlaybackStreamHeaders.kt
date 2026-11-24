@@ -121,8 +121,7 @@ internal object PlaybackStreamHeaders {
         override fun intercept(chain: Interceptor.Chain): Response {
             val first = chain.call().request().url
             val hop = chain.request()
-            val keep = isLocalHost(hop.url.host) && StreamOrigin.same(first, hop.url)
-            return chain.proceed(if (keep) hop else transportOnly(hop))
+            return chain.proceed(if (StreamOrigin.same(first, hop.url)) forUncheckedRetry(hop) else transportOnly(hop))
         }
     }
 
