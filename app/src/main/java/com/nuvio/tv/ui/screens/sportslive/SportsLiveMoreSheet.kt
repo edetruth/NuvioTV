@@ -476,7 +476,7 @@ internal fun SportsLiveSheet(
                 if (!status.isNullOrBlank()) {
                     Text(
                         text = buildAnnotatedString {
-                            if (statusLive) withStyle(SpanStyle(color = Colors.LiveRed, fontSize = 9.sp)) { append("● ") }
+                            if (statusLive) withStyle(SpanStyle(color = Colors.LiveRed, fontSize = 12.sp)) { append("● ") }
                             withStyle(SpanStyle(color = if (statusLive) Colors.LiveText else Colors.TextSecondary)) {
                                 append(status)
                             }

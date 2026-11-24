@@ -855,7 +855,7 @@ private fun PlayingChip(name: String, hint: String?, focused: Boolean) {
 private fun MiniCaption(text: String, modifier: Modifier = Modifier, small: Boolean = false) {
     Text(
         text = text,
-        style = if (small) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+        style = if (small) SportsLiveTokens.style(SportsLiveTokens.Type.Tag) else MaterialTheme.typography.labelMedium,
         color = NuvioTheme.colors.TextPrimary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

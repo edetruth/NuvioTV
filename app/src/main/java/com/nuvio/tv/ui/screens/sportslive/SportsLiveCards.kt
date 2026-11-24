@@ -217,7 +217,7 @@ internal fun SportsLiveListCard(
                     ) {
                         if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive && !ended && !final)
                         if (chip != null) SportsLiveScoreChip(chip)
-                        if (hasReplay) ReplayPill()
+                        if (hasReplay) SportsLiveReplayPill()
                         if (reminded) ReminderPill()
                     }
                 }

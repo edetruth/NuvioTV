@@ -88,8 +88,8 @@ object SportsLiveTokens {
 
     /** The TV type scale (board px → sp). Merge with the app font: [SportsLiveTokens.style]. */
     object Type {
-        /** Tags (league, period, badges): 22 px. */
-        val Tag = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold)
+        /** Decorative caps headings (matchup top line, NOW PLAYING): 24 px. Anything read to decide or act is [Pill]. */
+        val Tag = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em)
         /** The 26 px floor (live.24, audit A2) for status words, periods, ranks and pills: nothing a row reads is smaller. */
         val Pill = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
         /** League tags (live.24, audit B2): 26 px grey on every surface. */
@@ -232,8 +232,8 @@ object SportsLiveTokens {
         /** The card's fill: the panel colour, slightly see-through. */
         const val FILL_ALPHA = 0.86f
         val Border = Colors.Divider
-        /** The hint line ("OK Watch · ▼ Peek"). */
-        val Hint = Colors.TextMuted
+        /** The hint line ("OK Watch · ▼ Peek"): secondary, not muted (#95: key hints are read). */
+        val Hint = Colors.TextSecondary
         /** A grouped card's dots: the one showing, the others. */
         val DotOn = Colors.TextPrimary
         val DotOff = Colors.TextMuted.copy(alpha = 0.4f)
@@ -277,7 +277,7 @@ object SportsLiveTokens {
         val Label = TextStyle(fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
         val Value = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
         /** The help line: 22 px. */
-        val Help = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
+        val Help = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium)
     }
 
     /** The one focus language (#93). */
@@ -323,7 +323,7 @@ object SportsLiveTokens {
         val Title = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
         val Line = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
         /** "FT" in the icon column. */
-        val FinalMark = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold)
+        val FinalMark = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold)
         /** It fades and slides in this fast. */
         const val ENTER_MS = 200
     }

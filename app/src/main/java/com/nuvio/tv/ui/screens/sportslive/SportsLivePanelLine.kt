@@ -511,7 +511,7 @@ internal fun SportsLivePanelLine(
                             if (focused && okHint != null) {
                                 Text(
                                     text = okHint,
-                                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
                                     color = Colors.TextSecondary,
                                     maxLines = 1,
                                     softWrap = false

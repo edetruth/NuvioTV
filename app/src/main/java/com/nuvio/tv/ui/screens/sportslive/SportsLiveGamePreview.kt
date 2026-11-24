@@ -153,7 +153,7 @@ private fun PreviewForm(forms: List<TeamForm>, homeFirst: Boolean) {
                     }
                     Text(
                         text = game.opponent.orEmpty(),
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
                         color = Colors.TextMuted,
                         maxLines = 1,
                         textAlign = TextAlign.Center

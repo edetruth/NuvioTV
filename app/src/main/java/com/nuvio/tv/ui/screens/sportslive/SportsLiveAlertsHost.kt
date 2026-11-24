@@ -683,15 +683,15 @@ private fun KickoffToast(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!noStreamYet) {
-                Text(
-                    text = stringResource(R.string.sports_live_live_pill),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = ArtColors.Text,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(ArtColors.LiveRed)
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                )
+                // #95: the rows' grammar, a red dot and "LIVE" in the light red, never a red fill under small text.
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SportsLiveLiveDot()
+                    Text(
+                        text = stringResource(R.string.sports_live_live_pill),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).sportsLiveBold(),
+                        color = SportsLiveTokens.Colors.LiveText
+                    )
+                }
             }
             Text(
                 text = stringResource(if (noStreamYet) R.string.sports_live_alert_no_stream_yet else R.string.sports_live_alert_just_started),
@@ -745,7 +745,7 @@ private fun KickoffToast(
         // Its keys, named (research 4): OK is the card's while it shows.
         Text(
             text = stringResource(if (noStreamYet) R.string.sports_live_alert_hint_ok_remind else R.string.sports_live_alert_hint_ok_watch),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
             color = SportsLiveTokens.Alert.Hint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

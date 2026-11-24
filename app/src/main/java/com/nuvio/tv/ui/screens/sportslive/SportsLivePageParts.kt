@@ -127,13 +127,13 @@ internal fun SportsLivePageMessage(text: String, modifier: Modifier = Modifier) 
 internal fun SportsLiveReplayPill() {
     Text(
         text = stringResource(R.string.sports_live_results_replay),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).sportsLiveBold(),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).sportsLiveBold(),
         color = Colors.ReplayGreenText,
         maxLines = 1,
         modifier = Modifier
             .clip(SportsLiveTokens.Radius.PillShape)
             .background(Colors.ReplayGreen)
-            .padding(horizontal = 6.dp, vertical = 1.dp)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
 

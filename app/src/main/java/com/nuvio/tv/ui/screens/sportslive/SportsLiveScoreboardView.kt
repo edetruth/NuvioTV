@@ -566,7 +566,7 @@ private fun LeagueTag(tag: String, @Suppress("UNUSED_PARAMETER") live: Boolean) 
             maxLines = 1,
             softWrap = false,
             autoSize = TextAutoSize.StepBased(
-                minFontSize = SportsLiveTokens.Type.Tag.fontSize,
+                minFontSize = 12.sp,
                 maxFontSize = SportsLiveTokens.Type.LeagueTag.fontSize,
                 stepSize = 1.sp
             )
@@ -738,7 +738,7 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
         val excitement = row.excitement
         // A live row whose last lookup found nothing playable (#145, BUG2) says so in words, beside its dimming.
         val noStream = row.noStreams && row.group == ScoreboardGroup.LIVE
-        if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill() else when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
+        if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) SportsLiveReplayPill() else when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
             // BUG-D: the mini player's game says so in the badge's place (after its excitement or close badge), never on "LIVE".
             RowBadge.WATCHING -> SportsLiveWatchingPill()
             RowBadge.READY -> SportsLiveReadyPill()
@@ -800,7 +800,7 @@ private fun SportsLiveWatchingPill() {
 private fun BigGameBadge() {
     Text(
         text = stringResource(R.string.sports_live_big_game),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).copy(fontWeight = FontWeight.Medium),
         color = Colors.TextSecondary,
         maxLines = 1,
         modifier = Modifier

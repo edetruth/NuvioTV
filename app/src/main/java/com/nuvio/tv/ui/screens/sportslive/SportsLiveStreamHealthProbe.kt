@@ -21,6 +21,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 /**
@@ -98,7 +99,7 @@ internal class SportsLiveHealthTicker(private val tick: () -> Unit) {
 fun SportsLiveReconnectingChip(modifier: Modifier = Modifier, small: Boolean = false) {
     Text(
         text = stringResource(R.string.sports_live_reconnecting),
-        style = if (small) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
+        style = if (small) SportsLiveTokens.style(SportsLiveTokens.Type.Tag) else MaterialTheme.typography.labelLarge,
         color = NuvioTheme.colors.TextPrimary,
         maxLines = 1,
         modifier = modifier
