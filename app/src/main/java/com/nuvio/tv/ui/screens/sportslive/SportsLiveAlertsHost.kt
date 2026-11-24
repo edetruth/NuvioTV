@@ -560,7 +560,11 @@ fun SportsLiveAlertsHost(
                 }
             }
             // The 2 dp time-left line, on cards that ask something only (#101).
-            val timeLeft by rememberTimeLeft(state.clock, durationOf(alert))
+            val timeLeft by rememberTimeLeft(
+                state.clock,
+                durationOf(alert),
+                running = timeLeftTicks(actionable, counting = countdown != null, leaving = leaving, clock = state.clock)
+            )
             val timeLine: (() -> Float)? = if (actionable) ({ timeLeft }) else null
             val enter = remember(current.id) { MutableTransitionState(false) }
             enter.targetState = !leaving

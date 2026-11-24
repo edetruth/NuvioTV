@@ -57,12 +57,23 @@ internal fun SportsLiveCardEntrance(
 internal fun AlertCardClock.timeLeftFraction(nowMs: Long, duration: Long): Float =
     if (duration <= 0L) 0f else (1f - totalShownMs(nowMs).toFloat() / duration).coerceIn(0f, 1f)
 
-/** The time-left share of a card, updated every [tickMs] and eased linearly between ticks so the line shrinks smoothly. */
+/**
+ * Whether a card's time-left line moves (review R10): only on a card that asks ([actionable]), shows (its clock runs), is
+ * not a countdown ([counting]) and is not [leaving]. Otherwise nothing ticks, which spares a weak box 4 recompositions a
+ * second and the line's animation frames.
+ */
+internal fun timeLeftTicks(actionable: Boolean, counting: Boolean, leaving: Boolean, clock: AlertCardClock): Boolean =
+    actionable && !counting && !leaving && clock.shownAtMs != null
+
+/**
+ * The time-left share of a card, updated every [tickMs] while [running] and eased linearly between ticks so the line
+ * shrinks smoothly.
+ */
 @Composable
-internal fun rememberTimeLeft(clock: AlertCardClock, duration: Long, tickMs: Long = 250L): State<Float> {
+internal fun rememberTimeLeft(clock: AlertCardClock, duration: Long, running: Boolean = true, tickMs: Long = 250L): State<Float> {
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(tickMs) {
-        while (true) {
+    LaunchedEffect(tickMs, running) {
+        while (running) {
             nowMs = System.currentTimeMillis()
             delay(tickMs)
         }

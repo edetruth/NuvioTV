@@ -3,6 +3,8 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.alerts.AlertCardClock
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SportsLiveCardMotionTest {
@@ -39,5 +41,16 @@ class SportsLiveCardMotionTest {
     @Test
     fun `a card that has not shown yet has all its time`() {
         assertEquals(1f, AlertCardClock().timeLeftFraction(5_000L, 10_000L), 0.001f)
+    }
+
+    @Test
+    fun `the time left line ticks only on an asking card that shows - never on a passive card, a countdown or one leaving (review R10)`() {
+        val up = AlertCardClock(shownAtMs = 1_000L)
+        assertTrue(timeLeftTicks(actionable = true, counting = false, leaving = false, clock = up))
+        assertFalse(timeLeftTicks(actionable = false, counting = false, leaving = false, clock = up))
+        assertFalse(timeLeftTicks(actionable = true, counting = true, leaving = false, clock = up))
+        assertFalse(timeLeftTicks(actionable = true, counting = false, leaving = true, clock = up))
+        // Waiting under an overlay: its clock stands still, so the line does too.
+        assertFalse(timeLeftTicks(actionable = true, counting = false, leaving = false, clock = AlertCardClock(shownAtMs = null, shownMs = 4_000L)))
     }
 }
