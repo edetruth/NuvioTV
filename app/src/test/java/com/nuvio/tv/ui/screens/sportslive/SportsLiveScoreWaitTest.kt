@@ -112,6 +112,9 @@ class SportsLiveScoreWaitTest {
         assertEquals(ScoreboardGroup.LIVE, row.group)
         assertEquals(ScoreboardStatusLines("7:00 PM"), scoreboardStatusLines(row, strings, kickoff = "7:00 PM"))
         assertEquals(board(emptySet()).rows!!.map { it.item.streamKey }, waiting.rows!!.map { it.item.streamKey })
+        // #373: the LIVE header counts only what reads LIVE.
+        assertEquals(1, sportsLiveGroupCounts(waiting.rows!!)[ScoreboardGroup.LIVE])
+        assertEquals(2, sportsLiveGroupCounts(board(emptySet()).rows!!)[ScoreboardGroup.LIVE])
         // The uncovered game shows exactly as before.
         val other = waiting.rowOf(uncovered)
         assertFalse(other.awaitingScore)

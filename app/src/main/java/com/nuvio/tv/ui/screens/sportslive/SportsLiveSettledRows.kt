@@ -92,7 +92,8 @@ internal fun SportsLiveBoard.settledOn(previous: SportsLiveBoard?): SportsLiveBo
  * (12)" agrees with the chips, Home and the panel, which never count a final.
  */
 internal fun sportsLiveGroupCounts(rows: List<ScoreboardRow>): Map<ScoreboardGroup, Int> =
-    rows.filterNot { it.endedInPlace }.groupingBy { it.group }.eachCount()
+    // #373: a game still waiting for ESPN keeps its place under LIVE but is not counted there until it reads LIVE.
+    rows.filterNot { it.endedInPlace || it.awaitingScore }.groupingBy { it.group }.eachCount()
 
 /**
  * OK on a Live now card ([row]: its shown row, null when none; [ended]: its Just ended verdict): a game ESPN says ended
