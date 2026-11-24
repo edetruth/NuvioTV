@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.core.network.StreamOrigin
+import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -105,8 +106,27 @@ internal object PlaybackStreamHeaders {
      * [request] for the retry without certificate checks: to a home server as it is; to any other host with
      * transport headers and the app's User-Agent only.
      */
-    fun forUncheckedRetry(request: Request): Request {
-        if (isLocalHost(request.url.host)) return request
+    fun forUncheckedRetry(request: Request): Request =
+        if (isLocalHost(request.url.host)) request else transportOnly(request)
+
+    /**
+     * The retry without certificate checks as a call on [client] (#435, P1). Every hop, redirects included, is
+     * checked on its own: the stream's headers reach only a home server on the retried request's own origin; any
+     * other hop gets transport headers and the app's User-Agent only.
+     */
+    fun uncheckedRetry(client: OkHttpClient, request: Request): Call =
+        client.newBuilder().addNetworkInterceptor(UncheckedRetryGuard).build().newCall(request)
+
+    private object UncheckedRetryGuard : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val first = chain.call().request().url
+            val hop = chain.request()
+            val keep = isLocalHost(hop.url.host) && StreamOrigin.same(first, hop.url)
+            return chain.proceed(if (keep) hop else transportOnly(hop))
+        }
+    }
+
+    private fun transportOnly(request: Request): Request {
         val builder = request.newBuilder()
         request.headers.names()
             .filter { it.lowercase() !in TRANSPORT_NAMES }

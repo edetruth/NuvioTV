@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.player
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -75,6 +76,26 @@ class PlaybackHeaderRedirectTest {
         val hop = take(other)
         assertNoLogin(hop)
         assertEquals("v", hop.getHeader("X-Custom"))
+    }
+
+    /** [server] by its IPv4 address, a home-server address. */
+    private fun local(server: MockWebServer, path: String): HttpUrl =
+        HttpUrl.Builder().scheme("http").host("127.0.0.1").port(server.port).encodedPath(path).build()
+
+    @Test
+    fun `the unchecked retry keeps headers on the home server but sends none past its redirect (P1)`() {
+        link.enqueue(MockResponse().setResponseCode(302).addHeader("Location", local(other, "/seg.ts").toString()))
+        other.enqueue(MockResponse().setBody("ok"))
+        val request = Request.Builder().url(local(link, "/play")).apply {
+            streamHeaders.forEach { (name, value) -> header(name, value) }
+        }.build()
+        PlaybackStreamHeaders.uncheckedRetry(OkHttpClient(), request).execute().close()
+        assertEquals("Bearer t", take(link).getHeader("Authorization"))
+        val hop = take(other)
+        assertNoLogin(hop)
+        assertNull(hop.getHeader("Referer"))
+        assertNull(hop.getHeader("X-Custom"))
+        assertEquals(PlayerMediaSourceFactory.DEFAULT_USER_AGENT, hop.getHeader("User-Agent"))
     }
 
     /** A client the way the parallel connections path builds it: headers set on the request, a cookie jar. */

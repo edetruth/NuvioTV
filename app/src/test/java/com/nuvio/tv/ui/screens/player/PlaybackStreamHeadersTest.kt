@@ -112,7 +112,7 @@ class PlaybackStreamHeadersTest {
     @Test
     fun `the playback client's TLS fallback retries through the header-free request`() {
         val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerPlaybackNetworking.kt").readText()
-        assertTrue(source.contains("trustAllPlaybackHttpClient.newCall(PlaybackStreamHeaders.forUncheckedRetry(request))"))
+        assertTrue(source.contains("PlaybackStreamHeaders.uncheckedRetry(trustAllPlaybackHttpClient, request).execute()"))
     }
 
     @Test
