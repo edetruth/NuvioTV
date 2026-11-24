@@ -105,4 +105,82 @@ class ScoreDelayTest {
         // A delay-old version now exists: it shows.
         assertEquals(50, delay.apply(mapOf(key to live(50, 48)), delayMs, t0 + delayMs).getValue(key).homeScore)
     }
+
+    @Test
+    fun `a record and form updated at the final wait the delay with the score`() {
+        val delay = ScoreDelay()
+        val t0 = start + 3_600_000L
+        val before = live(100, 98, "Q4 0:30").let {
+            it.copy(home = it.home.copy(record = "10-4", form = "WWLDW"), away = it.away.copy(record = "9-5", form = "LLWWD"))
+        }
+        delay.apply(mapOf(key to before), delayMs, t0)
+        // The final arrives with both records and forms already counting it: they must not tell the result early.
+        val ended = final(102, 98).let {
+            it.copy(home = it.home.copy(record = "11-4", form = "WLDWW"), away = it.away.copy(record = "9-6", form = "LWWDL"))
+        }
+        val early = delay.apply(mapOf(key to ended), delayMs, t0 + 10_000).getValue(key)
+        assertEquals(ScoreState.IN, early.state)
+        assertEquals("10-4", early.home.record)
+        assertEquals("9-5", early.away.record)
+        assertEquals("WWLDW", early.home.form)
+        assertEquals("LLWWD", early.away.form)
+        val due = delay.apply(mapOf(key to ended), delayMs, t0 + 10_000 + delayMs).getValue(key)
+        assertEquals("11-4", due.home.record)
+        assertEquals("WLDWW", due.home.form)
+    }
+
+    @Test
+    fun `the game being watched first seen as a final that may have just ended withholds its records and form`() {
+        val ended = final(110, 100).let { it.copy(home = it.home.copy(record = "11-4", form = "WWWLW"), away = it.away.copy(record = "9-6")) }
+        val shown = ScoreDelay().apply(mapOf(key to ended), delayMs, start + 3 * 3_600_000L, setOf(base.eventId)).getValue(key)
+        assertNull(shown.home.record)
+        assertNull(shown.away.record)
+        assertNull(shown.home.form)
+    }
+
+    private fun tennis(games: Int, state: ScoreState = ScoreState.IN, winner: Boolean = false) = base.copy(
+        state = state, isFinal = state == ScoreState.POST, clockText = if (state == ScoreState.POST) "Final" else "Set 2",
+        home = base.home.copy(score = null), away = base.away.copy(score = null),
+        individual = TennisMatch(
+            title = "Final",
+            players = listOf(
+                TennisPlayer("Player A", winner = winner, sets = listOf(TennisSet(6, won = true), TennisSet(games)), setsWon = if (winner) 2 else 1),
+                TennisPlayer("Player B", winner = false, sets = listOf(TennisSet(4), TennisSet(3)))
+            ),
+            ending = TennisEnding.COMPLETED,
+            live = true
+        )
+    )
+
+    private fun ScoreSnapshot.firstSets(): List<TennisSet>? = (individual as? TennisMatch)?.players?.first()?.sets
+
+    @Test
+    fun `a tennis match's games and sets wait the delay like a score`() {
+        val delay = ScoreDelay()
+        val t0 = start + 3_600_000L
+        assertEquals(3, delay.apply(mapOf(key to tennis(3)), delayMs, t0).getValue(key).firstSets()?.get(1)?.games)
+        // A game won 10 s later: the set score shown stays the delayed one.
+        assertEquals(3, delay.apply(mapOf(key to tennis(4)), delayMs, t0 + 10_000).getValue(key).firstSets()?.get(1)?.games)
+        assertEquals(t0 + 10_000 + delayMs, delay.nextChangeAt)
+        assertEquals(4, delay.apply(mapOf(key to tennis(4)), delayMs, t0 + 10_000 + delayMs).getValue(key).firstSets()?.get(1)?.games)
+    }
+
+    @Test
+    fun `a tennis match that ends waits the delay before its winner shows`() {
+        val delay = ScoreDelay()
+        val t0 = start + 3_600_000L
+        delay.apply(mapOf(key to tennis(5)), delayMs, t0)
+        val early = delay.apply(mapOf(key to tennis(6, ScoreState.POST, winner = true)), delayMs, t0 + 10_000).getValue(key)
+        assertEquals(ScoreState.IN, early.state)
+        assertNull((early.individual as TennisMatch).winner)
+    }
+
+    @Test
+    fun `the tennis match being watched first seen live withholds its sets`() {
+        val shown = ScoreDelay().apply(mapOf(key to tennis(3)), delayMs, start + 3_600_000L, setOf(base.eventId)).getValue(key)
+        val match = shown.individual as TennisMatch
+        assertEquals(listOf(true, true), match.players.map { it.sets.isEmpty() })
+        assertEquals(listOf(0, 0), match.players.map { it.setsWon })
+        assertNull(match.winner)
+    }
 }
