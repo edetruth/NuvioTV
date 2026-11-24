@@ -88,10 +88,10 @@ class SportsLiveCrashReportTest {
         val error = IllegalArgumentException("bad event Celtics 102-99 76ers, then 3 – 0 at 14:05 in game 7")
         val text = SportsLiveCrashReport.withCrash("a\nb\n${SportsLiveReport.DETAILS}\n", "main", error, emptyList())
         for (score in listOf("102-99", "3 – 0", "14:05")) assertFalse("$score in\n$text", text.contains(score))
-        assertTrue(text, text.lines()[2].startsWith("Crash: java.lang.IllegalArgumentException: bad event Celtics <numbers> 76ers"))
+        assertTrue(text, text.lines()[2].startsWith("Crash: java.lang.IllegalArgumentException: bad event Celtics – 76ers"))
         assertTrue(text, text.contains("game 7"))
         val why = exit(SportsLiveExitRecord(1_000L, SportsLiveExitKind.ANR, "stuck after 2:1"), null).lines()[3]
-        assertEquals("Why: stuck after <numbers>", why)
+        assertEquals("Why: stuck after –", why)
     }
 
     private val anr1 = SportsLiveExitRecord(1_000L, SportsLiveExitKind.ANR, "Input dispatching timed out")
@@ -184,7 +184,7 @@ class SportsLiveCrashReportTest {
         val text = exit(anr1, trace)
         assertFalse(text, text.contains("2-1"))
         assertFalse(text, text.contains("3:0"))
-        assertTrue(text, text.contains("Arsenal <numbers> Chelsea"))
+        assertTrue(text, text.contains("Arsenal – Chelsea"))
         assertTrue(text, text.contains("  at com.nuvio.tv.Foo.bar(Foo.kt:12)"))
     }
 

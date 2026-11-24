@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive.report
 
 import com.nuvio.tv.core.LogRedact
+import com.nuvio.tv.ui.screens.sportslive.spoilerSafeLinkText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -82,10 +83,11 @@ object SportsLiveCrashReport {
     }
 
     /**
-     * [text] with every score-like pair of numbers (`2-1`, `3 – 0`, `14:05`) replaced: an exception message or the
-     * system's description could quote a feed's score (spoilers). A clock time goes too; telling them apart is a guess.
+     * [text] with every score masked the way a replay's link names are ([spoilerSafeLinkText]: shoot-out and extra-time
+     * forms too, #359), then any score-like pair of numbers (`2-1`, `3 – 0`, `14:05`) left replaced: an exception message
+     * or the system's description could quote a feed's score (spoilers). A clock time goes too; telling them apart is a guess.
      */
-    fun noScores(text: String): String = SCORE_LIKE.replace(text, NUMBERS)
+    fun noScores(text: String): String = SCORE_LIKE.replace(spoilerSafeLinkText(text) ?: text, NUMBERS)
 
     /**
      * An ANR trace line: a code frame ("  at pkg.Class.method(File.kt:12)") as it is; any other line (a thread's name,
