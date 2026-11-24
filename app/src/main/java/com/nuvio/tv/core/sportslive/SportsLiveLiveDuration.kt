@@ -86,8 +86,14 @@ object SportsLiveLiveDuration {
     fun isOverdue(item: SportsLiveItem, nowMs: Long): Boolean {
         if (item.isChannel) return false
         val timed = (listOf(item) + item.alternates).filter { it.startMs != null && it.startHasTimeOfDay }
-        return timed.isNotEmpty() && timed.all { source ->
-            nowMs - source.startMs!! > maxLiveMsOf(source, item)
-        }
+        if (timed.isEmpty()) return false
+        val limit = cardMaxLiveMs(item)
+        return timed.all { source -> nowMs - source.startMs!! > limit }
     }
+
+    /**
+     * L6: the longest [card] plausibly stays live: the longest of its sources' limits ([maxLiveMsOf]), so a merged card
+     * whose sport only an alternate names (a golf catalog's copy) keeps that sport's run; unsure means longer.
+     */
+    fun cardMaxLiveMs(card: SportsLiveItem): Long = (listOf(card) + card.alternates).maxOf { maxLiveMsOf(it, card) }
 }

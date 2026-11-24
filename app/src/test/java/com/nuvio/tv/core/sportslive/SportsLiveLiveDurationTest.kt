@@ -68,6 +68,17 @@ class SportsLiveLiveDurationTest {
     }
 
     @Test
+    fun `L6 - a merged card keeps the longest run any of its sources names`() {
+        // The primary names no sport; an untimed alternate comes from a golf catalog.
+        val primary = game("p", 4 * HOUR)
+        val golf = game("g", null).copy(catalogName = "Golf")
+        val merged = primary.copy(alternates = listOf(golf))
+        assertEquals(12 * HOUR, SportsLiveLiveDuration.cardMaxLiveMs(merged))
+        assertFalse(SportsLiveLiveDuration.isOverdue(merged, now))
+        assertTrue(SportsLiveLiveDuration.isOverdue(game("p", 4 * HOUR), now))
+    }
+
+    @Test
     fun `games without a timed kickoff and channels are never hidden by age`() {
         assertFalse(SportsLiveLiveDuration.isOverdue(game("a", null), now))
         assertFalse(SportsLiveLiveDuration.isOverdue(game("a", 10 * HOUR, timeOfDay = false), now))
