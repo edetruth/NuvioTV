@@ -33,7 +33,12 @@ class SportsLiveManifestFetcher @Inject constructor() {
             .build()
     }
 
-    suspend fun fetch(url: String, headers: Map<String, String>): ManifestResponse? = withContext(Dispatchers.IO) {
+    /** [url]'s answer, the body read up to [maxBytes]; null when it could not be read or a redirect may not be followed. */
+    suspend fun fetch(
+        url: String,
+        headers: Map<String, String>,
+        maxBytes: Long = MAX_BYTES
+    ): ManifestResponse? = withContext(Dispatchers.IO) {
         try {
             var target = url.toHttpUrlOrNull() ?: return@withContext null
             var sent = headers
@@ -48,7 +53,7 @@ class SportsLiveManifestFetcher @Inject constructor() {
                     } else {
                         return@withContext ManifestResponse(
                             response.code,
-                            if (response.isSuccessful) bodyStart(response) else null,
+                            if (response.isSuccessful) bodyStart(response, maxBytes) else null,
                             finalUrl = target.toString()
                         )
                     }
@@ -65,10 +70,10 @@ class SportsLiveManifestFetcher @Inject constructor() {
         }
     }
 
-    private fun bodyStart(response: okhttp3.Response): String? =
+    private fun bodyStart(response: okhttp3.Response, maxBytes: Long): String? =
         response.body?.source()?.let { source ->
-            source.request(MAX_BYTES)
-            val size = minOf(source.buffer.size, MAX_BYTES)
+            source.request(maxBytes)
+            val size = minOf(source.buffer.size, maxBytes)
             source.buffer.readUtf8(size)
         }
 
