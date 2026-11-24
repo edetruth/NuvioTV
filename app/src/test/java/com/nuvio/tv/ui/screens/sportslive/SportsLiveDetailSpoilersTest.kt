@@ -5,6 +5,11 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MetaBehaviorHints
+import com.nuvio.tv.domain.model.MetaCastMember
+import com.nuvio.tv.domain.model.MetaCompany
+import com.nuvio.tv.domain.model.MetaLink
+import com.nuvio.tv.domain.model.MetaReleaseDateCountry
+import com.nuvio.tv.domain.model.MetaTrailer
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
@@ -97,7 +102,12 @@ class SportsLiveDetailSpoilersTest {
             ageRating = "FT 2-1", director = listOf("Winner: Team A"), writer = listOf("Team A won"), cast = listOf("MVP Player"),
             imdbRating = 9.9f, country = "Won 2-1", language = "en", imdbId = "tt0000001", slug = "team-a-replays",
             behaviorHints = MetaBehaviorHints(defaultVideoId = "folder:ep1"),
-            videos = listOf(episode.copy(rating = 9.5, runtime = 128, available = true))
+            videos = listOf(episode.copy(rating = 9.5, runtime = 128, available = true)),
+            // S9: every list and link the hero or its rows could draw, so the test fails if the mask goes back to copy().
+            castMembers = listOf(MetaCastMember(name = "MVP Player")), productionCompanies = listOf(MetaCompany(name = "Final 2-1")),
+            networks = listOf(MetaCompany(name = "Highlights")), links = listOf(MetaLink("Recap 2-1", "recap", "https://example.invalid/r")),
+            trailers = listOf(MetaTrailer(name = "Goals 2-1")), releaseDates = listOf(MetaReleaseDateCountry("GB")),
+            rawPosterUrl = "https://img.example.invalid/raw.jpg", landscapePoster = "https://img.example.invalid/l.jpg"
         )
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         val expected = Meta(
@@ -164,6 +174,16 @@ class SportsLiveDetailSpoilersTest {
         sportsLiveDetailMeta("canonical:1", folder.copy(id = "canonical:1", videos = listOf(episode, second)))
         assertTrue(SportsLiveExtraSources.isSpoilerSafe(second.id))
         assertTrue(SportsLiveExtraSources.isSpoilerSafe(episode.id))
+    }
+
+    @Test
+    fun `blank video ids are never registered`() {
+        // S9: as the KDoc says.
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        SportsLiveExtraSources.markSpoilerSafeVideos("folder", listOf("", "   ", "ep1"))
+        assertFalse(SportsLiveExtraSources.isSpoilerSafe(""))
+        assertFalse(SportsLiveExtraSources.isSpoilerSafe("   "))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe("ep1"))
     }
 
     @Test
