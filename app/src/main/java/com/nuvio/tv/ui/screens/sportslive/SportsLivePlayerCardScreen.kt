@@ -95,8 +95,9 @@ fun SportsLivePlayerCardScreen(
     // once a key has been pressed on the card, so arriving on it gives nothing away.
     val hasGames = card != null && card.lastGames.isNotEmpty() && !state.showsReveal
     var keyPressed by remember { mutableStateOf(false) }
-    // Reveal while it shows, else the first game.
-    LaunchedEffect(state.showsReveal, hasGames) {
+    // Reveal while it shows, else the first game. Asked again once the card has loaded or a retry ended (review R7):
+    // Reveal is only placed with the loaded card, so a request while the skeleton or the failure card showed was lost.
+    LaunchedEffect(state.showsReveal, hasGames, card != null, state.retrying) {
         withFrameNanos { }
         runCatching {
             when {

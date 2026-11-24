@@ -199,7 +199,8 @@ class SportsLiveTeamViewModel internal constructor(
                     onChange = { mode, revealed, mayLoad ->
                         page.update { it.copy(mode = mode, revealed = revealed) }
                         if (!mayLoad) {
-                            page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL) }
+                            // A retry cut short by this (Scores Off) is over: no "Trying..." left behind (review R7).
+                            page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL, retrying = false) }
                         } else if (page.value.status == GameLoadStatus.WAITING_REVEAL) {
                             page.update { it.copy(status = GameLoadStatus.LOADING) }
                         }

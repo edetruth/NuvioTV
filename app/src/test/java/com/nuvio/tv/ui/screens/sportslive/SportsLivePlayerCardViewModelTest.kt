@@ -18,6 +18,7 @@ import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.core.sportslive.scores.TeamLeader
 import com.nuvio.tv.core.sportslive.scores.TeamRef
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceTimeBy
@@ -45,12 +46,15 @@ class SportsLivePlayerCardViewModelTest {
     private val settings = MutableStateFlow(ScoreSettings())
     private val requests = mutableListOf<String>()
     private var nextCard: PlayerCard? = embiid
+    /** While set, a load waits for it (a retry still running). */
+    private var gate: CompletableDeferred<Unit>? = null
 
     private fun viewModel(request: SportsLivePlayerCardRequest? = SportsLivePlayerCardRequest(target)) =
         SportsLivePlayerCardViewModel(
             request = request,
             loadCard = { league: EspnLeague, id: String ->
                 requests += "${league.path}/$id"
+                gate?.await()
                 nextCard
             },
             settings = settings
@@ -297,5 +301,31 @@ class SportsLivePlayerCardViewModelTest {
         assertEquals(3, requests.size)
         assertEquals(PlayerCardStatus.READY, vm.uiState.value.status)
         assertEquals(embiid, vm.uiState.value.card)
+    }
+
+    @Test
+    fun `a retry cut short by Scores Off leaves no Trying behind - Reveal then loads on the skeleton (review R7)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextCard = null
+        val vm = viewModel()
+        runCurrent()
+        assertEquals(PlayerCardStatus.FAILED, vm.uiState.value.status)
+
+        gate = CompletableDeferred()
+        nextCard = embiid
+        vm.retry()
+        runCurrent()
+        assertTrue(vm.uiState.value.retrying)
+
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        runCurrent()
+        assertFalse(vm.uiState.value.retrying)
+
+        vm.reveal()
+        runCurrent()
+        assertEquals(PlayerCardStatus.LOADING, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+        gate!!.complete(Unit)
+        runCurrent()
+        assertEquals(PlayerCardStatus.READY, vm.uiState.value.status)
     }
 }

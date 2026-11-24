@@ -150,6 +150,8 @@ class SportsLivePlayerCardViewModel internal constructor(
                     context = SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = request?.spoilerSafe == true),
                     onChange = { mode, revealed, mayLoad ->
                         state.update { it.copy(mode = mode, revealed = revealed) }
+                        // A retry cut short by this (Scores Off) is over: no "Trying..." left behind (review R7).
+                        if (!mayLoad) state.update { it.copy(retrying = false) }
                         // A card already loaded stays (Scores turned Off while it is open).
                         if (!mayLoad && state.value.card == null) state.update { it.copy(status = PlayerCardStatus.WAITING_REVEAL) }
                     }
