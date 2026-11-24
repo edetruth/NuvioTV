@@ -46,12 +46,18 @@ internal object PlaybackStreamHeaders {
         fun apply(request: Request, streamHeaders: Headers? = null): Request {
             if (inOrigin(request.url)) return request
             val scope = link.get() ?: return request
-            val names = request.headers.names().filter { name ->
-                StreamOrigin.drops(scope, request.url, name) &&
-                    (streamHeaders == null || request.header(name) in streamHeaders.values(name))
-            }
+            // Every value is judged on its own (#472): a header can repeat, e.g. the stream's Cookie beside a jar's.
+            val names = request.headers.names().filter { StreamOrigin.drops(scope, request.url, it) }
             if (names.isEmpty()) return request
-            return request.newBuilder().apply { names.forEach { removeHeader(it) } }.build()
+            val builder = request.newBuilder()
+            for (name in names) {
+                val values = request.headers(name)
+                val kept = if (streamHeaders == null) emptyList() else values.filter { it !in streamHeaders.values(name) }
+                if (kept.size == values.size) continue
+                builder.removeHeader(name)
+                kept.forEach { builder.addHeader(name, it) }
+            }
+            return builder.build()
         }
 
         /** Whether [url] is within the link's origin (the first url seen is the link). */

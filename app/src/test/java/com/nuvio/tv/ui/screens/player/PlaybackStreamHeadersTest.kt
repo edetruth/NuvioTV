@@ -70,6 +70,22 @@ class PlaybackStreamHeadersTest {
     }
 
     @Test
+    fun `a repeated header loses the stream's value even beside another host's own (#472)`() {
+        val scope = PlaybackStreamHeaders.HostScope(link.toHttpUrl())
+        val stream = request(link).headers
+        val both = Request.Builder().url("https://edge.invalid/seg1.ts")
+            .addHeader("Cookie", "s=1")
+            .addHeader("Cookie", "edge=1")
+            .build()
+        assertEquals(listOf("edge=1"), scope.apply(both, stream).headers("Cookie"))
+        val streamTwice = Request.Builder().url("https://edge.invalid/seg1.ts")
+            .addHeader("Cookie", "edge=1")
+            .addHeader("Cookie", "s=1")
+            .build()
+        assertEquals(listOf("edge=1"), scope.apply(streamTwice, stream).headers("Cookie"))
+    }
+
+    @Test
     fun `another host keeps its own cookie, only the stream's goes (P7)`() {
         val scope = PlaybackStreamHeaders.HostScope()
         val stream = request(link).headers
