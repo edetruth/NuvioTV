@@ -334,6 +334,7 @@ internal fun moreLiveGroupLabel(key: String): String = when (key) {
     SportsLiveMoreLive.FIGHTS -> stringResource(R.string.sports_live_more_live_fights)
     SportsLiveMoreLive.OTHER -> stringResource(R.string.sports_live_more_live_other)
     SportsLiveMoreLive.OTHER_STREAMS -> stringResource(R.string.sports_live_more_live_other_streams)
+    SportsLiveMoreLive.CHANNELS -> stringResource(R.string.sports_live_tab_channels)
     else -> SportsLiveMoreLive.kindOf(key)?.let { sportKindLabel(it) }
         ?: SportsLiveMoreLive.textOf(key)?.let { SportsLiveDisplayText.label(it) }
         ?: stringResource(R.string.sports_live_more_live_other)

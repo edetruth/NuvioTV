@@ -55,6 +55,16 @@ class SportsLiveMoreLiveTest {
     }
 
     @Test
+    fun `a 24-7 channel goes in a Channels group of its own after the sports, never under its catalog's sport (#285)`() {
+        val news = game("Sky Sports News", "Soccer").copy(isChannel = true)
+        assertEquals(SportsLiveMoreLive.CHANNELS, SportsLiveMoreLive.keyOf(news, untagged = { false }))
+        val hidden = listOf(game("Al Hilal vs Al Ahli", "Soccer"), news, game("India vs Australia", "Cricket"), game("Pakistan vs England", "Cricket"))
+        val groups = SportsLiveMoreLive.groups(hidden, listOf(game("BKFC", null)), untagged = { it.sport == null })
+        assertEquals(listOf("CRICKET", "SOCCER", SportsLiveMoreLive.CHANNELS, SportsLiveMoreLive.OTHER), groups.map { it.key })
+        assertEquals(listOf("Al Hilal vs Al Ahli"), groups.first { it.key == "SOCCER" }.items.map { it.meta.name })
+    }
+
+    @Test
     fun `adding a sport is offered once per sport My sports can hold`() {
         val mine = MySports(mapOf(MySport.SOCCER to emptySet()))
         val tennis = game("Sinner vs Alcaraz", "Tennis")
