@@ -119,9 +119,10 @@ class SportsLiveViewModelTest {
     /** Collects [SportsLiveViewModel.uiState] in the background, as the screen would, so WhileSubscribed stays active. */
     private fun TestScope.newViewModel(
         scores: Map<String, ScoreSnapshot> = emptyMap(),
-        canEstimate: (SportsLiveItem) -> Boolean = { true }
+        canEstimate: (SportsLiveItem) -> Boolean = { true },
+        espnDown: (SportsLiveItem) -> Boolean = { false }
     ): SportsLiveViewModel {
-        val viewModel = SportsLiveViewModel(repo, endedInputs = flowOf(EndedInputs(scores, canEstimate)), endedGames = SportsLiveEndedGames(), computeDispatcher = compute)
+        val viewModel = SportsLiveViewModel(repo, endedInputs = flowOf(EndedInputs(scores, canEstimate, espnDown)), endedGames = SportsLiveEndedGames(), computeDispatcher = compute)
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
@@ -2173,7 +2174,9 @@ class SportsLiveViewModelTest {
         )
         val viewModel = SportsLiveViewModel(
             repo,
-            endedInputs = flowOf(EndedInputs(scores, canEstimate = { false })),
+            // ESPN does not answer (down): no estimate, and no wait for it (#462), so only a link check moves a game; a
+            // covered game "not answered" for the whole test at a pinned clock would otherwise wait for ever (#470).
+            endedInputs = flowOf(EndedInputs(scores, canEstimate = { false }, espnDown = { true })),
             endedGames = SportsLiveEndedGames(),
             clock = linkTicks,
             linkChecker = checker,
@@ -2354,7 +2357,8 @@ class SportsLiveViewModelTest {
         // estimate with no stream yet stays live, dimmed (#145).
         nextLoad = load(listOf(pastEstimate, stillOn))
         endedFlow.value = setOf(pastEstimate.streamKey, stillOn.streamKey)
-        val viewModel = newViewModel(canEstimate = { false })
+        // ESPN not answering (down): no estimate and no wait (#462), as on a TV once ESPN's feeds fail.
+        val viewModel = newViewModel(canEstimate = { false }, espnDown = { true })
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
