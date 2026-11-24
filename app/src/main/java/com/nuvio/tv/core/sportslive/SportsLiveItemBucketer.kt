@@ -368,7 +368,8 @@ object SportsLiveItemBucketer {
         return liveByClockAt(start, nowMs)
     }
 
-    private fun liveByClockAt(start: Long, nowMs: Long): Boolean = start > nowMs - LIVE_WINDOW_MS && start <= nowMs
+    /** A game starting at [start] is in its live window at [nowMs]. */
+    internal fun liveByClockAt(start: Long, nowMs: Long): Boolean = start > nowMs - LIVE_WINDOW_MS && start <= nowMs
 
     /**
      * The next moment after [nowMs] when one of [items] (or a merged copy) changes tab by the clock alone

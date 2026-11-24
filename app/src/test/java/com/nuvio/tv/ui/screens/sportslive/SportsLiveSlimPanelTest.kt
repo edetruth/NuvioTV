@@ -397,7 +397,7 @@ class SportsLiveSlimPanelTest {
     @Test
     fun `a panel row is one compact line - tag, logos, short names and score, then the clock`() {
         assertEquals(22.dp, SportsLiveTokens.Size.PanelLine)
-        assertTrue(SportsLiveTokens.Size.PanelWidth in 270.dp..290.dp)
+        assertTrue(SportsLiveTokens.Size.PanelWidth in 310.dp..330.dp)
 
         val art = GameArt(GameArtTeam("Orlando Magic", "ORL", null), GameArtTeam("Philadelphia 76ers", "PHI", null), "NBA", null, false)
         val live = ScoreboardRow(

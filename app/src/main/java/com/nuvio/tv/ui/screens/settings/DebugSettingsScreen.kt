@@ -2,6 +2,7 @@
 
 package com.nuvio.tv.ui.screens.settings
 
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSafeAreaFrame
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.compose.foundation.layout.Arrangement
@@ -157,6 +158,16 @@ fun DebugSettingsContent(
                     subtitle = stringResource(R.string.advanced_compose_highlighter_subtitle),
                     checked = uiState.composeHighlighterEnabled,
                     onToggle = { viewModel.onEvent(DebugSettingsEvent.ToggleComposeHighlighter(it)) }
+                )
+            }
+
+            item(key = "debug_toggle_safe_area") {
+                val safeAreaShown by SportsLiveSafeAreaFrame.shown.collectAsStateWithLifecycle()
+                DebugToggleCard(
+                    title = stringResource(R.string.sports_live_debug_safe_area_title),
+                    subtitle = stringResource(R.string.sports_live_debug_safe_area_subtitle),
+                    checked = safeAreaShown,
+                    onToggle = { SportsLiveSafeAreaFrame.shown.value = it }
                 )
             }
 

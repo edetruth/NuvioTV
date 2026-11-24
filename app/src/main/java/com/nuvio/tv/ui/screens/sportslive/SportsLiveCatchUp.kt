@@ -27,7 +27,6 @@ import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.home.SportsLiveHomeMeta
 import com.nuvio.tv.ui.screens.home.SportsLiveHomeRow
@@ -217,7 +216,7 @@ object SportsLiveCatchUpHomeRow {
 @Composable
 internal fun SportsLiveReplayResolvingDialog(title: String, onDismiss: () -> Unit) {
     NuvioDialog(onDismiss = onDismiss, title = stringResource(R.string.sports_live_zap_switching, title)) {
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+        SportsLiveSkeletonRows(count = 3)
     }
 }
 

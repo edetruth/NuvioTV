@@ -233,6 +233,30 @@ class SportsLiveAlertCardsTest {
         assertEquals(null, alerts.current.value)
     }
 
+    @Test
+    fun `a card taken away for the Scores setting or a profile switch is cut, with no exit fade showing its score (review R9)`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.onProfile(1)
+        alerts.onRules(ScoresMode.SHOW, SportsLiveAlertSettings())
+        alerts.enqueue(listOf(score(pacers)), now)
+        val hidden = alerts.current.value!!
+        alerts.onRules(ScoresMode.HIDE_UNTIL_FOCUSED, SportsLiveAlertSettings())
+        assertEquals(hidden.id, alerts.cut.value)
+
+        alerts.onRules(ScoresMode.SHOW, SportsLiveAlertSettings())
+        alerts.enqueue(listOf(score(lakers)), now + 1_000)
+        val switched = alerts.current.value!!
+        alerts.onProfile(2)
+        assertEquals(switched.id, alerts.cut.value)
+
+        // A card that simply ends fades out as usual.
+        alerts.enqueue(listOf(score(knicks)), now + 2_000)
+        val ends = alerts.current.value!!
+        alerts.close(ends, AlertAnswer.TIMEOUT)
+        assertFalse(alerts.cut.value == ends.id)
+    }
+
     // Tier 1 C6: the card already up is read again when Scores, a switch or spoiler protection changes.
 
     @Test

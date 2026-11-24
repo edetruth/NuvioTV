@@ -88,8 +88,8 @@ object SportsLiveTokens {
 
     /** The TV type scale (board px → sp). Merge with the app font: [SportsLiveTokens.style]. */
     object Type {
-        /** Tags (league, period, badges): 22 px. */
-        val Tag = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold)
+        /** Decorative caps headings (matchup top line, NOW PLAYING): 24 px. Anything read to decide or act is [Pill]. */
+        val Tag = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em)
         /** The 26 px floor (live.24, audit A2) for status words, periods, ranks and pills: nothing a row reads is smaller. */
         val Pill = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
         /** League tags (live.24, audit B2): 26 px grey on every surface. */
@@ -182,7 +182,12 @@ object SportsLiveTokens {
         val StageGap = 24.dp
 
         /** The in-player panel (#140): 560 px wide (29 % of 1080p), one-line rows 44 px tall, 4 px apart. */
-        val PanelWidth = 280.dp
+        val PanelWidth = 320.dp
+        /**
+         * The in-player panel's content inset (#259): its scrim starts at x = 0 (backgrounds bleed), the rows' text
+         * starts on the 48 dp safe line, the top and bottom on the 27 dp one.
+         */
+        val PanelContentStart = 48.dp
         val PanelLine = 22.dp
         val PanelLineGap = 2.dp
         /** A matched panel row's team logos or flags: 36 px, beside the abbreviations. */
@@ -217,8 +222,8 @@ object SportsLiveTokens {
     }
 
     /**
-     * Followed teams' alert cards (#136): one slim, slightly translucent card in the toasts' corner (live.20: one
-     * corner for everything, [Toast]'s bottom left, the toast stacked above the card); in dual screen split, the
+     * Followed teams' alert cards (#136): one slim opaque card. The two homes (#101): top right = something asks you
+     * (alert and kickoff cards), bottom left = status (toasts, the player's own cards); in dual screen split, the
      * bottom left of the pane the card is not about.
      */
     object Alert {
@@ -231,15 +236,13 @@ object SportsLiveTokens {
         val Radius = 12.dp
         /** The card's fill: the panel colour, slightly see-through. */
         const val FILL_ALPHA = 0.86f
-        val Border = Colors.Divider
-        /** The hint line ("OK Watch · ▼ Peek"). */
-        val Hint = Colors.TextMuted
+        val Border = Colors.Outline
+        /** The hint line ("OK Watch · ▼ Peek"): secondary, not muted (#95: key hints are read). */
+        val Hint = Colors.TextSecondary
         /** A grouped card's dots: the one showing, the others. */
         val DotOn = Colors.TextPrimary
         val DotOff = Colors.TextMuted.copy(alpha = 0.4f)
         val Dot = 5.dp
-        /** It slides in from the right this fast. */
-        const val SLIDE_MS = 220
 
         /** The peek's label over the peeked game. */
         val PeekLabelFill = Color.Black.copy(alpha = 0.6f)
@@ -277,7 +280,7 @@ object SportsLiveTokens {
         val Label = TextStyle(fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
         val Value = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
         /** The help line: 22 px. */
-        val Help = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
+        val Help = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium)
     }
 
     /** The one focus language (#93). */
@@ -294,8 +297,8 @@ object SportsLiveTokens {
 
     /**
      * The one toast card (#134, `SportsLiveToast`): 640 px wide on the raised surface, an icon column whose colour
-     * carries the meaning, a 28 px title over a 26 px line, each one line with an ellipsis. It sits top right, in
-     * the same spot as the alert cards (#136), on every screen: inside the stage's top right on browse screens.
+     * carries the meaning, a 28 px title over a 26 px line, each one line with an ellipsis. It sits bottom left
+     * (status), never in the alert cards' top right (#101).
      */
     /** The full player's Sports & Live corner (#138, F8): its starting, waiting and error cards, the toast above them. */
     object Player {
@@ -323,9 +326,23 @@ object SportsLiveTokens {
         val Title = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
         val Line = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
         /** "FT" in the icon column. */
-        val FinalMark = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold)
-        /** It fades and slides in this fast. */
+        val FinalMark = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold)
+    }
+
+    /** Overlay card motion (#101): one set of numbers for toasts and alert cards. */
+    object Motion {
         const val ENTER_MS = 200
+        const val EXIT_MS = 150
+        /** Swapping one card for another in place (OK to countdown): a crossfade, no slide. */
+        const val CROSSFADE_MS = 150
+        /** A card comes in from its own edge by this much, not across the screen. */
+        val TRAVEL = 24.dp
+        /** The time-left line on a card that asks something. */
+        val TIME_LINE = 2.dp
+        const val TIME_LINE_ALPHA = 0.6f
+
+        /** The slide's start offset in px: from the end (right) edge it is positive, from the start (left) edge negative. */
+        fun slideOffset(fromEnd: Boolean, travelPx: Int): Int = if (fromEnd) travelPx else -travelPx
     }
 
     /** More… as a sheet over the stage (#134): 720 px wide, 72 px entries, its title and one status line. */

@@ -84,7 +84,8 @@ class SportsLiveAlerts @Inject constructor(
     /** Probes a game's links at kickoff (#162); null (tests): every kickoff fires unchecked. */
     private val kickoffProbe: SportsLiveKickoffProbe? = null
 ) {
-    private val engine = SportsLiveAlertEngine()
+    @VisibleForTesting
+    internal val engine = SportsLiveAlertEngine()
     /** Crunch-time alerts' limits (#137); guarded by [lock]. */
     private val crunch = CrunchAlerts()
     private val lock = Any()
@@ -120,6 +121,14 @@ class SportsLiveAlerts @Inject constructor(
      * shows ([SportsLiveAlertCards.priority]) and the others wait their turn ([SportsLiveAlertCards.addWaiting]).
      */
     val current: StateFlow<AlertCard?> = currentFlow.asStateFlow()
+
+    private val cutFlow = MutableStateFlow(-1L)
+
+    /**
+     * The id of the last card taken away for the Scores setting, spoiler protection or a profile switch (review R9): the
+     * host drops it at once, with no exit fade that would keep its score on screen.
+     */
+    val cut: StateFlow<Long> = cutFlow.asStateFlow()
 
     /** What plays now, as the host last said. */
     val watchingNow: StateFlow<SportsLiveWatching> = watching.asStateFlow()
@@ -171,6 +180,39 @@ class SportsLiveAlerts @Inject constructor(
 
     fun setWatching(now: SportsLiveWatching) {
         watching.value = now
+        synchronized(lock) {
+            val card = currentFlow.value ?: return@synchronized
+            val alert = card.alert as? SportsLiveAlert.Kickoff ?: return@synchronized
+            if (alert.noStreamYet) return@synchronized
+            val nowMs = System.currentTimeMillis()
+            when {
+                // Review R6: the viewer left the movie into this very game: nothing to ask, the game is answered.
+                alert.passive && SportsLiveAlertEngine.isPlaying(alert.item, now, alert.snapshot) -> {
+                    engine.answered(alert.item)
+                    currentFlow.value = null
+                    showNextLocked(nowMs)
+                }
+                // Review R6: into dual screen, which holds kickoffs: the offer waits until it closes.
+                alert.passive && now.dual -> {
+                    engine.deferOffer(alert.item)
+                    currentFlow.value = null
+                    showNextLocked(nowMs)
+                }
+                // The passive kickoff card over a movie (#91): the viewer paused or left it, so the card asks now, as a new
+                // card. It is the game's one deferred offer.
+                alert.passive && SportsLiveAlertEngine.viewerFree(now) -> {
+                    currentFlow.value = AlertCard(++cardCount, alert.copy(passive = false, deferred = true), nowMs)
+                }
+                // The movie plays again while the card asks (review R1): OK is the movie's again, so the card goes. The
+                // deferred offer was the one offer (answered); a first kickoff keeps its one offer for the next pause.
+                !alert.passive && SportsLiveAlertEngine.moviePlays(now) -> {
+                    if (alert.deferred) engine.answered(alert.item) else engine.deferOffer(alert.item)
+                    currentFlow.value = null
+                    showNextLocked(nowMs)
+                }
+                else -> Unit
+            }
+        }
     }
 
     /** The Scores setting and alert switches as last read: a queued toast is checked against them before it shows. */
@@ -426,6 +468,7 @@ class SportsLiveAlerts @Inject constructor(
             val next = underProtection(card.alert, lastProtection.copy(nowMs = nowMs), liveScoreShown::contains)
                 ?.let { SportsLiveAlertEngine.stillShowable(it, lastMode, lastSettings) }
             if (next == null) {
+                cutFlow.value = card.id
                 currentFlow.value = null
                 showNextLocked(nowMs)
             } else if (next != card.alert) {
@@ -444,6 +487,7 @@ class SportsLiveAlerts @Inject constructor(
             queue.clear()
             liveScoreShown.clear()
             // The card up belongs to the profile before too (live.24 RC3 review L1).
+            currentFlow.value?.let { cutFlow.value = it.id }
             currentFlow.value = null
         }
         lastProfile = profileId
@@ -461,7 +505,14 @@ class SportsLiveAlerts @Inject constructor(
     fun close(card: AlertCard, answer: AlertAnswer) = synchronized(lock) {
         val nowMs = System.currentTimeMillis()
         val alert = card.first
-        if (alert is SportsLiveAlert.Kickoff && alert.noStreamYet) {
+        if (alert is SportsLiveAlert.Kickoff && alert.passive) {
+            // Over a movie that plays (#91): not answered; its one offer waits for the viewer to pause or leave.
+            engine.deferOffer(alert.item)
+        } else if (alert is SportsLiveAlert.Kickoff && alert.deferred && answer == AlertAnswer.LATER) {
+            // The deferred offer went stale unseen (a panel over the paused movie, review R8): it waits for the next pause,
+            // never as Later's re-ask, which would come over the playing movie.
+            engine.deferOffer(alert.item)
+        } else if (alert is SportsLiveAlert.Kickoff && alert.noStreamYet) {
             // The note (#162): Remind me in 10 min probes once more then; anything else, done.
             engine.answered(alert.item)
             if (answer == AlertAnswer.LATER) holdsScope.launch { holdsLock.withLock { holds.remindLater(alert) } }
@@ -496,6 +547,11 @@ class SportsLiveAlerts @Inject constructor(
             if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
             return null
         }
+        // The deferred offer never shows over a movie that plays (review R1): it waits for the next pause.
+        if (next is SportsLiveAlert.Kickoff && next.deferred && SportsLiveAlertEngine.moviePlays(watching.value)) {
+            engine.deferOffer(next.item)
+            return null
+        }
         if (!SportsLiveAlertEngine.claimToShow(next)) return null
         return next
     }
@@ -512,7 +568,9 @@ class SportsLiveAlerts @Inject constructor(
             // A kickoff or full time that waited behind another card gets its own time to show from now; a score stays
             // dated from when it was raised.
             val from = if (next is SportsLiveAlert.Kickoff || next is SportsLiveAlert.FullTime) nowMs else raisedAt
-            currentFlow.value = AlertCard(++cardCount, next, from)
+            // Over a movie that plays the kickoff card shows passive (#91), decided now, as it shows.
+            val shown = if (next is SportsLiveAlert.Kickoff && SportsLiveAlertEngine.kickoffPassive(next, watching.value)) next.copy(passive = true) else next
+            currentFlow.value = AlertCard(++cardCount, shown, from)
             // A Full time card showing its score: the result is known (live.20 1c). Recorded as it shows, never as it is
             // raised (l24 polish): a waiting one may still show as "result hidden" or not at all, and a known result
             // takes its replay out of Catch up and Your teams.

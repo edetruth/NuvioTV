@@ -52,7 +52,6 @@ import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.PlayerGame
 import com.nuvio.tv.core.sportslive.scores.PlayerStat
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
@@ -96,8 +95,9 @@ fun SportsLivePlayerCardScreen(
     // once a key has been pressed on the card, so arriving on it gives nothing away.
     val hasGames = card != null && card.lastGames.isNotEmpty() && !state.showsReveal
     var keyPressed by remember { mutableStateOf(false) }
-    // Reveal while it shows, else the first game.
-    LaunchedEffect(state.showsReveal, hasGames) {
+    // Reveal while it shows, else the first game. Asked again once the card has loaded or a retry ended (review R7):
+    // Reveal is only placed with the loaded card, so a request while the skeleton or the failure card showed was lost.
+    LaunchedEffect(state.showsReveal, hasGames, card != null, state.retrying) {
         withFrameNanos { }
         runCatching {
             when {
@@ -123,8 +123,9 @@ fun SportsLivePlayerCardScreen(
                 focusRequester = revealFocus,
                 onReveal = viewModel::reveal
             )
-            state.status == PlayerCardStatus.FAILED -> SportsLivePageMessage(stringResource(R.string.sports_live_player_unavailable))
-            card == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+            state.status == PlayerCardStatus.FAILED || state.retrying ->
+                SportsLivePageFailure(stringResource(R.string.sports_live_player_failed_title), state.retrying, viewModel::retry)
+            card == null -> SportsLivePlayerSkeleton()
             else -> Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP)) {
                 // Left: the last 5 games, where focus lives.
                 LazyColumn(

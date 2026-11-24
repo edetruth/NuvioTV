@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +63,6 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.StandingsTable
 import com.nuvio.tv.core.sportslive.scores.StatComparison
 import com.nuvio.tv.core.sportslive.scores.scoreDetails
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
@@ -97,6 +97,10 @@ internal fun GameBody(
     onOpenPlayer: (String, PlayerCardTarget) -> Unit,
     /** A Standings row's Team page (BUG11). */
     onOpenTeam: (TeamRef) -> Unit = {},
+    /** Try again on the failure card (#97). */
+    onRetry: () -> Unit = {},
+    /** The failure card's Try again: the header's Down and the first focus while it shows (review R2). */
+    failureFocus: FocusRequester = remember { FocusRequester() },
     /** A college league's AP ranks by team id, for every Standings row (BUG18). */
     standingRanks: Map<String, Int> = emptyMap()
 ) {
@@ -106,8 +110,9 @@ internal fun GameBody(
         !state.settled -> Unit
         // An upcoming game's Preview is spoiler-neutral (#171): it shows with the score hidden too.
         !state.showsScore && section != GameSection.PREVIEW -> HiddenGameBody(hasReplay = state.replay != null)
-        state.status == GameLoadStatus.FAILED && summary == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_unavailable))
-        summary == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+        state.showsFailure ->
+            SportsLivePageFailure(stringResource(R.string.sports_live_game_failed_title), state.retrying, onRetry, focus = failureFocus)
+        summary == null -> SportsLiveGameSkeleton()
         section == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_no_stats))
         else -> androidx.compose.runtime.key(section) {
             // Standings open on the game's teams (BUG18).

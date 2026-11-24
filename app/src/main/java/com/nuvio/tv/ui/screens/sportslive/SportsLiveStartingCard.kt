@@ -122,7 +122,7 @@ fun SportsLiveStartingCard(
             .then(if (selected == null) Modifier.claimsBottomLeft() else Modifier)
             .widthIn(max = if (compact) COMPACT_WIDTH else SportsLiveTokens.Alert.Width)
             .clip(shape)
-            .background(Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            .background(Colors.SurfaceRaised)
             .border(1.dp, SportsLiveTokens.Alert.Border, shape)
             .padding(SportsLiveTokens.Alert.Padding)
     ) {

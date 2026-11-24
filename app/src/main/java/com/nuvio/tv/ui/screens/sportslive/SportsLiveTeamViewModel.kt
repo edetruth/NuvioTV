@@ -86,7 +86,9 @@ data class SportsLiveTeamUiState(
     /** The card of each upcoming game (strict match), by event id: Watch and Remind me. */
     val cards: Map<String, SportsLiveItem> = emptyMap(),
     /** Spoiler protection (#151): a protected game's result row stays hidden. */
-    val protection: SpoilerProtection = SpoilerProtection()
+    val protection: SpoilerProtection = SpoilerProtection(),
+    /** Try again was pressed and the load is running (#97). */
+    val retrying: Boolean = false
 ) {
     /** Record, standing, upcoming games and leaders (decision 5: shown under Hide until focused). */
     val showsRecord: Boolean get() = TeamPageSpoilers.showsRecord(mode, revealed, spoilerSafe)
@@ -153,11 +155,13 @@ class SportsLiveTeamViewModel internal constructor(
         val status: GameLoadStatus = GameLoadStatus.LOADING,
         val stale: Boolean = false,
         val mode: ScoresMode = ScoresMode.SHOW,
-        val revealed: Boolean = false
+        val revealed: Boolean = false,
+        val retrying: Boolean = false
     )
 
     private val page = MutableStateFlow(Page())
     private val visible = MutableStateFlow(false)
+    private val retryTick = MutableStateFlow(0)
     private val revealRequested = MutableStateFlow(false)
 
     val uiState: StateFlow<SportsLiveTeamUiState> = combine(page, followedTeams, items, protection) { page, followed, items, protection ->
@@ -176,7 +180,8 @@ class SportsLiveTeamViewModel internal constructor(
             followed = isFollowed,
             replays = data?.let { TeamPages.replaysFor(it.recent, SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.REPLAYS, nowMs), nowMs) }.orEmpty(),
             cards = data?.let { teamPageCards(it.upcoming, items, isFollowed, nowMs) }.orEmpty(),
-            protection = protection
+            protection = protection,
+            retrying = page.retrying
         )
     }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team, spoilerSafe = request?.spoilerSafe == true))
 
@@ -188,12 +193,14 @@ class SportsLiveTeamViewModel internal constructor(
                     settings = settings.map { it.mode },
                     revealed = revealRequested,
                     visible = visible,
+                    retry = retryTick,
                     mode = { it },
                     context = SpoilerContext(SpoilerSurface.TEAM, spoilerSafe = request.spoilerSafe),
                     onChange = { mode, revealed, mayLoad ->
                         page.update { it.copy(mode = mode, revealed = revealed) }
                         if (!mayLoad) {
-                            page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL) }
+                            // A retry cut short by this (Scores Off) is over: no "Trying..." left behind (review R7).
+                            page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL, retrying = false) }
                         } else if (page.value.status == GameLoadStatus.WAITING_REVEAL) {
                             page.update { it.copy(status = GameLoadStatus.LOADING) }
                         }
@@ -202,12 +209,19 @@ class SportsLiveTeamViewModel internal constructor(
                     // Loaded once per open; the repository serves a return from a Game page.
                     if (page.value.status == GameLoadStatus.READY) return@revealGatedLoad
                     when (val load = loadTeam(team.league, team.teamId)) {
-                        is TeamPageLoad.Loaded -> page.update { it.copy(data = load.data, stale = load.stale, status = GameLoadStatus.READY) }
-                        TeamPageLoad.Failed -> page.update { it.copy(status = GameLoadStatus.FAILED) }
+                        is TeamPageLoad.Loaded -> page.update { it.copy(data = load.data, stale = load.stale, status = GameLoadStatus.READY, retrying = false) }
+                        TeamPageLoad.Failed -> page.update { it.copy(status = GameLoadStatus.FAILED, retrying = false) }
                     }
                 }
             }
         }
+    }
+
+    /** Try again on the failure card (#97): the load runs afresh; the button reads "Trying..." until it ends. */
+    fun retry() {
+        if (page.value.retrying || page.value.status != GameLoadStatus.FAILED) return
+        page.update { it.copy(retrying = true) }
+        retryTick.update { it + 1 }
     }
 
     /** The page is on screen (started): only then does it load. */

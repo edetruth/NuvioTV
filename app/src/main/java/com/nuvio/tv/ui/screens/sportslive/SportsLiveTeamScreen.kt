@@ -69,7 +69,6 @@ import com.nuvio.tv.core.sportslive.scores.TeamOutcome
 import com.nuvio.tv.core.sportslive.scores.TeamPageSpoilers
 import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.domain.model.SportsLiveItem
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
@@ -136,6 +135,10 @@ fun SportsLiveTeamScreen(
     var returnKey by rememberSaveable { mutableStateOf<String?>(null) }
     var returnPending by rememberSaveable { mutableStateOf(false) }
     val returnFocus = remember { FocusRequester() }
+    // The failure card (#97): its Try again is the header's Down and the first focus while it shows (review R2).
+    val failureFocus = remember { FocusRequester() }
+    val failed = state.status == GameLoadStatus.FAILED
+    val failedNow by rememberUpdatedState(failed)
     // First focus: Reveal under Off, else Follow. A Reveal goes away once pressed: focus moves to Follow.
     LaunchedEffect(state.revealed) {
         repeat(2) { withFrameNanos { } }
@@ -144,6 +147,18 @@ fun SportsLiveTeamScreen(
             withFrameNanos { }
             if (runCatching { returnFocus.requestFocus() }.isSuccess) return@LaunchedEffect
         }
+        runCatching { (if (failedNow) failureFocus else headerFocus).requestFocus() }
+    }
+    // Try again worked: the card that held focus is gone, so the header takes it, as on a first load.
+    var wasFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(failed) {
+        if (failed) {
+            wasFailed = true
+            return@LaunchedEffect
+        }
+        if (!wasFailed) return@LaunchedEffect
+        wasFailed = false
+        withFrameNanos { }
         runCatching { headerFocus.requestFocus() }
     }
     fun Modifier.returning(key: String): Modifier = if (key == returnKey) focusRequester(returnFocus) else this
@@ -178,7 +193,7 @@ fun SportsLiveTeamScreen(
         TeamHeader(
             state = state,
             firstFocus = headerFocus,
-            downFocus = if (data != null) bodyFocus else null,
+            downFocus = if (data != null) bodyFocus else if (failed) failureFocus else null,
             onReveal = viewModel::reveal,
             onToggleFollow = viewModel::toggleFollow
         )
@@ -186,8 +201,9 @@ fun SportsLiveTeamScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 waiting -> SportsLivePageMessage(stringResource(R.string.sports_live_team_hidden_off))
-                state.status == GameLoadStatus.FAILED -> SportsLivePageMessage(stringResource(R.string.sports_live_team_unavailable))
-                data == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                state.status == GameLoadStatus.FAILED ->
+                    SportsLivePageFailure(stringResource(R.string.sports_live_team_failed_title), state.retrying, viewModel::retry, focus = failureFocus)
+                data == null -> SportsLiveRowsSkeleton()
                 // Scrolling only when a row nears an edge, so the list opens at its top with its heading showing (the TV
                 // default pivot would scroll a row returned to from a Game page up to a third of the height).
                 else -> SportsLiveKeepFromEdge(margin = TEAM_EDGE_KEEP) { Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {

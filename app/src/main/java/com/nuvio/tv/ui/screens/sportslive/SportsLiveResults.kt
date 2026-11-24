@@ -1052,7 +1052,7 @@ private fun ResultBoardRow(
                     )
                     // Only a strict replay match gets the tag (#51); it stays visible while a score is hidden, except where
                     // the row already says "▶ Watch replay".
-                    if (hasReplay && !(watchReplay && !showScore)) ReplayPill()
+                    if (hasReplay && !(watchReplay && !showScore)) SportsLiveReplayPill()
                 }
             }
             val bar = when {
@@ -1247,21 +1247,6 @@ internal object ResultRowMetrics {
 private fun resultLineStyle() =
     SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontSize = ResultRowMetrics.FONT_SP.sp, lineHeight = ResultRowMetrics.LINE_SP.sp)
 
-/** The green "Replay" tag of a result with a replay. */
-@Composable
-internal fun ReplayPill() {
-    Text(
-        text = stringResource(R.string.sports_live_results_replay),
-        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-        color = REPLAY_PILL_TEXT,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(REPLAY_PILL_COLOR)
-            .padding(horizontal = NuvioTheme.spacing.sm, vertical = 2.dp)
-    )
-}
-
 @Composable
 private fun TeamLine(
     choices: List<String>,
@@ -1339,5 +1324,3 @@ private fun resultsFinalWords(event: ScoreSnapshot): String = ScoreChips.finalWo
     fullTimeSport = GameStatusText.endsAtFullTime(event.league.sport)
 )
 
-private val REPLAY_PILL_COLOR = Color(0xFF7EE0A1)
-private val REPLAY_PILL_TEXT = Color(0xFF0B1F12)

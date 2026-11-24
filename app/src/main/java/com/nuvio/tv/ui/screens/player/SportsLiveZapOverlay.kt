@@ -503,7 +503,7 @@ private fun BoxScope.PausedLiveChip(
         maxLines = 1,
         modifier = Modifier
             .align(Alignment.TopEnd)
-            .padding(top = 32.dp, end = 32.dp)
+            .padding(top = SportsLiveTokens.Size.SafeTop, end = SportsLiveTokens.Size.SafeEnd)
             .zIndex(3f)
             .clip(RoundedCornerShape(NuvioTheme.radii.xl))
             .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
@@ -542,7 +542,7 @@ private fun BoxScope.BehindLiveIndicator(
         color = NuvioTheme.colors.TextPrimary,
         modifier = Modifier
             .align(Alignment.TopEnd)
-            .padding(top = 32.dp, end = 32.dp)
+            .padding(top = SportsLiveTokens.Size.SafeTop, end = SportsLiveTokens.Size.SafeEnd)
             .zIndex(3f)
             .clip(RoundedCornerShape(NuvioTheme.radii.xl))
             .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
@@ -848,7 +848,7 @@ private fun LiveGamesPanel(
             }
     ) {
         CompositionLocalProvider(LocalPanelTagColumn provides tagColumn) {
-            Column(modifier = Modifier.padding(horizontal = PANEL_PADDING, vertical = NuvioTheme.spacing.lg)) {
+            Column(modifier = Modifier.padding(start = SportsLiveTokens.Size.PanelContentStart, end = PANEL_PADDING, top = SportsLiveTokens.Size.SafeTop, bottom = SportsLiveTokens.Size.SafeBottom)) {
                 // V2 (`Player.dc.html` 1): "Live now" and the filter on one line; no preview (live.20, #106), the list has the room.
                 Row(
                     modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM).height(PANEL_HEADER_HEIGHT),
@@ -1109,7 +1109,7 @@ private fun LazyListState.isFullyVisible(index: Int): Boolean {
     return info.offset >= layoutInfo.viewportStartOffset && info.offset + info.size <= layoutInfo.viewportEndOffset
 }
 
-/** The live games panel (#140): 280 dp wide at 1080p (29 % of the screen), its rows filling it. */
+/** The live games panel (#140, #259): 320 dp wide at 1080p (a third of the screen), its content on the safe lines. */
 private val PANEL_WIDTH = SportsLiveTokens.Size.PanelWidth
 private val PANEL_PADDING = 4.dp
 private val PANEL_ROW_ROOM = 6.dp

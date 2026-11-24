@@ -432,4 +432,89 @@ class SportsLiveGameViewModelTest {
         addonId = "a", addonName = "a", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
         kind = SportsLiveKind.REPLAY, isLive = false, isChannel = false, startMs = null, sport = "Soccer", teams = null
     )
+
+    @Test
+    fun `a failed Game load offers Try again - it shows Trying, then the stats once the service answers (#97)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+        assertEquals(1, requests.size)
+
+        // A second failure: the card stays, the button is back to Try again.
+        vm.retry()
+        runCurrent()
+        assertEquals(2, requests.size)
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+
+        nextLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
+        vm.retry()
+        runCurrent()
+        assertEquals(3, requests.size)
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+    }
+
+    @Test
+    fun `the failure card is what the page shows - its Try again takes the header's Down (review R2)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertTrue(vm.uiState.value.showsFailure)
+        // Trying: the card stays, so focus stays on its button.
+        nextLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
+        vm.retry()
+        assertTrue(vm.uiState.value.showsFailure)
+        runCurrent()
+        assertFalse(vm.uiState.value.showsFailure)
+    }
+
+    @Test
+    fun `a failed load under hidden scores shows the hidden card, not the failure card (review R2)`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertTrue(vm.uiState.value.showsFailure)
+        assertFalse(vm.uiState.value.copy(settled = false).showsFailure)
+        assertFalse(vm.uiState.value.copy(spoilerProtected = true).showsFailure)
+    }
+
+    @Test
+    fun `a live game's retry that works waits out the score delay on the skeleton, not on Trying (review R5)`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(delaySeconds = 60)
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(liveEvent()))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+
+        nextLoad = { GameSummaryLoad.Loaded(liveNba(), final = false) }
+        vm.retry()
+        runCurrent()
+        assertEquals(GameLoadStatus.LOADING, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.retrying)
+        assertFalse(vm.uiState.value.showsFailure)
+        // Nothing of the score before the delay.
+        assertNull(vm.uiState.value.summary)
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        vm.setVisible(false)
+        runCurrent()
+    }
+
+    @Test
+    fun `Try again does nothing unless the load failed (#97)`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        vm.retry()
+        runCurrent()
+        assertEquals(1, requests.size)
+    }
 }

@@ -120,7 +120,7 @@ private fun SportsLivePlayerCornerCard(
             .claimsBottomLeft()
             .widthIn(min = SportsLiveTokens.Alert.Width, max = ERROR_CARD_MAX_WIDTH)
             .clip(shape)
-            .background(Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            .background(Colors.SurfaceRaised)
             .border(1.dp, SportsLiveTokens.Alert.Border, shape)
             .padding(SportsLiveTokens.Alert.Padding)
             .semantics { liveRegion = LiveRegionMode.Polite }

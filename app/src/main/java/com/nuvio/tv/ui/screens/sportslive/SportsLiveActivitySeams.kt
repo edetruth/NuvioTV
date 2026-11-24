@@ -293,6 +293,8 @@ fun SportsLiveActivityOverlays(navController: NavHostController, currentRoute: S
     SportsLiveToastLayer()
     // Hold OK's Report a problem sheet, on any screen without a hold of its own (#218 everywhere).
     SportsLiveHoldOkHost()
+    // Debug builds only (#259): the safe-area frame, on top of everything.
+    SportsLiveSafeAreaFrameLayer()
 }
 
 /**
