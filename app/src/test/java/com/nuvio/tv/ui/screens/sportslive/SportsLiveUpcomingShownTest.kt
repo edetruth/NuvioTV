@@ -58,6 +58,21 @@ class SportsLiveUpcomingShownTest {
     }
 
     @Test
+    fun `#355 - a game ESPN still has as not started leaves once it is well past its start, ESPN being stale`() {
+        // ESPN's start 2 h ago, plus a minute: past the late-start grace.
+        val stale = espn(ScoreState.PRE, startMs = NOW - UPCOMING_LATE_START_GRACE_MS - MINUTE)
+        assertEquals(listOf("n"), shown(mapOf(game.streamKey to stale)).items.map { it.id })
+        // Within the grace it stays, a late start.
+        val late = espn(ScoreState.PRE, startMs = NOW - UPCOMING_LATE_START_GRACE_MS + MINUTE)
+        assertEquals(listOf("p", "n"), shown(mapOf(game.streamKey to late)).items.map { it.id })
+        // No valid ESPN time: the game's own timed start decides.
+        val timed = item("t", "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 5 * HOUR)
+        val noTime = espn(ScoreState.PRE).copy(timeValid = false)
+        val result = sportsLiveUpcomingShown(emptyList(), listOf(timed, next), mapOf(timed.streamKey to noTime), NOW, null, emptySet())
+        assertEquals(listOf("n"), result.items.map { it.id })
+    }
+
+    @Test
     fun `a final leaves even with focus, an in-play game with focus is held where it was`() {
         assertEquals(listOf("n"), shown(mapOf(game.streamKey to espn(ScoreState.POST)), focusedId = "p").items.map { it.id })
         val held = shown(mapOf(game.streamKey to espn(ScoreState.IN)), liveNowEvents = setOf(pacers.eventId), focusedId = "p")
