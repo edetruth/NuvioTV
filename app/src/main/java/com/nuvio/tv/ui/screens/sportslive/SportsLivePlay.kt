@@ -248,6 +248,8 @@ internal fun sportsLiveHidesReplayLinks(
 ): Boolean {
     if (!replay) return false
     mode ?: return true
+    // A team folder holds many games: no one ESPN match or reveal speaks for the rest (F1).
+    if (item.apiType == "series") return sportsLiveReplayFolderHides(mode, protection)
     if (protection.savedReplayKeys(listOf(item), match?.let { mapOf(item.streamKey to it) }.orEmpty()).isNotEmpty()) return true
     if (match != null) {
         val followed = protection.followed.any { SportsResults.follows(it, match) }
@@ -256,6 +258,15 @@ internal fun sportsLiveHidesReplayLinks(
     val followed = item.followed || protection.followed.any { SportsLiveTeams.follows(it, item) }
     return mode != ScoresMode.SHOW || (followed && (protection.myTeams || protection.myTeamsResults))
 }
+
+/**
+ * Whether a replay team folder (a series of replays, F1) is shown masked: it holds many games, none matched to one ESPN
+ * game, so it is masked whenever any game in it could be hidden: the Scores setting [mode] other than Show (null: not
+ * read yet), a game saved for later, or a followed team under my teams' protection.
+ */
+internal fun sportsLiveReplayFolderHides(mode: ScoresMode?, protection: SpoilerProtection): Boolean =
+    mode != ScoresMode.SHOW || protection.saved.isNotEmpty() ||
+        (protection.followed.isNotEmpty() && (protection.myTeams || protection.myTeamsResults))
 
 /** [stream] of a replay as the player names it: its name, title and description with any score masked. */
 internal fun spoilerSafeReplayStream(stream: Stream): Stream = stream.copy(

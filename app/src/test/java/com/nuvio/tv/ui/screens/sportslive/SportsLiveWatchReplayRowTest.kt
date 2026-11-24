@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -113,6 +114,25 @@ class SportsLiveWatchReplayRowTest {
             val rowHides = !SportsLiveResultsUiState(mode = mode, revealed = revealed, protection = protection).showsScore(row)
             assertEquals("$mode $protection $revealed", rowHides, hides(mode, revealed = revealed, protection = protection))
         }
+    }
+
+    // F1: a replay team folder ("76ers Replays") names no two sides and matches no one ESPN game, but holds many.
+    private val folder = AlertFixtures.item(name = "76ers Replays", id = "folder").let {
+        it.copy(kind = SportsLiveKind.REPLAY, teams = null, meta = it.meta.copy(type = ContentType.SERIES, rawType = "series"))
+    }
+
+    @Test
+    fun `a replay team folder is masked whenever any game in it could be hidden`() {
+        assertTrue(hides(ScoresMode.SHOW, match = null, item = folder, protection = SpoilerProtection(myTeamsResults = true, followed = sixers, nowMs = replayNow)))
+        assertTrue(hides(ScoresMode.SHOW, match = null, item = folder, protection = SpoilerProtection(myTeams = true, followed = sixers, nowMs = replayNow)))
+        val saved = SpoilerProtection(games = SpoilerProtection.saved(emptyList(), final, replayNow), nowMs = replayNow)
+        assertTrue("a game saved for later", hides(ScoresMode.SHOW, match = null, item = folder, protection = saved))
+        assertTrue(hides(ScoresMode.HIDE_UNTIL_FOCUSED, match = null, item = folder))
+        // Even when one game in it matches ESPN and is revealed, the folder's other games are not.
+        assertTrue(hides(ScoresMode.HIDE_UNTIL_FOCUSED, item = folder, revealed = setOf(final.eventId)))
+        // Show with nothing protected and no team followed: as the addon names it.
+        assertFalse(hides(ScoresMode.SHOW, match = null, item = folder))
+        assertFalse(hides(ScoresMode.SHOW, match = null, item = folder, protection = SpoilerProtection(followed = sixers, nowMs = replayNow)))
     }
 
     @Test
