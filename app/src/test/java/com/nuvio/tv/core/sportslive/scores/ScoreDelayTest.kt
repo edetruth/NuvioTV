@@ -176,6 +176,16 @@ class ScoreDelayTest {
     }
 
     @Test
+    fun `a tennis match being watched that ended retired is held with no ending`() {
+        // T-1 (F4): how a match ended tells its result.
+        val retired = tennis(4, ScoreState.POST, winner = true).let {
+            it.copy(individual = (it.individual as TennisMatch).copy(ending = TennisEnding.RETIRED))
+        }
+        val shown = ScoreDelay().apply(mapOf(key to retired), delayMs, start + 3_600_000L, setOf(base.eventId)).getValue(key)
+        assertEquals(TennisEnding.COMPLETED, (shown.individual as TennisMatch).ending)
+    }
+
+    @Test
     fun `the tennis match being watched first seen live withholds its sets`() {
         val shown = ScoreDelay().apply(mapOf(key to tennis(3)), delayMs, start + 3_600_000L, setOf(base.eventId)).getValue(key)
         val match = shown.individual as TennisMatch

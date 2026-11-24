@@ -111,6 +111,22 @@ class SportsLiveHoldOkTest {
     }
 
     @Test
+    fun `a live game's player replacing a replay's keeps its own Hold OK after the replay's player closes`() {
+        // T-1 (F9): an alert's popUpTo closes the outgoing replay player after the live one opened.
+        val replay = Any()
+        val live = Any()
+        try {
+            SportsLiveHoldOk.playerOpened(replay, replay = true)
+            SportsLiveHoldOk.playerOpened(live, replay = false)
+            SportsLiveHoldOk.playerClosed(replay)
+            assertFalse(SportsLiveHoldOk.replayPlayerOpen)
+        } finally {
+            SportsLiveHoldOk.playerClosed(live)
+            SportsLiveHoldOk.playerClosed(replay)
+        }
+    }
+
+    @Test
     fun `a long press sent as one repeat and a release opens the sheet in a sports replay's player`() {
         // adb's --longpress (and some remotes over CEC): the press, one repeat at the long-press time, the release.
         val run = Run(SportsLiveHoldOkKey(graceMs = 500, playerHasOwnHold = { false }), Screens(consumeRepeats = true))
