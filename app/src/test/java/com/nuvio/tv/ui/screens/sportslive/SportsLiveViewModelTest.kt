@@ -2263,6 +2263,39 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `F2 - the wait never runs out on another tab, where no feed is asked, and games My sports hides wait only once shown`() = runTest {
+        val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
+        val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
+        nextLoad = load(listOf(nba, cricket))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            endedInputs = flowOf(EndedInputs(emptyMap()) { false }),
+            endedGames = SportsLiveEndedGames(),
+            mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        // My sports' game waits; the cricket game (left to More live, not tracked) does not.
+        assertEquals(setOf(nba.streamKey), viewModel.uiState.value.awaitingScore)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.awaitingScore.isEmpty())
+        advanceTimeBy(com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS + 1_000L)
+        runCurrent()
+        // Back on Live now: the wait starts now, it did not run out meanwhile.
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        assertEquals(setOf(nba.streamKey), viewModel.uiState.value.awaitingScore)
+        // More live opened: its games are tracked, and wait from then.
+        viewModel.openMoreLive()
+        runCurrent()
+        assertEquals(setOf(nba.streamKey, cricket.streamKey), viewModel.uiState.value.awaitingScore)
+    }
+
+    @Test
     fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
         // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
         // estimate with no stream yet stays live, dimmed (#145).

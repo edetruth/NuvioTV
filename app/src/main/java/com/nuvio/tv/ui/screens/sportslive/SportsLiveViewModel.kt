@@ -1724,10 +1724,6 @@ class SportsLiveViewModel internal constructor(
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
                 finals = split.finals.keys
-                // live.28 (user decision): an ESPN-covered game reads its start time, not LIVE, until its feed answers; at
-                // most SportsLiveScoreWait.MAX_WAIT_MS, then as before. The estimate gate is "answered or not covered".
-                awaitingScore = scoreWait.awaiting(split.live, scores, inputs.canEstimate, now)
-                scheduleWaitWake(scoreWait.deadline)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 // #275: one past its estimate whose every lookup found no stream has no link to check: "Probably ended" too.
@@ -1754,6 +1750,17 @@ class SportsLiveViewModel internal constructor(
                         true
                     }
                 }
+                // live.28 (user decision): an ESPN-covered game reads its start time, not LIVE, until its feed answers; at
+                // most SportsLiveScoreWait.MAX_WAIT_MS, then as before. The estimate gate is "answered or not covered".
+                // F2: only over the games the screen tracks for scores now (Live now shown: My sports' games, every game
+                // while More live / All sports is open), so a wait never runs out on a game no feed was asked for.
+                val tracked = when {
+                    selection.tab != SportsLiveTab.LIVE_NOW -> emptyList()
+                    mySports.isDefault || selection.moreLiveOpen -> live
+                    else -> SportsLiveMySportsScope.scope(live, mySports)
+                }
+                awaitingScore = scoreWait.awaiting(tracked, scores, inputs.canEstimate, now)
+                scheduleWaitWake(scoreWait.deadline)
                 if (toCheck.isNotEmpty() && screenVisible && selection.tab == SportsLiveTab.LIVE_NOW) {
                     linkChecker?.offer(toCheck, viewModelScope)
                 }
