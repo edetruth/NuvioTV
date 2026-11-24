@@ -33,6 +33,11 @@ internal object PlaybackStreamHeaders {
     class HostScope(initial: HttpUrl? = null) {
         private val link = AtomicReference(initial)
 
+        companion object {
+            /** The scope of the addon's link [linkUrl] (#464); without one, the first request seen is taken as the link. */
+            fun of(linkUrl: String?): HostScope = HostScope(linkUrl?.trim()?.toHttpUrlOrNull())
+        }
+
         /**
          * [request] with the stream's login headers removed when it leaves the link's origin. With [streamHeaders]
          * (the values the stream set), a header holding another value stays: it is the other host's own, e.g. a
@@ -157,5 +162,5 @@ internal object PlaybackStreamHeaders {
      * an earlier redirect led, and must not become the scope.
      */
     fun scoped(client: OkHttpClient, linkUrl: String? = null): OkHttpClient =
-        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope(linkUrl?.trim()?.toHttpUrlOrNull()))).build()
+        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope.of(linkUrl))).build()
 }

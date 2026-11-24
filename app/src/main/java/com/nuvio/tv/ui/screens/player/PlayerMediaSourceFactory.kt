@@ -238,7 +238,8 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                         context,
                         PlayerPlaybackNetworking.createHttpDataSourceFactory(
                             sanitizedHeaders,
-                            useLongReadTimeout = isLoopbackUrl(url)
+                            useLongReadTimeout = isLoopbackUrl(url),
+                            linkUrl = url // Fork #464
                         )
                     ),
                     subtitleConfigurations = subtitleConfigurations,
@@ -261,11 +262,12 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 PlayerPlaybackNetworking.createHttpDataSourceFactory(
                     sanitizedHeaders,
                     useLongReadTimeout = isLoopbackUrl(url),
+                    linkUrl = url, // Fork #464
                 ),
             )
             if (isHls) HlsParameterSetInitDataSource.Factory(adaptiveFactory) else adaptiveFactory
         } else {
-            PlayerPlaybackNetworking.createDataSourceFactory(context, sanitizedHeaders)
+            PlayerPlaybackNetworking.createDataSourceFactory(context, sanitizedHeaders, linkUrl = url) // Fork #464
         }.counted()
 
         val mediaItemBuilder = MediaItem.Builder().setUri(url)
@@ -335,7 +337,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 onResolvedUri = { resolved -> currentVodCacheResolvedUrl = resolved?.toString() }
             )
         } else if (directLoopback) {
-            PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, useLongReadTimeout = true)
+            PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, useLongReadTimeout = true, linkUrl = url) // Fork #464
         } else {
             httpDataSourceFactory
         }.let { if (it === httpDataSourceFactory) it else it.counted() }

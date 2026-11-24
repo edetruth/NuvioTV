@@ -11,6 +11,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
 
@@ -56,6 +57,23 @@ class PlaybackHeaderRedirectTest {
         assertNoLogin(hop)
         assertEquals("https://ref.invalid/", hop.getHeader("Referer"))
         assertEquals("v", hop.getHeader("X-Custom"))
+    }
+
+    @Test
+    fun `a stream client given the link sends no login headers when its first request goes elsewhere (#464)`() {
+        other.enqueue(MockResponse().setBody("ok"))
+        val client = PlayerPlaybackNetworking.createHttpClient(streamHeaders, linkUrl = link.url("/master").toString())
+        client.newCall(Request.Builder().url(other.url("/subtitle.srt")).build()).execute().close()
+        val first = take(other)
+        assertNoLogin(first)
+        assertEquals("https://ref.invalid/", first.getHeader("Referer"))
+    }
+
+    @Test
+    fun `the main player's data sources are scoped to the addon's link, the DRM licence factory is left as it is (#464)`() {
+        val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerMediaSourceFactory.kt").readText()
+        assertEquals(4, Regex("""linkUrl = url""").findAll(source).count())
+        assertTrue(source.contains("setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders))"))
     }
 
     @Test

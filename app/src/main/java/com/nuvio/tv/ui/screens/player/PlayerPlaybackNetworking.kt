@@ -162,7 +162,8 @@ internal object PlayerPlaybackNetworking {
 
     fun createHttpClient(
         defaultHeaders: Map<String, String> = emptyMap(),
-        useLongReadTimeout: Boolean = false
+        useLongReadTimeout: Boolean = false,
+        linkUrl: String? = null // Fork #464: the addon's link, the origin its login headers belong to.
     ): OkHttpClient {
         val builder = playbackHttpClient.newBuilder()
         if (useLongReadTimeout) {
@@ -172,7 +173,7 @@ internal object PlayerPlaybackNetworking {
             !key.equals("Range", ignoreCase = true)
         }
         // Fork #434: sets the stream's headers per hop; login headers stay on the link's origin (always installed, P8).
-        builder.addNetworkInterceptor(PlaybackStreamHeaders.StreamGuard(PlaybackStreamHeaders.HostScope(), proxyHeaders))
+        builder.addNetworkInterceptor(PlaybackStreamHeaders.StreamGuard(PlaybackStreamHeaders.HostScope.of(linkUrl), proxyHeaders))
         val http1Client = builder
             .let { NuvioExoPlayerPerformanceHelper.applyNetworkOptimizations(it) }
             .build()
@@ -184,7 +185,8 @@ internal object PlayerPlaybackNetworking {
     @UnstableApi
     fun createHttpDataSourceFactory(
         defaultHeaders: Map<String, String> = emptyMap(),
-        useLongReadTimeout: Boolean = false
+        useLongReadTimeout: Boolean = false,
+        linkUrl: String? = null // Fork #464
     ): DataSource.Factory {
         val requestHeaders = defaultHeaders.mapNotNull { (rawKey, rawValue) ->
             val key = rawKey.trim()
@@ -195,7 +197,7 @@ internal object PlayerPlaybackNetworking {
                 key to value
             }
         }.toMap()
-        val client = createHttpClient(requestHeaders, useLongReadTimeout)
+        val client = createHttpClient(requestHeaders, useLongReadTimeout, linkUrl)
         val httpFactory = OkHttpDataSource.Factory(client).apply {
             setDefaultRequestProperties(requestHeaders)
             if (requestHeaders.none { it.key.equals("User-Agent", ignoreCase = true) }) {
@@ -208,9 +210,10 @@ internal object PlayerPlaybackNetworking {
     @UnstableApi
     fun createDataSourceFactory(
         context: android.content.Context,
-        defaultHeaders: Map<String, String> = emptyMap()
+        defaultHeaders: Map<String, String> = emptyMap(),
+        linkUrl: String? = null // Fork #464
     ): DataSource.Factory {
-        return DefaultDataSource.Factory(context, createHttpDataSourceFactory(defaultHeaders))
+        return DefaultDataSource.Factory(context, createHttpDataSourceFactory(defaultHeaders, linkUrl = linkUrl))
     }
 
     fun openConnection(

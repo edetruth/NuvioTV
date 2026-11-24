@@ -1050,7 +1050,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                     extractorsFactory = effectiveExtractorsFactory,
                     subtitleParserFactory = null
                 )
-                val playerDataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(context, headers)
+                val playerDataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(context, headers, linkUrl = url) // Fork #464
                 ExoPlayer.Builder(context)
                     .setBandwidthMeter(bandwidthMeter)
                     .setTrackSelector(trackSelector!!)
@@ -1078,7 +1078,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 com.nuvio.tv.libass.media.AssHandler.setRenderScale(
                     playerSettings.libassRenderScale.scale
                 )
-                val playerDataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(context, headers)
+                val playerDataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(context, headers, linkUrl = url) // Fork #464
                 ExoPlayer.Builder(context)
                     .setBandwidthMeter(bandwidthMeter)
                     .setLoadControl(loadControl)

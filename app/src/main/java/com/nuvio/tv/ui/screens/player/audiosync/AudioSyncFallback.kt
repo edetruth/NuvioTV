@@ -124,7 +124,7 @@ internal class AudioSyncFallback private constructor(
         controller.setSpotSource(
             forSourceKey = sourceUrl,
             url = sourceUrl,
-            dataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(appContext, runtime.currentHeaders),
+            dataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(appContext, runtime.currentHeaders, linkUrl = sourceUrl),
             extractorsFactory = DefaultExtractorsFactory(),
             localEngine = runtime._uiState.value.isTorrentStream || isLoopback(sourceUrl),
         )
