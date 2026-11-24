@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.times
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 
