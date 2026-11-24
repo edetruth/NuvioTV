@@ -464,6 +464,10 @@
     <string name="sports_live_all_sports_entry">%1$s · %2$d</string>
     <string name="sports_live_more_live_fights">Fights</string>
     <string name="sports_live_more_live_other">Other</string>
+    <!-- live.27: Live now's "A vs B" listings that are no game in progress (team channels, replays, season passes), at the end. -->
+    <string name="sports_live_more_live_other_streams">Other streams</string>
+    <!-- live.27: Live now's last row when Other streams is all it holds (nothing picked in My sports): "Other streams · 12 ›". -->
+    <string name="sports_live_other_streams_row">Other streams · %1$d ›</string>
     <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->
     <string name="sports_live_more_live_title">More live</string>
     <!-- After a More live game was played: the card at the top of Live now, and the toast after Add. -->

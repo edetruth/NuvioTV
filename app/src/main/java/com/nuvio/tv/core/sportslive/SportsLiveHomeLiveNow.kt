@@ -10,7 +10,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
  * Home's Live now row in Live Now's own rules and order (RC TV finding, live.23: Home listed "ATP" and two "ATP 250 ·
  * Stockholm Open" rows, and other sports' games, that Live Now keeps under More live). The steps and functions are the
  * section's, in its order:
- * - titles hidden from Live Now leave ([SportsLiveHiddenTitles]); each card takes the league its teams name
+ * - titles hidden from Live Now leave ([SportsLiveHiddenTitles]), and so do "A vs B" listings that are no game in progress
+ *   ([SportsLiveOtherStreams], live.27: Live now's Other streams, never Home's row); each card takes the league its teams name
  *   ([SportsLiveSportInference], as the section's pinned tabs); followed teams' games are marked ([SportsLiveItemBucketer.pinFollowed]);
  * - under My sports, listings that are no game leave ([SportsLiveOtherEvents.split], H), as they leave Live now for
  *   More live (with nothing picked they stay, as on Live now, copies of one listing as one card);
@@ -30,9 +31,10 @@ object SportsLiveHomeLiveNow {
         followed: List<FollowedTeam>,
         mySports: MySports,
         hidden: Set<String>,
-        inferSport: (SportsLiveItem) -> SportsLiveItem = infer
+        inferSport: (SportsLiveItem) -> SportsLiveItem = infer,
+        nowMs: Long = System.currentTimeMillis()
     ): List<SportsLiveItem> {
-        val listed = SportsLiveHiddenTitles.filter(live, hidden).map(inferSport)
+        val listed = SportsLiveOtherStreams.split(SportsLiveHiddenTitles.filter(live, hidden), nowMs).first.map(inferSport)
         val pinned = SportsLiveItemBucketer.pinFollowed(listed, followed)
         // As Live now: with nothing picked in My sports there is no More live, and they stay listed (their copies as one,
         // as More live's Other folds them); under My sports they are More live's.

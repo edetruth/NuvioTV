@@ -333,6 +333,7 @@ private const val MORE_LIVE_KEY = "live:more_live"
 internal fun moreLiveGroupLabel(key: String): String = when (key) {
     SportsLiveMoreLive.FIGHTS -> stringResource(R.string.sports_live_more_live_fights)
     SportsLiveMoreLive.OTHER -> stringResource(R.string.sports_live_more_live_other)
+    SportsLiveMoreLive.OTHER_STREAMS -> stringResource(R.string.sports_live_more_live_other_streams)
     else -> SportsLiveMoreLive.kindOf(key)?.let { sportKindLabel(it) }
         ?: SportsLiveMoreLive.textOf(key)?.let { SportsLiveDisplayText.label(it) }
         ?: stringResource(R.string.sports_live_more_live_other)
@@ -341,8 +342,14 @@ internal fun moreLiveGroupLabel(key: String): String = when (key) {
 /** "More live: 4 Racing · 3 Cricket · 2 Fights · 2 Other ›". */
 @Composable
 internal fun moreLiveRowText(summary: List<Pair<String, Int>>): String {
-    val parts = summary.map { (key, count) -> stringResource(R.string.sports_live_more_live_count, count, moreLiveGroupLabel(key)) }
-    return stringResource(R.string.sports_live_more_live_row, parts.joinToString(" · "))
+    // live.27: Other streams alone (nothing picked in My sports) is its own row, not "More live".
+    val streamsOnly = summary.singleOrNull()?.takeIf { it.first == SportsLiveMoreLive.OTHER_STREAMS }
+    return if (streamsOnly != null) {
+        stringResource(R.string.sports_live_other_streams_row, streamsOnly.second)
+    } else {
+        val parts = summary.map { (key, count) -> stringResource(R.string.sports_live_more_live_count, count, moreLiveGroupLabel(key)) }
+        stringResource(R.string.sports_live_more_live_row, parts.joinToString(" · "))
+    }
 }
 
 /** The list's content types (#143): game rows, entry lines and the hidden-games line are reused only as their own kind. */

@@ -9,6 +9,7 @@ import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.SportsLiveJustWatched
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
+import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
@@ -479,13 +480,16 @@ class SportsLiveZapViewModel internal constructor(
         }.flowOn(computeDispatcher)
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
         // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).
-        val items = combine(all, panelChip, mySports, logos.revision) { (list, followed), chip, sports, _ ->
+        val items = combine(all, panelChip, mySports, logos.revision) { (loaded, followed), chip, sports, _ ->
             // #218: every report says what My sports holds.
             SportsLiveReportTrail.onMySports(mySportsReportLine(sports))
             // Audit G15: a session started on Channels lists its channels, in the order CH± walks them, never Live now's games.
             controller.session(contentId)?.channelGuideItems()?.let { channels ->
                 return@combine PanelList(channels, chip, filterPanelItems(channels, chip), followed, channels, channels = true, mySports = sports)
             }
+            // live.27: "A vs B" listings that are no game in progress (Live now's Other streams) are never in the lineup or
+            // its counts (SportsLiveOtherStreams).
+            val list = SportsLiveOtherStreams.split(loaded, System.currentTimeMillis()).first
             // More live (user 2026-11-21): under My sports the listings that are no game (H) are never in the lineup, and the
             // All sports value shows More live's games, by sport (the games My sports leaves out), not everything.
             val (games, others) = if (sports.isDefault) list to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(list)

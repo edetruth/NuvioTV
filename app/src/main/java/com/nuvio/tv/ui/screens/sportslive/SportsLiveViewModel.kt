@@ -26,6 +26,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveLineup
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
+import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -1339,8 +1340,10 @@ class SportsLiveViewModel internal constructor(
         val state = uiState.value
         // More live's games are zapped only among themselves, when one of them is played (user 2026-11-21).
         val moreLive = state.moreLive.flatMap { it.items }
-        // A More live game played: the next Live now offers adding its sport to My sports, once per sport.
-        if (moreLive.any { it.streamKey == item.streamKey }) {
+        // A More live game played: the next Live now offers adding its sport to My sports, once per sport (never for an
+        // Other stream, live.27: no game of any sport).
+        val streamKeys = state.moreLive.filter { it.key == SportsLiveMoreLive.OTHER_STREAMS }.flatMap { it.items }.mapTo(HashSet()) { it.streamKey }
+        if (item.streamKey !in streamKeys && moreLive.any { it.streamKey == item.streamKey }) {
             SportsLiveMoreLive.promptFor(item, lastMySports, addSportMemoryNow.notAsked)?.let { sport ->
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
@@ -1670,6 +1673,7 @@ class SportsLiveViewModel internal constructor(
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         var otherEvents = emptyList<SportsLiveItem>()
+        var otherStreams = emptyList<SportsLiveItem>()
         var liveNowSettled = false
         // J1 (live.23): Live now shows its loading rows, not the saved list of an earlier visit, until this visit's load
         // (most addons answered) lands or HOLD_MS passed; then the whole list at once.
@@ -1686,9 +1690,13 @@ class SportsLiveViewModel internal constructor(
             if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
                 emptyList<SportsLiveItem>()
             } else if (tab == SportsLiveTab.LIVE_NOW) {
+                // live.27: "A vs B" listings that are no game in progress (team channels, replays, passes) leave the list,
+                // its counts and the strip for Other streams at its end, whatever My sports holds (SportsLiveOtherStreams).
+                val (listedGames, streams) = SportsLiveOtherStreams.split(allItems, now)
+                otherStreams = SportsLiveHiddenTitles.filter(streams, hiddenNow)
                 // H (live.23): listings that are no game and no event of their own leave the list for More live's Other.
                 // With nothing picked in My sports there is no More live: they stay in the list, as before.
-                val (tabItems, others) = if (mySports.isDefault) allItems to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(allItems)
+                val (tabItems, others) = if (mySports.isDefault) listedGames to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(listedGames)
                 otherEvents = SportsLiveHiddenTitles.filter(others, hiddenNow)
                 val scores = inputs.scores
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
@@ -1840,10 +1848,11 @@ class SportsLiveViewModel internal constructor(
             .let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
             .let { shown -> if ((mySportsScoped || allSports) && !onLiveNow) withAllSports(shown) else shown }
         // More live (user 2026-11-21): under My sports, Live now ends with one row holding the live games it leaves out
-        // (other sports, J3's unplaced games) and the listings that are no game (H), by sport; OK opens them.
-        val hiddenLiveGroups = if (onLiveNow && !mySports.isDefault) {
+        // (other sports, J3's unplaced games) and the listings that are no game (H), by sport; OK opens them. live.27: Other
+        // streams join it last, with nothing picked too (the row then holds them alone).
+        val hiddenLiveGroups = if (onLiveNow && (!mySports.isDefault || otherStreams.isNotEmpty())) {
             val scopedKeys = scopedItems.mapTo(HashSet()) { it.streamKey }
-            SportsLiveMoreLive.groups(counted(fullItems).filter { it.streamKey !in scopedKeys }, otherEvents)
+            SportsLiveMoreLive.groups(counted(fullItems).filter { it.streamKey !in scopedKeys }, otherEvents, streams = otherStreams)
         } else {
             emptyList()
         }
@@ -1851,12 +1860,12 @@ class SportsLiveViewModel internal constructor(
         val moreLiveGroups = if (filter == null) hiddenLiveGroups else emptyList()
         // All sports (live.26 decision): every live game by sport, so its counts match the games listed; offered while
         // My sports hides something, whatever the filter (gemini final review #5: also from ★ My teams).
-        val allSportsGroups = if (hiddenLiveGroups.isEmpty()) {
+        val allSportsGroups = if (hiddenLiveGroups.isEmpty() || mySports.isDefault) {
             emptyList()
         } else {
             val live = counted(fullItems)
             val liveKeys = live.mapTo(HashSet()) { it.streamKey }
-            SportsLiveMoreLive.groups(live, otherEvents.filter { it.streamKey !in liveKeys })
+            SportsLiveMoreLive.groups(live, otherEvents.filter { it.streamKey !in liveKeys }, streams = otherStreams.filter { it.streamKey !in liveKeys })
         }
         val moreLiveOpen = selection.moreLiveOpen && moreLiveGroups.isNotEmpty()
         val moreLiveViewGroups = if (selection.moreLiveAll) allSportsGroups else moreLiveGroups
@@ -1917,7 +1926,8 @@ class SportsLiveViewModel internal constructor(
             moreLiveViewGroups = moreLiveViewGroups,
             moreLiveOpen = moreLiveOpen,
             moreLiveAll = moreLiveOpen && selection.moreLiveAll,
-            moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
+            // Other streams (live.27) never say LIVE either: no ESPN game is theirs.
+            moreLiveOther = (otherEvents + otherStreams).mapTo(HashSet()) { it.streamKey },
             // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
             addSportPrompt = selection.addSport?.takeIf {
                 selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
