@@ -151,7 +151,7 @@ fun StreamScreen(
         val ordered = sportsLiveStreamScreenOrder(uiState.videoId, uiState.filteredStreams, uiState.contentId)
         linkMarks?.group(ordered, SportsLiveZapResolver::isNoticeEntry)?.items ?: ordered
     }
-    val isSportsNotice: (Stream) -> Boolean = remember(uiState.videoId) { { sportsLiveSourceNotice(uiState.videoId, it) } }
+    val isSportsNotice: (Stream) -> Boolean = remember(uiState.videoId, uiState.contentId) { { sportsLiveSourceNotice(uiState.videoId, it, uiState.contentId) } }
     val watchProgress by viewModel.watchProgress.collectAsStateWithLifecycle()
     val resumeProgress = streamResumeProgress(watchProgress, startFromBeginning)
     val resumePositionMs = resumeProgress?.position?.takeIf { it > 0L }

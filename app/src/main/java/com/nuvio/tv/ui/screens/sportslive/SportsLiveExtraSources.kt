@@ -169,6 +169,7 @@ object SportsLiveExtraSources {
             sportsPlaybackIds.add(contentId)
             while (sportsPlaybackIds.size > MAX_ENTRIES) sportsPlaybackIds.remove(sportsPlaybackIds.first())
         }
+        saveMasks()
         if (item != null) {
             synchronized(sourceNames) {
                 sourceNames.remove(contentId)
@@ -277,6 +278,32 @@ object SportsLiveExtraSources {
                 spoilerSafeVideos.remove(oldest)
             }
         }
+        saveMasks()
+    }
+
+    // Where the masks are kept across process death (#458); null: memory only (tests, before app start).
+    @Volatile
+    private var maskStore: SportsLiveMaskStore? = null
+
+    /**
+     * App start (#458, #362): the masks saved by the last process, under a day old, are read back before any restored
+     * Detail page, Stream screen or player reads them, and every change is saved to [store] from now on.
+     */
+    fun installMaskStore(store: SportsLiveMaskStore) {
+        maskStore = store
+        val masks = SportsLiveMasks.decode(store.read(), nowMs()) ?: return
+        synchronized(spoilerSafeIds) {
+            spoilerSafeIds.addAll(masks.spoilerSafe)
+            masks.videos.forEach { (folder, ids) -> if (folder in spoilerSafeIds) spoilerSafeVideos[folder] = ids }
+        }
+        synchronized(sportsPlaybackIds) { sportsPlaybackIds.addAll(masks.sportsPlayback) }
+    }
+
+    private fun saveMasks() {
+        val store = maskStore ?: return
+        val (safe, videos) = synchronized(spoilerSafeIds) { spoilerSafeIds.toList() to spoilerSafeVideos.toMap() }
+        val playback = synchronized(sportsPlaybackIds) { sportsPlaybackIds.toList() }
+        store.write(SportsLiveMasks(nowMs(), safe, videos, playback).encode())
     }
 
     /**
@@ -293,6 +320,7 @@ object SportsLiveExtraSources {
                 ?: return
             spoilerSafeVideos[folder] = spoilerSafeVideos[folder].orEmpty() + videoIds.filter { it.isNotBlank() }
         }
+        saveMasks()
     }
 
     /** Whether [contentId] (a replay, or a video of a spoiler-safe team folder) lists and plays its links score-masked. */
@@ -317,21 +345,22 @@ object SportsLiveExtraSources {
         if (text == null || !isSpoilerSafe(contentId)) return text
         val extension = FILE_EXTENSION.find(text)?.value.orEmpty()
         val words = percentDecoded(text.removeSuffix(extension)).replace('_', ' ').replace('.', ' ')
-        val masked = spoilerSafeLinkText(words) ?: words
+        val masked = hiddenReplayText(words) ?: words
         return if (masked == words) text else masked + extension
     }
 
     private val FILE_EXTENSION = Regex("""\.[A-Za-z0-9]{2,4}$""")
 
-    /** [text] with its %XX escapes decoded as UTF-8 ("+" stays: "HDR10+"); as it is when it is not valid encoding. */
+    /** [text] with its %XX escapes decoded as UTF-8 ("+" stays: "HDR10+"); a "%" that starts none stays as it is (#471). */
     private fun percentDecoded(text: String): String {
         if ('%' !in text) return text
         val bytes = java.io.ByteArrayOutputStream()
         var i = 0
         while (i < text.length) {
             val c = text[i]
-            if (c == '%' && i + 2 <= text.lastIndex) {
-                val byte = text.substring(i + 1, i + 3).toIntOrNull(16) ?: return text
+            val hex = if (c == '%' && i + 2 <= text.lastIndex) text.substring(i + 1, i + 3) else null
+            val byte = hex?.takeIf { pair -> pair.all { it in '0'..'9' || it.lowercaseChar() in 'a'..'f' } }?.toInt(16)
+            if (byte != null) {
                 bytes.write(byte)
                 i += 3
             } else {
@@ -462,6 +491,7 @@ object SportsLiveExtraSources {
         synchronized(streamSources) { streamSources.clear() }
         synchronized(seeds) { seeds.clear() }
         nowMs = { System.currentTimeMillis() }
+        maskStore = null
         fetcher = null
         resolveInvalidator = null
     }

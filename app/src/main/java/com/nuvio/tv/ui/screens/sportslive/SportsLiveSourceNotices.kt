@@ -30,8 +30,10 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
  * (a tip, a limit, an upsell) or junk link, for Sports & Live playback only. Movies and shows list every
  * stream as before.
  */
-internal fun sportsLiveSourceNotice(contentId: String?, stream: Stream): Boolean =
-    SportsLiveExtraSources.isSportsPlayback(contentId) && SportsLiveZapResolver.isNoticeEntry(stream)
+internal fun sportsLiveSourceNotice(contentId: String?, stream: Stream, parentId: String? = null): Boolean =
+    // [parentId]: the Stream screen's content (#477: an episode of a replay folder opened from its Detail page).
+    (SportsLiveExtraSources.isSportsPlayback(contentId) || SportsLiveExtraSources.isSportsPlayback(parentId)) &&
+        SportsLiveZapResolver.isNoticeEntry(stream)
 
 /**
  * [streams] with the entries [isNotice] flags moved after the others, each part in its own order (N2):
@@ -63,8 +65,8 @@ internal fun sportsLiveSpoilerSafePlayback(info: StreamPlaybackInfo): StreamPlay
     // By its video, or its content (S4: an episode of a hidden folder not registered yet).
     if (!SportsLiveExtraSources.isSpoilerSafe(info.videoId) && !SportsLiveExtraSources.isSpoilerSafe(info.contentId)) info
     else info.copy(
-        streamName = spoilerSafeLinkText(info.streamName) ?: info.streamName,
-        streamDescription = spoilerSafeLinkText(info.streamDescription)
+        streamName = hiddenReplayText(info.streamName) ?: info.streamName,
+        streamDescription = hiddenReplayText(info.streamDescription)
     )
 
 /**
