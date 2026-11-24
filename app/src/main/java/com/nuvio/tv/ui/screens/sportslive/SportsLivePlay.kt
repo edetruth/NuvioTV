@@ -212,10 +212,12 @@ private const val SCORE_ENDING_IN_BRACKETS =
 
 /**
  * What follows a score and tells how it ended (#244, F6): a shoot-out's score and tag ("(4-2 pens)", "[AET]"), or a tag
- * alone ("aet", "OT"). Masked with the score: "pens" or "AET" beside a hidden score still says it was a draw.
+ * alone ("aet", "OT"). Masked with the score: "pens" or "AET" beside a hidden score still says it was a draw. A tag
+ * closing a bracket is left to [LOOSE_EXTRA_TIME_TAG] with its bracket (S2: "(4-2 pens)" after the team names must not
+ * leave "(–)").
  */
 private const val SCORE_ENDING =
-    """(?:\s*[(\[]\s*$SCORE_ENDING_IN_BRACKETS\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w))*"""
+    """(?:\s*[(\[]\s*$SCORE_ENDING_IN_BRACKETS\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w|\s*[)\]]))*"""
 
 /** A shoot-out's goals in brackets beside a side's score: the "(4)" of "1 (4) - (2) 1" or "1 (4) - 1 (2)". */
 private const val PENALTY_GOALS = """[(\[]\s*\d{1,2}\s*[)\]]"""
