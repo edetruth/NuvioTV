@@ -17,6 +17,14 @@ class SportsLiveScoreWait(private val maxWaitMs: Long = MAX_WAIT_MS) {
     private val since = HashMap<String, Long>()
 
     /**
+     * #374: when the first of the last [awaiting] call's waiting games stops waiting (its [maxWaitMs] runs out), so the
+     * caller can show it as before at once; null when none waits.
+     */
+    @get:Synchronized
+    var deadline: Long? = null
+        private set
+
+    /**
      * The card keys of [items] waiting for their score at [nowMs]: not a channel, no snapshot in [scores], not [answered]
      * (see the class doc), and waiting for less than [maxWaitMs].
      */
@@ -39,6 +47,7 @@ class SportsLiveScoreWait(private val maxWaitMs: Long = MAX_WAIT_MS) {
             val start = since.getOrPut(key) { nowMs }
             if (nowMs - start < maxWaitMs) waiting += key
         }
+        deadline = waiting.minOfOrNull { since.getValue(it) + maxWaitMs }
         return waiting
     }
 

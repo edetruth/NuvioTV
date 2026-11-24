@@ -79,7 +79,10 @@ class SportsLiveScoreWaitTest {
         val wait = SportsLiveScoreWait()
         assertEquals(setOf(covered.streamKey), wait.awaiting(listOf(covered), emptyMap(), waitingGate, NOW))
         assertEquals(setOf(covered.streamKey), wait.awaiting(listOf(covered), emptyMap(), waitingGate, NOW + SportsLiveScoreWait.MAX_WAIT_MS - 1))
+        // #374: the caller is told when the wait runs out, to show the game as before right then.
+        assertEquals(NOW + SportsLiveScoreWait.MAX_WAIT_MS, wait.deadline)
         assertTrue(wait.awaiting(listOf(covered), emptyMap(), waitingGate, NOW + SportsLiveScoreWait.MAX_WAIT_MS).isEmpty())
+        assertEquals(null, wait.deadline)
         // Answered, then the snapshot goes (a feed paused while the player showed): a new wait.
         val later = NOW + HOUR
         assertTrue(wait.awaiting(listOf(covered), mapOf(covered.streamKey to pacersEvent), waitingGate, later).isEmpty())

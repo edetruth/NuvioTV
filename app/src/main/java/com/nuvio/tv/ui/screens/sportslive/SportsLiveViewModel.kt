@@ -783,6 +783,25 @@ class SportsLiveViewModel internal constructor(
     // live.28: Live now's ESPN-covered games waiting for their feed's first answer (read on the state build only).
     private val scoreWait = SportsLiveScoreWait()
 
+    // #374: bumped when a covered game's wait runs out with no ESPN answer, so it shows as before then, not at the next tick.
+    private val waitWakes = MutableStateFlow(0L)
+    private var waitWakeJob: Job? = null
+    private var waitWakeAt: Long? = null
+
+    /** One state build just after [deadline] (the score wait's), once; a later or no deadline replaces it. */
+    @Synchronized
+    private fun scheduleWaitWake(deadline: Long?) {
+        if (deadline == waitWakeAt && waitWakeJob?.isActive == true) return
+        waitWakeJob?.cancel()
+        waitWakeAt = deadline
+        waitWakeJob = deadline?.let { at ->
+            viewModelScope.launch {
+                delay((at - nowMs()).coerceAtLeast(0L) + 1)
+                waitWakes.update { it + 1 }
+            }
+        }
+    }
+
     // Each clock tick counts, so a tick (with nothing else new) still builds again.
     private var clockTicks = 0L
     private var lastBuild: StateBuild? = null
@@ -800,7 +819,7 @@ class SportsLiveViewModel internal constructor(
             repo.endedKeys,
             combine(selectionState, scoresMode, mySports) { selection, mode, sports -> Triple(selection, mode, sports) },
             combine(endedInputs, linkChecker?.dead ?: flowOf(emptyMap())) { inputs, linkDead -> inputs to linkDead },
-            clock.map { ++clockTicks }
+            merge(clock, waitWakes.drop(1).map { }).map { ++clockTicks }
         ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), tick ->
             // A focus move alone (live.20): the last build with the new selection, unless it changes which rows Live now keeps.
             stateForFocus(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick)
@@ -1708,6 +1727,7 @@ class SportsLiveViewModel internal constructor(
                 // live.28 (user decision): an ESPN-covered game reads its start time, not LIVE, until its feed answers; at
                 // most SportsLiveScoreWait.MAX_WAIT_MS, then as before. The estimate gate is "answered or not covered".
                 awaitingScore = scoreWait.awaiting(split.live, scores, inputs.canEstimate, now)
+                scheduleWaitWake(scoreWait.deadline)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 // #275: one past its estimate whose every lookup found no stream has no link to check: "Probably ended" too.

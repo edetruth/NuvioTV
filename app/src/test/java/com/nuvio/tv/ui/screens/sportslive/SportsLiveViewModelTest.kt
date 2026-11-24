@@ -2246,6 +2246,23 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `a covered game's wait running out with no ESPN answer shows it LIVE at once, not at the next tick (#374)`() = runTest {
+        nextLoad = load(listOf(stillOn))
+        val viewModel = newViewModel(canEstimate = { false })
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        runCurrent()
+        assertEquals(setOf(stillOn.streamKey), viewModel.uiState.value.awaitingScore)
+        advanceTimeBy(com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS - 1_000L)
+        runCurrent()
+        assertEquals(setOf(stillOn.streamKey), viewModel.uiState.value.awaitingScore)
+        // Nothing else changes (the default clock never ticks): the one-shot wake alone builds again.
+        advanceTimeBy(2_000L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.awaitingScore.isEmpty())
+        assertEquals(listOf("on"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
     fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
         // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
         // estimate with no stream yet stays live, dimmed (#145).
