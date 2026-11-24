@@ -109,21 +109,7 @@ internal class ScoreDelay {
         return raw.mapValues { (_, snapshot) -> shownByEvent.getValue(snapshot.eventId) }
     }
 
-    private fun withheld(s: ScoreSnapshot): ScoreSnapshot = s.copy(
-        clockText = null,
-        home = s.home.copy(score = null, linescores = emptyList(), record = null, form = null),
-        away = s.away.copy(score = null, linescores = emptyList(), record = null, form = null),
-        scorers = emptyList(),
-        situation = null,
-        individual = s.individual.let { result ->
-            // A tennis match (#160, the individual sport a card is matched to) keeps its players, not its sets.
-            if (result is TennisMatch) {
-                result.copy(players = result.players.map { it.copy(winner = false, sets = emptyList(), setsWon = 0) })
-            } else {
-                result
-            }
-        }
-    )
+    private fun withheld(s: ScoreSnapshot): ScoreSnapshot = s.withResultWithheld()
 
     companion object {
         private const val FORGET_AFTER_MS = 10 * 60_000L
@@ -169,3 +155,28 @@ internal class ScoreDelay {
             )
         }
 }
+
+/**
+ * This game with nothing of its result (F4): no score, clock, lines, scorers or situation; no season records or form
+ * (updated as it ends); a tennis match keeps its players, not its sets, winner, server or how it ended. Its state stays.
+ * The one mask of a game held back: the score delay's first-seen hold ([ScoreDelay]) and the game being watched
+ * ([ScoreWatch.masked]).
+ */
+internal fun ScoreSnapshot.withResultWithheld(): ScoreSnapshot = copy(
+    clockText = null,
+    home = home.copy(score = null, linescores = emptyList(), record = null, form = null),
+    away = away.copy(score = null, linescores = emptyList(), record = null, form = null),
+    scorers = emptyList(),
+    situation = null,
+    individual = individual.let { result ->
+        // A tennis match (#160, the individual sport a card is matched to).
+        if (result is TennisMatch) {
+            result.copy(
+                players = result.players.map { it.copy(winner = false, sets = emptyList(), setsWon = 0, serving = false) },
+                ending = TennisEnding.COMPLETED
+            )
+        } else {
+            result
+        }
+    }
+)

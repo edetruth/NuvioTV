@@ -44,6 +44,31 @@ class ScoreWatchTest {
     }
 
     @Test
+    fun `the watched game is served with no records, form or tennis sets either`() {
+        // F4: a watched game is masked as the score delay withholds one, records and form updated at the end included.
+        val final = AlertFixtures.final(101, 99).let {
+            it.copy(home = it.home.copy(record = "11-4", form = "WWWLW"), away = it.away.copy(record = "9-6", form = "LLWDW"))
+        }
+        val masked = ScoreWatch.masked(final)
+        assertNull(masked.home.record)
+        assertNull(masked.away.record)
+        assertNull(masked.home.form)
+        assertNull(masked.away.form)
+        val match = TennisMatch(
+            title = "Final",
+            players = listOf(
+                TennisPlayer("Player A", winner = true, sets = listOf(TennisSet(6, won = true)), serving = true, setsWon = 1),
+                TennisPlayer("Player B", winner = false, sets = listOf(TennisSet(2)))
+            ),
+            ending = TennisEnding.RETIRED,
+            live = true
+        )
+        val tennis = ScoreWatch.masked(final.copy(individual = match)).individual as TennisMatch
+        assertTrue(tennis.players.all { it.sets.isEmpty() && !it.winner && !it.serving && it.setsWon == 0 })
+        assertEquals(TennisEnding.COMPLETED, tennis.ending)
+    }
+
+    @Test
     fun `the watched game is served with no score, clock, scorers or situation, its state kept`() {
         val live = AlertFixtures.live(54, 50)
         val masked = ScoreWatch.masked(live)

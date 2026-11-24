@@ -144,7 +144,7 @@ class ScoreDelayTest {
         individual = TennisMatch(
             title = "Final",
             players = listOf(
-                TennisPlayer("Player A", winner = winner, sets = listOf(TennisSet(6, won = true), TennisSet(games)), setsWon = if (winner) 2 else 1),
+                TennisPlayer("Player A", winner = winner, sets = listOf(TennisSet(6, won = true), TennisSet(games)), serving = true, setsWon = if (winner) 2 else 1),
                 TennisPlayer("Player B", winner = false, sets = listOf(TennisSet(4), TennisSet(3)))
             ),
             ending = TennisEnding.COMPLETED,
@@ -182,5 +182,6 @@ class ScoreDelayTest {
         assertEquals(listOf(true, true), match.players.map { it.sets.isEmpty() })
         assertEquals(listOf(0, 0), match.players.map { it.setsWon })
         assertNull(match.winner)
+        assertEquals(listOf(false, false), match.players.map { it.serving })
     }
 }
