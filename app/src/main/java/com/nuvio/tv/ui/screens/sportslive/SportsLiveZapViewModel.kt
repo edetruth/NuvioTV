@@ -418,6 +418,10 @@ class SportsLiveZapViewModel internal constructor(
     // The latest deadline already woken for: never armed again, so a clock that has not moved past it never loops.
     private var panelWaitFired = Long.MIN_VALUE
 
+    /** How many times the wait's one-shot update fired; tests read it (it must never loop). */
+    @androidx.annotation.VisibleForTesting
+    internal var panelWaitWakeCount = 0
+
     @Synchronized
     private fun schedulePanelWaitWake(deadline: Long?) {
         if (deadline == panelWaitAt && panelWaitJob?.isActive == true) return
@@ -427,6 +431,7 @@ class SportsLiveZapViewModel internal constructor(
             viewModelScope.launch {
                 delay((at - System.currentTimeMillis()).coerceAtLeast(0L) + 1)
                 synchronized(this@SportsLiveZapViewModel) { panelWaitFired = maxOf(panelWaitFired, at) }
+                panelWaitWakeCount++
                 panelWaitWakes.update { it + 1 }
             }
         }
