@@ -27,6 +27,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLineup
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
+import com.nuvio.tv.core.sportslive.SportsLiveScoreWait
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -780,6 +781,9 @@ class SportsLiveViewModel internal constructor(
         val builtLiveCount: Int,
         val state: SportsLiveUiState
     )
+
+    // live.28: Live now's ESPN-covered games waiting for their feed's first answer (read on the state build only).
+    private val scoreWait = SportsLiveScoreWait()
 
     // Each clock tick counts, so a tick (with nothing else new) still builds again.
     private var clockTicks = 0L
@@ -1669,6 +1673,7 @@ class SportsLiveViewModel internal constructor(
         var justEnded = emptyMap<String, EndedGame>()
         var heldBack = emptyList<SportsLiveItem>()
         var noStreams = emptySet<String>()
+        var awaitingScore = emptySet<String>()
         var finals = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
@@ -1702,6 +1707,9 @@ class SportsLiveViewModel internal constructor(
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
                 finals = split.finals.keys
+                // live.28 (user decision): an ESPN-covered game reads its start time, not LIVE, until its feed answers; at
+                // most SportsLiveScoreWait.MAX_WAIT_MS, then as before. The estimate gate is "answered or not covered".
+                awaitingScore = scoreWait.awaiting(split.live, scores, inputs.canEstimate, now)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 val (overdue, notOverdue) = split.live.partition {
@@ -1923,6 +1931,7 @@ class SportsLiveViewModel internal constructor(
             sources = selection.sources,
             justEnded = justEnded,
             noStreams = noStreams,
+            awaitingScore = awaitingScore,
             nowMs = now,
             whyTags = whyTags,
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.

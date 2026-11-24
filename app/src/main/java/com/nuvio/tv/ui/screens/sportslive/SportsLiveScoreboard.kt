@@ -89,7 +89,9 @@ data class ScoreboardRow(
     /** A channel in the profile's favorites now (Channels phase 1): the gold ★, and Remove from favorites in its menu. */
     val favorite: Boolean = false,
     /** Listed live only (#215, [listedLiveOnly]): its addon says live, ESPN could not place it: "Listed live", no red dot. */
-    val listedOnly: Boolean = false
+    val listedOnly: Boolean = false,
+    /** Waiting for its ESPN feed's first answer (live.28, [withAwaitingScore]): its start time, no LIVE and no red dot. */
+    val awaitingScore: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -391,6 +393,18 @@ internal fun withListedLive(rows: List<ScoreboardRow>, scoresOn: Boolean, unmatc
     }
 
 /**
+ * [rows] with [ScoreboardRow.awaitingScore] set on the live rows of [awaiting] (live.28, user decision): an ESPN-covered
+ * game whose feed has not answered reads its start time in place of LIVE; nothing moves (settled screens). Only a row
+ * live on its list's word ([GameStatus.Live] with no ESPN game): a game ESPN has is never waiting.
+ */
+internal fun withAwaitingScore(rows: List<ScoreboardRow>, awaiting: Set<String>): List<ScoreboardRow> =
+    if (awaiting.isEmpty()) rows else rows.map { row ->
+        val status = row.status
+        val waiting = row.item.streamKey in awaiting && row.group == ScoreboardGroup.LIVE && status is GameStatus.Live && status.event == null
+        if (waiting == row.awaitingScore) row else row.copy(awaitingScore = waiting)
+    }
+
+/**
  * [row]'s status column in the one status format (#102). [kickoff] words its start ("8:30 PM",
  * "Tomorrow 6:30 PM"); null when it has none.
  */
@@ -414,6 +428,8 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         )
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
+        // live.28: an ESPN-covered game whose feed has not answered yet: its start time, never LIVE before ESPN says so.
+        row.awaitingScore && row.group == ScoreboardGroup.LIVE -> ScoreboardStatusLines(kickoff)
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
             // The game grammar's one scoreless form (live.24, audit A6): LIVE with its dot, then the muted "No score yet".
             if (row.listedOnly) ScoreboardStatusLines(strings.live, strings.listedLive, live = true, listed = true) else ScoreboardStatusLines(strings.live, live = true)

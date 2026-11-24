@@ -62,6 +62,11 @@ data class SportsLiveUiState(
      * dimmed as "no streams yet", and looked up again later. Never a sign the game is over.
      */
     val noStreams: Set<String> = emptySet(),
+    /**
+     * Live now games of an ESPN-covered league whose feed has not answered yet (live.28, [com.nuvio.tv.core.sportslive.SportsLiveScoreWait]),
+     * by card key: they read their start time, not LIVE, in place. Empty on other tabs.
+     */
+    val awaitingScore: Set<String> = emptySet(),
     /** The view model's clock when this state was built (it ticks while the list is watched). */
     val nowMs: Long = 0L,
     /** Live now's excitement badges (#43, V2) by card key, with scores shown only; empty otherwise. */

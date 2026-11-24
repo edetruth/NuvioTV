@@ -2224,6 +2224,28 @@ class SportsLiveViewModelTest {
     } }
 
     @Test
+    fun `an ESPN-covered game is not LIVE until its feed answers, an uncovered one is, and ESPN not answering falls back`() = runTest {
+        // live.28 (user decision). canEstimate false: covered, the feed has not answered; true: no feed covers it.
+        nextLoad = load(listOf(stillOn))
+        val covered = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+        assertEquals(setOf(stillOn.streamKey), covered.uiState.value.awaitingScore)
+        // Listed in place all the same: nothing hidden or held back.
+        assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+
+        val uncovered = newViewModel(canEstimate = { true })
+        advanceUntilIdle()
+        assertTrue(uncovered.uiState.value.awaitingScore.isEmpty())
+
+        // ESPN down: no answer within the wait, so the game shows as before at the next build.
+        covered.nowMs = { NOW + com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS }
+        endedFlow.value = setOf("x|y")
+        advanceUntilIdle()
+        assertTrue(covered.uiState.value.awaitingScore.isEmpty())
+        assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
     fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
         // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
         // estimate with no stream yet stays live, dimmed (#145).

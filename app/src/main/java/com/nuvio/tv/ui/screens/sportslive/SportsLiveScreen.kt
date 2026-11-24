@@ -780,7 +780,8 @@ private fun SportsLiveContent(
     // A Just ended card (#60) or an ESPN final: "Final" (left to the chip when it already says it) or "Probably ended".
     val stateLabelOf: (SportsLiveItem) -> String? = { item ->
         when (val status = statusOf(item)) {
-            is GameStatus.Live -> liveLabel
+            // live.28: an ESPN-covered game whose feed has not answered yet reads its kickoff, as a scheduled one does.
+            is GameStatus.Live -> if (status.event == null && item.streamKey in uiState.awaitingScore) baseStateLabelOf(item.copy(isLive = false)) else liveLabel
             is GameStatus.JustEnded, is GameStatus.Final -> when {
                 status is GameStatus.JustEnded && status.estimate -> probablyEndedLabel
                 chipOf(item) is ScoreChip.Final -> null

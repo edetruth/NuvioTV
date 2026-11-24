@@ -66,6 +66,8 @@ data class SportsLiveBoardInputs(
     val noStreams: Set<String> = emptySet(),
     /** Live now's cards the score feeds confirmed they do not have (#215, [listedLiveOnly]); empty on other tabs. */
     val unmatched: Set<String> = emptySet(),
+    /** Live now's cards waiting for their feed's first answer (live.28, [SportsLiveUiState.awaitingScore]); empty on other tabs. */
+    val awaiting: Set<String> = emptySet(),
     /** Live now's excitement badges by card key (#43, Scores shown); empty otherwise. */
     val excitement: Map<String, WhyTag>,
     val followed: List<FollowedTeam>,
@@ -117,6 +119,7 @@ internal fun sportsLiveBoardInputsOf(
         ended = if (live) state.justEnded else emptyMap(),
         noStreams = if (live) state.noStreams else emptySet(),
         unmatched = if (live) unmatched else emptySet(),
+        awaiting = if (live) state.awaitingScore else emptySet(),
         excitement = if (live) state.whyTags else emptyMap(),
         otherEvents = if (live && state.moreLiveOpen) state.moreLiveOther else emptySet(),
         moreLive = if (live && state.moreLiveOpen) state.moreLiveGroupOf else emptyMap(),
@@ -223,6 +226,7 @@ data class SportsLiveBoard(
                 // no game already show no LIVE unless ESPN has them in play (H), so this never touches them.
                 moreLiveRows(inputs.items, inputs.moreLive, inputs.otherEvents, scores, inputs.clockMs)
                     .let { built -> withListedLive(built, scoresOn = scores.mode != null && scores.mode != ScoresMode.OFF, unmatched = inputs.unmatched) }
+                    .let { built -> withAwaitingScore(built, inputs.awaiting) }
             } else if (isScoreboard(tab)) {
                 scoreboardRows(
                     items = inputs.items,
@@ -241,6 +245,7 @@ data class SportsLiveBoard(
                     keepOrder = liveNow
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
                     .let { built -> withListedLive(built, scoresOn = scores.mode != null && scores.mode != ScoresMode.OFF, unmatched = inputs.unmatched) }
+                    .let { built -> withAwaitingScore(built, inputs.awaiting) }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
             } else {
                 when (tab) {
