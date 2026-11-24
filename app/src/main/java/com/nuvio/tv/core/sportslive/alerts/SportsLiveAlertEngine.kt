@@ -485,8 +485,7 @@ class SportsLiveAlertEngine {
 }
 
 /**
- * The full player's pause as the alerts hear it (#91, review R1): [paused] (and stayed so a moment) is a pause; it ends only
- * when the video plays again ([playing]). A seek's buffering while paused is neither, so the pause holds through it and an
- * asking kickoff card is not closed by it.
+ * The full player's pause as the alerts hear it (#91, review R1, Gemini RC F9): [paused] (and stayed so a moment) is a
+ * pause; it holds only through [buffering] (a seek while paused), and ends when the video plays again, ends or fails.
  */
-internal fun sportsLivePausedNow(paused: Boolean, playing: Boolean, wasPaused: Boolean): Boolean = paused || (wasPaused && !playing)
+internal fun sportsLivePausedNow(paused: Boolean, buffering: Boolean, wasPaused: Boolean): Boolean = paused || (wasPaused && buffering)

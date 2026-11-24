@@ -309,12 +309,19 @@ class SportsLiveMovieKickoffTest {
     }
 
     @Test
-    fun `a seek while paused is not a resume - the player's pause holds until it plays`() {
-        // Paused, then buffering for a seek (neither paused nor playing): still paused.
-        assertTrue(sportsLivePausedNow(paused = false, playing = false, wasPaused = true))
-        assertFalse(sportsLivePausedNow(paused = false, playing = true, wasPaused = true))
+    fun `a seek while paused is not a resume - the player's pause holds only through its buffering`() {
+        // Paused, then buffering for a seek: still paused.
+        assertTrue(sportsLivePausedNow(paused = false, buffering = true, wasPaused = true))
+        // Playing again (not buffering, not paused): the pause is over.
+        assertFalse(sportsLivePausedNow(paused = false, buffering = false, wasPaused = true))
         // Buffering while it plays is never a pause.
-        assertFalse(sportsLivePausedNow(paused = false, playing = false, wasPaused = false))
+        assertFalse(sportsLivePausedNow(paused = false, buffering = true, wasPaused = false))
+    }
+
+    @Test
+    fun `a paused movie that ends or fails is no longer a viewer's pause (Gemini RC F9)`() {
+        // Ended or an error: the player says neither paused nor buffering.
+        assertFalse(sportsLivePausedNow(paused = false, buffering = false, wasPaused = true))
     }
 
     @Test
