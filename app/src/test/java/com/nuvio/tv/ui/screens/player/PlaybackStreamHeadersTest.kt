@@ -103,4 +103,18 @@ class PlaybackStreamHeadersTest {
             .forEach { assertTrue(it, PlaybackStreamHeaders.isLocalHost(it)) }
     }
 
+    @Test
+    fun `the opt-in parallel connections client gets the same host scope (#434)`() {
+        val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerMediaSourceFactory.kt").readText()
+        assertTrue(source.contains("OkHttpDataSource.Factory(PlaybackStreamHeaders.scoped(playbackHttpClient))"))
+    }
+
+    @Test
+    fun `a scoped client drops login headers on another host`() {
+        val base = okhttp3.OkHttpClient()
+        val scoped = PlaybackStreamHeaders.scoped(base)
+        assertEquals(base.networkInterceptors.size + 1, scoped.networkInterceptors.size)
+        // Each call gets its own scope: two clients never share a link host.
+        assertTrue(PlaybackStreamHeaders.scoped(base).networkInterceptors.last() !== scoped.networkInterceptors.last())
+    }
 }

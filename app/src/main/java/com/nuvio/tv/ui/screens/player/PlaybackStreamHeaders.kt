@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.player
 
 import okhttp3.HttpUrl
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.atomic.AtomicReference
 
@@ -76,4 +78,11 @@ internal object PlaybackStreamHeaders {
         return name.endsWith(".local") || '.' !in name.trimEnd('.')
     }
 
+    /** [client] with its own [HostScope] (#434), for a player client that sets the stream's headers itself. */
+    fun scoped(client: OkHttpClient): OkHttpClient {
+        val scope = HostScope()
+        return client.newBuilder()
+            .addNetworkInterceptor(Interceptor { chain -> chain.proceed(scope.apply(chain.request())) })
+            .build()
+    }
 }
