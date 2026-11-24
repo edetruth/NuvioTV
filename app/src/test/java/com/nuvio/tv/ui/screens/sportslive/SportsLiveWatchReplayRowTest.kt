@@ -190,6 +190,22 @@ class SportsLiveWatchReplayRowTest {
     }
 
     @Test
+    fun `a shoot-out bracket after the team names and a tag followed by words go too`() {
+        // F6-1
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (pens 4-2)"))
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (AET, 4-2 pens)"))
+        assertEquals("Team A –", spoilerSafeLinkText("Team A 1-1 (aet, pens 4-2)"))
+        assertEquals("Lakers – Celtics Highlights", spoilerSafeLinkText("Lakers 120-118 Celtics OT Highlights"))
+        assertEquals("Arsenal – Chelsea Full Match", spoilerSafeLinkText("Arsenal 1-1 Chelsea AET Full Match"))
+        assertEquals("Leafs – Bruins 1080p", spoilerSafeLinkText("Leafs 3-2 Bruins SO 1080p"))
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea aet"))
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea on penalties"))
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea after extra time"))
+        // A series score in brackets, masked, has no tag: it stays as "(–)".
+        assertEquals("Lakers – Celtics (–)", spoilerSafeLinkText("Lakers 102 - 99 Celtics (3–2)"))
+    }
+
+    @Test
     fun `words after a score that are not how it ended stay`() {
         assertEquals("Team A – Team B part 2", spoilerSafeLinkText("Team A 2-1 Team B part 2"))
         assertEquals("Team A – Team B (pt 1)", spoilerSafeLinkText("Team A 2-1 Team B (pt 1)"))

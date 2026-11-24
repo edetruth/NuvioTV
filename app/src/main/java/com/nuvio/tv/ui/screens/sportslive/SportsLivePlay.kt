@@ -203,9 +203,12 @@ private const val EXTRA_TIME_TAG =
 private const val BARE_EXTRA_TIME_TAG =
     """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|(?-i:\d*OT|SO))"""
 
-/** Inside the brackets after a score: a shoot-out's score and tag either way round ("4-2 pens", "pens 4-2"), or tags ("AET, 4-2 pens"). */
+/**
+ * Inside the brackets after a score: a shoot-out's score and tag either way round ("4-2 pens", "pens 4-2"), or tags
+ * before it ("AET, 4-2 pens", "aet, pens 4-2").
+ */
 private const val SCORE_ENDING_IN_BRACKETS =
-    """(?:\d{1,2}\s*[-–—:]\s*\d{1,2}\s*,?\s*$EXTRA_TIME_TAG?|$EXTRA_TIME_TAG(?:\s*,?\s*\d{1,2}\s*[-–—:]\s*\d{1,2}(?:\s*$EXTRA_TIME_TAG)?)?)"""
+    """(?:\d{1,2}\s*[-–—:]\s*\d{1,2}\s*,?\s*$EXTRA_TIME_TAG?|$EXTRA_TIME_TAG(?:\s*,?\s*$EXTRA_TIME_TAG)*(?:\s*,?\s*\d{1,2}\s*[-–—:]\s*\d{1,2}(?:\s*$EXTRA_TIME_TAG)?)?)"""
 
 /**
  * What follows a score and tells how it ended (#244, F6): a shoot-out's score and tag ("(4-2 pens)", "[AET]"), or a tag
@@ -227,11 +230,13 @@ private val SCORE_IN_LINK_TEXT = Regex(
 )
 
 /**
- * An extra-time tag away from the score, once a score was masked (F6): "Arsenal 1-1 Chelsea (AET)", "Leafs 3-2 Bruins SO".
- * In brackets any tag; bare only in capitals and at the end or before a separator, so words stay.
+ * An extra-time tag away from the score, once a score was masked (F6, F6-1): "Arsenal 1-1 Chelsea (AET)", "(pens 4-2)" after
+ * the team names (its score already masked to "–"), "Leafs 3-2 Bruins SO 1080p", "… on penalties". In brackets any tags
+ * with masked scores ("(AET, –)"), but at least one tag, so a masked series score "(–)" stays; bare, the same tags as
+ * beside a score (no single letter; OT and SO in capitals only), so words stay.
  */
 private val LOOSE_EXTRA_TIME_TAG = Regex(
-    """\s*[(\[]\s*$EXTRA_TIME_TAG(?:\s*,?\s*$EXTRA_TIME_TAG)*\s*[)\]]|\s+(?-i:\d*OT|SO|AET|PENS?)(?=\s*$|\s*[-|,·•])""",
+    """\s*[(\[](?=[^)\]]*[a-z])\s*(?:–|$EXTRA_TIME_TAG)(?:\s*,?\s*(?:–|$EXTRA_TIME_TAG))*\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w)""",
     RegexOption.IGNORE_CASE
 )
 
