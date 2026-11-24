@@ -221,7 +221,7 @@ class SportsLiveEndedGames {
                 ScoreChips.matchedEvent(item, snapshot) == null
             ) {
                 moved += key
-                timedStart(item)?.let { start -> EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport)) }
+                timedStart(item)?.let { start -> EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMsOf(item)) }
             } else if (key in noStreams) {
                 linkCheckEnd(item, snapshot, nowMs)?.let { end -> moved += key; EndedGame(EndedSignal.ESTIMATE, end) }
             } else {

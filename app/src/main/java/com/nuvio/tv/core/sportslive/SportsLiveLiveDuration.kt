@@ -34,6 +34,33 @@ object SportsLiveLiveDuration {
             ?: DEFAULT_MAX_MS
 
     /**
+     * #358: the longest [item] plausibly stays live, by the sport the app infers for it
+     * ([SportsLiveMySportsScope.kindOf]: its sport word, title, genres, a single-sport catalog, its teams; a bare
+     * "Football" is soccer), [card]'s when the source names none; the sport word's own limit ([maxLiveMs]) only when no
+     * kind is known.
+     */
+    fun maxLiveMsOf(item: SportsLiveItem, card: SportsLiveItem = item): Long {
+        val kind = SportsLiveMySportsScope.kindOf(item) ?: SportsLiveMySportsScope.kindOf(card)
+        return kind?.let(byKind::get) ?: maxLiveMs(item.sport ?: card.sport)
+    }
+
+    // #358: the same limits by inferred kind. Motorsport takes the longest of its series (MotoGP's six hours).
+    private val byKind: Map<SportsLiveSportKind, Long> = mapOf(
+        SportsLiveSportKind.SOCCER to 3 * HOUR_MS + 15 * 60 * 1000L,
+        SportsLiveSportKind.BASKETBALL to 3 * HOUR_MS,
+        SportsLiveSportKind.HOCKEY to 3 * HOUR_MS,
+        SportsLiveSportKind.FOOTBALL to 4 * HOUR_MS + 30 * 60 * 1000L,
+        SportsLiveSportKind.BASEBALL to 4 * HOUR_MS + 30 * 60 * 1000L,
+        SportsLiveSportKind.MOTORSPORT to 6 * HOUR_MS,
+        SportsLiveSportKind.MMA to 6 * HOUR_MS,
+        SportsLiveSportKind.BOXING to 6 * HOUR_MS,
+        SportsLiveSportKind.WRESTLING to 6 * HOUR_MS,
+        SportsLiveSportKind.TENNIS to 8 * HOUR_MS,
+        SportsLiveSportKind.CRICKET to 9 * HOUR_MS,
+        SportsLiveSportKind.GOLF to 12 * HOUR_MS
+    )
+
+    /**
      * True when every source of [item] (a merged card's alternates included) with a timed kickoff
      * started longer ago than its sport allows, and at least one has such a kickoff. Channels and
      * games without a known time of day are never hidden this way.
@@ -42,7 +69,7 @@ object SportsLiveLiveDuration {
         if (item.isChannel) return false
         val timed = (listOf(item) + item.alternates).filter { it.startMs != null && it.startHasTimeOfDay }
         return timed.isNotEmpty() && timed.all { source ->
-            nowMs - source.startMs!! > maxLiveMs(source.sport ?: item.sport)
+            nowMs - source.startMs!! > maxLiveMsOf(source, item)
         }
     }
 }

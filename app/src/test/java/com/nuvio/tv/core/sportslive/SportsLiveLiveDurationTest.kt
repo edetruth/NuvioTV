@@ -40,6 +40,20 @@ class SportsLiveLiveDurationTest {
     }
 
     @Test
+    fun `#358 - the limit follows the inferred sport - a bare Football or an untagged soccer game gets soccer's`() {
+        // Tagged "Football" (soccer, as the app reads a bare Football): soccer's 3 h 15, not the 3 h 30 default.
+        val football = game("f", 3 * HOUR + 20 * MINUTE, sport = "Football")
+        assertEquals(3 * HOUR + 15 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(football))
+        assertTrue(SportsLiveLiveDuration.isOverdue(football, now))
+        // No sport word, soccer only in its genres.
+        val untagged = game("u", 3 * HOUR + 20 * MINUTE).let { it.copy(meta = it.meta.copy(genres = listOf("Soccer"))) }
+        assertTrue(SportsLiveLiveDuration.isOverdue(untagged, now))
+        // American football named by its league keeps its own limit; nothing known keeps the default.
+        assertEquals(4 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(game("n", HOUR, sport = "NFL")))
+        assertEquals(3 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(game("x", HOUR)))
+    }
+
+    @Test
     fun `games without a timed kickoff and channels are never hidden by age`() {
         assertFalse(SportsLiveLiveDuration.isOverdue(game("a", null), now))
         assertFalse(SportsLiveLiveDuration.isOverdue(game("a", 10 * HOUR, timeOfDay = false), now))
