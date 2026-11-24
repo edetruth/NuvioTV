@@ -424,6 +424,9 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         // Settled screens (live.26): a game that ended in its shown place says so there; under Hide its score stays hidden.
         row.endedInPlace && chip !is ScoreChip.Final ->
             ScoreboardStatusLines(GameStatusText.finalWord(sport, strings), strings.chip.hidden.takeIf { chip is ScoreChip.Hidden })
+        // #468 (L9): a postponed, cancelled or suspended game reads ESPN's word in every mode: it carries no score, and
+        // "Score hidden" (Hide until focused) would read as a game in play; never Final either.
+        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         // Spoilers unchanged: "Score hidden", no clock and no dot, whatever the game's state.
         chip is ScoreChip.Hidden -> ScoreboardStatusLines(strings.chip.hidden)
         chip is ScoreChip.Live -> {
@@ -435,8 +438,6 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
             ScoreChips.finalWords(chip.note, GameStatusText.finalWord(sport, strings), strings.fullTime, GameStatusText.endsAtFullTime(sport))
         )
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
-        // L9: a postponed game in the Just ended strip reads Postponed, never Final (with no chip too).
-        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
         // live.28: an ESPN-covered game whose feed has not answered yet: its start time, never LIVE before ESPN says so.
         // F6: with no start to show, a quiet "Checking score…", never a blank status.

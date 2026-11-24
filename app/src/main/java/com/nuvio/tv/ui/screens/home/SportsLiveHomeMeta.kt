@@ -54,8 +54,14 @@ internal object SportsLiveHomeMeta {
          */
         awaiting: String? = null,
         /** #375: "Probably ended" for a game Live Now shows so (an estimate, overdue): labelled, never hidden, never "● Live". */
-        probablyEnded: String? = null
+        probablyEnded: String? = null,
+        /**
+         * #468: ESPN has the game postponed, cancelled or suspended: its word ("Postponed", "Canceled"), in every Scores mode
+         * (it carries no score), never "● Live · Score hidden".
+         */
+        offStatus: String? = null
     ): DrawnCardFooter = when {
+        offStatus != null -> DrawnCardFooter(lead = offStatus)
         probablyEnded != null && (chip == null || chip is ScoreChip.Live || chip == ScoreChip.Hidden) -> DrawnCardFooter(lead = probablyEnded)
         awaiting != null && chip == null -> DrawnCardFooter(lead = awaiting)
         else -> footerOf(chip, mode, strings, liveWord, listedLive, halves, noScoreYet, startsAt, watching)

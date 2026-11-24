@@ -75,6 +75,14 @@ class SportsLiveHomeMetaTest {
     }
 
     @Test
+    fun `#468 - a postponed or cancelled game's card reads ESPN's word in every Scores mode, never Live`() {
+        for (mode in listOf(ScoresMode.SHOW, ScoresMode.HIDE_UNTIL_FOCUSED, ScoresMode.OFF)) {
+            val chip = if (mode == ScoresMode.HIDE_UNTIL_FOCUSED) ScoreChip.Hidden else null
+            assertEquals(DrawnCardFooter(lead = "Canceled"), SportsLiveHomeMeta.cardFooter(chip, mode, strings, "Live", offStatus = "Canceled"))
+        }
+    }
+
+    @Test
     fun `Hide until focused reads Score hidden on every game card`() {
         assertEquals(
             DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("Score hidden")),

@@ -346,6 +346,7 @@ internal fun SportsLiveYourTeamsStrip(
     val todayWord = stringResource(R.string.sports_live_agenda_today)
     val startedWord = stringResource(R.string.sports_live_your_teams_started)
     val checkingWord = stringResource(R.string.sports_live_checking_score)
+    val postponedWord = stringResource(R.string.sports_live_chip_postponed)
     val listState = rememberLazyListState()
     // Focus gone from the strip: back to its first card, so the tabs' Down (which lands on it) always finds it composed,
     // also after ▶ along the strip (user TV report, live.20).
@@ -387,7 +388,13 @@ internal fun SportsLiveYourTeamsStrip(
                     }
                     val face = when (entry) {
                         // F5: a covered game still waiting for ESPN reads its start, as its list row does: no red dot.
-                        is YourTeamsEntry.Live -> if (entry.row.awaitingScore) {
+                        // #468: postponed, cancelled or suspended: ESPN's word, no red dot, in every Scores mode.
+                        is YourTeamsEntry.Live -> if (entry.row.status is com.nuvio.tv.core.sportslive.GameStatus.Postponed) {
+                            SlimFace(
+                                status = SlimStatus.Time((entry.row.status as com.nuvio.tv.core.sportslive.GameStatus.Postponed).text ?: postponedWord),
+                                corner = if (ready) SlimCorner.Ready else null
+                            )
+                        } else if (entry.row.awaitingScore) {
                             SlimFace(
                                 status = SlimStatus.Time(art.startMs?.let { agendaTimeText(it) } ?: checkingWord),
                                 corner = if (ready) SlimCorner.Ready else null
