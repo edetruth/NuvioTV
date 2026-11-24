@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -41,5 +42,13 @@ class SportsLivePostponedTest {
         assertEquals(ScoreboardGroup.JUST_ENDED, scoreboardGroupOf(off, card))
         assertEquals(ScoreboardGroup.LIVE, scoreboardGroupOf(paused, card))
         assertEquals(ScoreboardGroup.LATER, scoreboardGroupOf(off, card, SportsLiveTab.UPCOMING))
+    }
+
+    @Test
+    fun `L3 - a postponed game in the panel's Just ended plays on OK, no box score or postgame`() {
+        val postponed = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Postponed", mayResume = false)
+        val row = groupPanelRows(listOf(card), mapOf(card.streamKey to postponed), ScoresMode.SHOW, emptySet(), 0L).single()
+        assertEquals(ScoreboardGroup.JUST_ENDED, row.section)
+        assertEquals(PanelRowOk.PLAY, panelRowOk(row, postponed))
     }
 }

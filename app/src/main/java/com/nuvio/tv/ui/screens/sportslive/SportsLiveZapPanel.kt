@@ -659,7 +659,8 @@ internal enum class PanelRowOk { PLAY, BOX_SCORE }
  * the box score, as Game stats in its menu does; every other row (a Just ended game ESPN does not know too) plays.
  */
 internal fun panelRowOk(row: ZapPanelRow, game: ScoreSnapshot?): PanelRowOk =
-    if (row.section == ScoreboardGroup.JUST_ENDED && game != null) PanelRowOk.BOX_SCORE else PanelRowOk.PLAY
+    // L3: a postponed or cancelled game sits in Just ended too, but was never played: no box score, no postgame; it plays.
+    if (row.section == ScoreboardGroup.JUST_ENDED && row.status !is GameStatus.Postponed && game != null) PanelRowOk.BOX_SCORE else PanelRowOk.PLAY
 
 /**
  * What Hold OK on a panel row lists (#140), in order: **Watch both** first (the game playing beside the one
