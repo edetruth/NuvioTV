@@ -3,6 +3,7 @@ package com.nuvio.tv.core.sportslive.alerts
 import com.nuvio.tv.core.sportslive.scores.CrunchMoment
 import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
+import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -273,7 +274,7 @@ class SportsLiveAlertEngine {
         if (prompt.deferred) {
             // The deferred offer (#91): once, while the game is listed live and not over, when the viewer is free. It is not
             // held for a link again and not bound to the 20 minute window, so pausing 40 minutes into a movie still offers it.
-            if (!liveNow(game) || !viewerFree(watching)) return null
+            if (!liveNow(game, nowMs) || !viewerFree(watching)) return null
             prompt.deferred = false
             return SportsLiveAlert.Kickoff(game.item, event, again = true, deferred = true)
         }
@@ -288,10 +289,18 @@ class SportsLiveAlertEngine {
         return SportsLiveAlert.Kickoff(game.item, event)
     }
 
-    /** The game is listed live and ESPN has not said it is over (Scores Off has no ESPN game: the listing alone). */
-    private fun liveNow(game: AlertGame): Boolean = when (game.snapshot?.state) {
+    /**
+     * The game is live now: ESPN says it is on; with no ESPN game (Scores Off, or a league ESPN does not cover), a game
+     * with a timed start is live for the section's live window from it (review R3: the listing was read at load, before
+     * kick-off or hours ago, and the alerts do not reload it), and an untimed one as it is listed.
+     */
+    private fun liveNow(game: AlertGame, nowMs: Long): Boolean = when (game.snapshot?.state) {
         ScoreState.IN -> true
-        null -> game.item.isLive
+        null -> {
+            val listed = SportsLiveItemBucketer.reclock(game.item, nowMs)
+            val start = listed.startMs?.takeIf { listed.startHasTimeOfDay }
+            if (start != null) SportsLiveItemBucketer.liveByClockAt(start, nowMs) else listed.isLive
+        }
         else -> false
     }
 

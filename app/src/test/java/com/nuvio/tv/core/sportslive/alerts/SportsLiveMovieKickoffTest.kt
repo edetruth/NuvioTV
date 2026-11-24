@@ -167,18 +167,49 @@ class SportsLiveMovieKickoffTest {
     }
 
     @Test
-    fun `under Off scores the listing alone says whether the game is live`() {
-        val live = item(followed = true, isLive = true)
-        val over = item(followed = true, isLive = false)
+    fun `under Off scores an untimed game is live as the listing says`() {
+        val live = item(followed = true, isLive = true, startMs = null)
+        val over = item(followed = true, isLive = false, startMs = null)
         val engine = SportsLiveAlertEngine()
-        engine.look(START + MINUTE, null, playing, live, ScoresMode.OFF)
         engine.deferOffer(live)
         assertEquals(1, engine.look(START + 30 * MINUTE, null, paused, live, ScoresMode.OFF).size)
 
         val other = SportsLiveAlertEngine()
-        other.look(START + MINUTE, null, playing, over, ScoresMode.OFF)
         other.deferOffer(over)
         assertEquals(emptyList<SportsLiveAlert>(), other.look(START + 30 * MINUTE, null, paused, over, ScoresMode.OFF))
+    }
+
+    @Test
+    fun `with no ESPN game a game listed Upcoming at load is live from its start - the offer comes on pause (review R3)`() {
+        // Scores Off, or a league ESPN does not cover: the listing was loaded before kick-off and is not reloaded.
+        val upcoming = item(followed = true, isLive = false).copy(liveByClock = true)
+        for (mode in listOf(ScoresMode.OFF, ScoresMode.SHOW)) {
+            val engine = SportsLiveAlertEngine()
+            val first = engine.look(START + MINUTE, null, playing, upcoming, mode)
+            assertEquals("$mode", 1, first.size)
+            engine.deferOffer(upcoming)
+            val offer = engine.look(START + 30 * MINUTE, null, paused, upcoming, mode)
+            assertEquals("$mode", 1, offer.size)
+            assertTrue((offer.single() as SportsLiveAlert.Kickoff).deferred)
+        }
+    }
+
+    @Test
+    fun `with no ESPN game the offer ends with the game's live window, however it was listed (review R3)`() {
+        for (listed in listOf(item(followed = true, isLive = true), item(followed = true, isLive = false).copy(liveByClock = true))) {
+            val engine = SportsLiveAlertEngine()
+            engine.deferOffer(listed)
+            assertEquals(emptyList<SportsLiveAlert>(), engine.look(START + 5 * 60 * MINUTE, null, paused, listed, ScoresMode.OFF))
+        }
+    }
+
+    @Test
+    fun `with no ESPN game nothing is offered before the listed start`() {
+        val engine = SportsLiveAlertEngine()
+        val game = item(followed = true, isLive = false).copy(liveByClock = true)
+        engine.deferOffer(game)
+        assertEquals(emptyList<SportsLiveAlert>(), engine.look(START - 10 * MINUTE, null, paused, game, ScoresMode.OFF))
+        assertEquals(1, engine.look(START + MINUTE, null, paused, game, ScoresMode.OFF).size)
     }
 
     @Test
