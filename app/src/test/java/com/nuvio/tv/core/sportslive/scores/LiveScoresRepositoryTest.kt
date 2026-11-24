@@ -873,14 +873,42 @@ class LiveScoresRepositoryTest {
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(30_000); runCurrent() // failure 1
-        advanceTimeBy(120_000); runCurrent() // failure 2 (Retry-After 120 s > 30 s)
-        assertEquals(3, provider.calls.size)
+        advanceTimeBy(90_000); runCurrent() // 2 min after the last answer: its live score still stands
         assertEquals(1, repo.scores.value.size)
+        advanceTimeBy(30_000); runCurrent() // failure 2 (Retry-After 120 s > 30 s)
+        assertEquals(3, provider.calls.size)
+        // Tier 1 H1: 2.5 min old, the live score is gone though the feed is not paused yet.
+        assertTrue(repo.scores.value.isEmpty())
         advanceTimeBy(119_000); runCurrent()
         assertEquals(3, provider.calls.size)
         advanceTimeBy(1_000); runCurrent() // failure 3: paused, scores hidden
         assertEquals(4, provider.calls.size)
         assertTrue(repo.scores.value.isEmpty())
+    }
+
+    @Test
+    fun `a live score is not served long after its last answer while ESPN asks to wait 15 minutes`() = runTest {
+        // Tier 1 H1: the interval became the Retry-After, and the 2-1 stood for up to 30 min with no new answer.
+        var fail = false
+        provider.respond = { if (fail) ScoreboardResult.FAILED.copy(retryAfterMs = 15 * 60_000L) else ScoreboardResult(listOf(game(ScoreState.IN, 2, 1))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(2, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        fail = true
+        advanceTimeBy(30_000); runCurrent() // failure 1, next ask in 15 min
+        assertEquals(2, provider.calls.size)
+        assertEquals(1, repo.scores.value.size)
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        // Gone without asking ESPN again inside its Retry-After.
+        assertEquals(2, provider.calls.size)
+        // The next answer brings it back.
+        fail = false
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertEquals(3, provider.calls.size)
+        assertEquals(2, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
     @Test

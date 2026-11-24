@@ -17,6 +17,27 @@ internal object ScoreCadence {
     const val JITTER_MS = 3_000L
 
     /**
+     * Tier 1 H1 (a wrong score is worse than none): after a failure, a live feed's last answer stands for now at most
+     * this long after it landed, whatever the backoff or Retry-After: the slowest normal live pace (soccer/all) twice,
+     * plus jitter. A feed polling normally is never cut by it.
+     */
+    const val LIVE_STALE_MS = 2 * SOCCER_ALL_FLOOR_MS + JITTER_MS
+
+    /**
+     * True when a feed's last answer, [ageMs] old, may be shown: within twice [intervalMs] (plus jitter; null, stopped:
+     * always), and, for a feed with a game in play ([live]) that has failed since ([failures]), within [LIVE_STALE_MS].
+     */
+    fun fresh(ageMs: Long, intervalMs: Long?, failures: Int, live: Boolean): Boolean {
+        if (failures > 0 && live && ageMs > LIVE_STALE_MS) return false
+        val interval = intervalMs ?: return true
+        return ageMs <= 2 * interval + JITTER_MS
+    }
+
+    /** Millis until a failing live feed's last answer, [ageMs] old, is past [LIVE_STALE_MS]; null: no such cut ahead. */
+    fun liveStaleInMs(ageMs: Long, failures: Int, live: Boolean): Long? =
+        if (failures > 0 && live && ageMs <= LIVE_STALE_MS) LIVE_STALE_MS - ageMs + 1 else null
+
+    /**
      * Millis from the last fetch to the next, or null to stop: [matched] are the tracked cards' games
      * found in the feed, [events] the whole feed, [followed] the event ids of followed teams' games.
      * - After a failure: the backoff for [failures] (30 s → 60 s → 2 min → 5 min), or [retryAfterMs] if longer.

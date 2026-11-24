@@ -653,7 +653,17 @@ class LiveScoresRepository internal constructor(
     private suspend fun poll(feed: ScoreFeed, pollerScope: CoroutineScope) {
         warmStart(feed, pollerScope)
         while (true) {
-            val (wait, seen) = lock.withLock { waitLocked(feed)?.let { it to matchedStates.value } } ?: return
+            val (wait, seen, staleIn) = lock.withLock {
+                waitLocked(feed)?.let { Triple(it, matchedStates.value, liveStaleInLocked(feed)) }
+            } ?: return
+            // Tier 1 H1: a failing feed's live score goes once it is too old to stand for now, not at the next fetch a
+            // long backoff or Retry-After away. Nothing is fetched for it.
+            if (staleIn != null && staleIn < wait) {
+                if (withTimeoutOrNull(staleIn) { matchedStates.first { it != seen } } == null) {
+                    lock.withLock { refreshLocked(pollerScope, restartStopped = false) }
+                }
+                continue
+            }
             // Woken when the matched games change: the wait is worked out again from the last fetch (#81).
             if (wait > 0 && withTimeoutOrNull(wait) { matchedStates.first { it != seen } } != null) continue
             val request = lock.withLock { fetchLocked(feed) }
@@ -1290,8 +1300,15 @@ class LiveScoresRepository internal constructor(
         val success = lastSuccessAt ?: return false
         // Only a warm copy so far: shown while younger than its limit.
         if (!fetched && nowMs - success > ScoreProvider.RECENT_MS) return false
-        val interval = intervalMs ?: return true
-        return nowMs - success <= 2 * interval + ScoreCadence.JITTER_MS
+        // Tier 1 H1: after a failure the interval is the backoff (up to Retry-After); a live score is cut sooner.
+        return ScoreCadence.fresh(nowMs - success, intervalMs, failures, live = events.any { it.state == ScoreState.IN })
+    }
+
+    /** Millis until [feed]'s last live answer is too old to show after a failure ([ScoreCadence.LIVE_STALE_MS]); null: none. */
+    private fun liveStaleInLocked(feed: ScoreFeed): Long? {
+        val state = feeds[feed] ?: return null
+        val success = state.lastSuccessAt ?: return null
+        return ScoreCadence.liveStaleInMs(now() - success, state.failures, live = state.events.any { it.state == ScoreState.IN })
     }
 
     private fun publishLocked(off: Boolean = false) {
