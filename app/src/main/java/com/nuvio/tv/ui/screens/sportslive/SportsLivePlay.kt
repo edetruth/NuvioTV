@@ -192,16 +192,36 @@ internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiv
 internal fun sportsLiveCardToPlay(item: SportsLiveItem, hidden: Boolean, title: () -> String): SportsLiveItem =
     if (hidden) spoilerSafeReplay(item, spoilerSafeLinkText(title()).orEmpty()) else item
 
+/** How a game that went past normal time is tagged in brackets: "AET", "a.e.t.", "pens", "on penalties", "p", "OT", "SO". */
+private const val EXTRA_TIME_TAG =
+    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens?\.?|(?:on\s+)?penalties|p|o\.?t\.?|s\.?o\.?)"""
+
+/** The same tags standing alone after a score ("1-1 aet", "3-2 OT"): no single letter, OT and SO in capitals only. */
+private const val BARE_EXTRA_TIME_TAG =
+    """(?:a\.?e\.?t\.?|after\s+extra\s+time|(?:on\s+)?pens\.?|(?:on\s+)?penalties|(?-i:OT|SO))"""
+
 /**
- * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0"; not part of a date ("2026-11-22", "22-11-2026") or a
- * picture's aspect ratio ("16:9").
+ * What follows a score and tells how it ended (#244): a shoot-out's score and tag ("(4-2 pens)"), a tag in brackets
+ * ("(AET)") or alone ("aet", "OT"). Masked with the score: "pens" or "AET" beside a hidden score still says it was a draw.
  */
-private val SCORE_IN_LINK_TEXT =
-    Regex("""(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-–—:/.]\d)""")
+private const val SCORE_ENDING =
+    """(?:\s*\(\s*(?:\d{1,2}\s*[-–—:]\s*\d{1,2}\s*$EXTRA_TIME_TAG?|$EXTRA_TIME_TAG)\s*\)|\s+$BARE_EXTRA_TIME_TAG(?!\w))*"""
+
+/** A shoot-out's goals in brackets beside each side's score: the "(4)" of "1 (4) - (2) 1". */
+private const val PENALTY_GOALS = """\(\s*\d{1,2}\s*\)"""
+
+/**
+ * A score in a link's words: "2-1", "102 - 99", "3–2", "1:0", "1 (4) - (2) 1", with how it ended ([SCORE_ENDING]); not
+ * part of a date ("2026-11-22", "22-11-2026") or a picture's aspect ratio ("16:9").
+ */
+private val SCORE_IN_LINK_TEXT = Regex(
+    """(?<!\d[-–—:/.])\b(?!(?:16|21|32):9\b|9:16\b)\d{1,3}(?:\s*$PENALTY_GOALS)?\s*[-–—:]\s*(?:$PENALTY_GOALS\s*)?\d{1,3}\b(?![-–—:/.]\d)$SCORE_ENDING""",
+    RegexOption.IGNORE_CASE
+)
 
 /** A score split by "vs" between the team names: "Team A 2 vs 1 Team B", "2 v 1" (a "vs" alone stays). */
 private val SPLIT_SCORE_IN_LINK_TEXT =
-    Regex("""(?<![\d.])\b\d{1,3}\s+vs?\.?\s+\d{1,3}\b(?![-–—:/.]\d)""", RegexOption.IGNORE_CASE)
+    Regex("""(?<![\d.])\b\d{1,3}\s+vs?\.?\s+\d{1,3}\b(?![-–—:/.]\d)$SCORE_ENDING""", RegexOption.IGNORE_CASE)
 
 /**
  * [text] with any score in it masked ("Arsenal 2-1 Chelsea highlights" → "Arsenal – Chelsea highlights"): live.26 shorter

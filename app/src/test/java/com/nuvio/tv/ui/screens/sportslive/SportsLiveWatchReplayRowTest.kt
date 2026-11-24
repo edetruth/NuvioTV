@@ -49,7 +49,8 @@ class SportsLiveWatchReplayRowTest {
     fun `a score in a replay's link words is masked, other numbers stay`() {
         assertEquals("Arsenal – Chelsea highlights", spoilerSafeLinkText("Arsenal 2-1 Chelsea highlights"))
         assertEquals("Lakers – Celtics (–)", spoilerSafeLinkText("Lakers 102 - 99 Celtics (3–2)"))
-        assertEquals("Final – AET", spoilerSafeLinkText("Final 1:0 AET"))
+        // #244: how it ended goes with the score ("AET" beside a hidden score still says it was a draw after 90 minutes).
+        assertEquals("Final –", spoilerSafeLinkText("Final 1:0 AET"))
         assertEquals("NBA 2024-25 1080p H.265 5.1", spoilerSafeLinkText("NBA 2024-25 1080p H.265 5.1"))
         assertNull(spoilerSafeLinkText(null))
     }
@@ -66,6 +67,34 @@ class SportsLiveWatchReplayRowTest {
         assertTrue(sportsLiveHidesReplayLinks(true, ScoresMode.OFF, post, revealed = true, spoilerProtected = false))
         assertTrue("setting not read yet", sportsLiveHidesReplayLinks(true, null, post, revealed = false, spoilerProtected = false))
         assertFalse("not a replay", sportsLiveHidesReplayLinks(false, ScoresMode.HIDE_UNTIL_FOCUSED, post, revealed = false, spoilerProtected = true))
+    }
+
+    @Test
+    fun `a shoot-out score and an extra-time tag next to a score are masked with it`() {
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1 (4) - (2) 1 Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1(4)-(2)1 Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 (4-2 pens) Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 (4-2 p) Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 2-2 (5-4 on penalties) Team B"))
+        assertEquals("Team A – Team B (–)", spoilerSafeLinkText("Team A 1-1 Team B (4-2 pens)"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 aet Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 a.e.t. Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 (a.e.t.) Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 2-1 (OT) Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 3-2 SO Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 3–2 (SO) Team B"))
+        assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 2 vs 1 aet Team B"))
+    }
+
+    @Test
+    fun `words after a score that are not how it ended stay`() {
+        assertEquals("Team A – Team B part 2", spoilerSafeLinkText("Team A 2-1 Team B part 2"))
+        assertEquals("Team A – Team B (pt 1)", spoilerSafeLinkText("Team A 2-1 Team B (pt 1)"))
+        assertEquals("Team A – p2p stream", spoilerSafeLinkText("Team A 2-1 p2p stream"))
+        assertEquals("Team A – Overtime highlights", spoilerSafeLinkText("Team A 2-1 Overtime highlights"))
+        assertEquals("Team A – so good", spoilerSafeLinkText("Team A 2-1 so good"))
+        assertEquals("Team A – ot Team B", spoilerSafeLinkText("Team A 2-1 ot Team B"))
+        assertEquals("Team A – () Team B", spoilerSafeLinkText("Team A 1-1 () Team B"))
     }
 
     @Test
