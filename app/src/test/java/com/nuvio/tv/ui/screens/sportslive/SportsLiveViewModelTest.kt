@@ -2296,6 +2296,20 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `the wait's one-shot update never re-arms for the same deadline when the clock does not move (test hang)`() = runTest {
+        // The clock stays at NOW: the game keeps waiting, its deadline stays the same. Before the fix each wake built
+        // again, found that deadline and armed it again, so advanceUntilIdle never returned.
+        nextLoad = load(listOf(stillOn))
+        val viewModel = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+        val builds = viewModel.stateBuilds
+        advanceTimeBy(10 * com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS)
+        runCurrent()
+        assertEquals(builds, viewModel.stateBuilds)
+        assertEquals(setOf(stillOn.streamKey), viewModel.uiState.value.awaitingScore)
+    }
+
+    @Test
     fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
         // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
         // estimate with no stream yet stays live, dimmed (#145).

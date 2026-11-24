@@ -415,15 +415,18 @@ class SportsLiveZapViewModel internal constructor(
     private val panelWaitWakes = MutableStateFlow(0L)
     private var panelWaitJob: Job? = null
     private var panelWaitAt: Long? = null
+    // The latest deadline already woken for: never armed again, so a clock that has not moved past it never loops.
+    private var panelWaitFired = Long.MIN_VALUE
 
     @Synchronized
     private fun schedulePanelWaitWake(deadline: Long?) {
         if (deadline == panelWaitAt && panelWaitJob?.isActive == true) return
         panelWaitJob?.cancel()
         panelWaitAt = deadline
-        panelWaitJob = deadline?.let { at ->
+        panelWaitJob = deadline?.takeIf { it > panelWaitFired }?.let { at ->
             viewModelScope.launch {
                 delay((at - System.currentTimeMillis()).coerceAtLeast(0L) + 1)
+                synchronized(this@SportsLiveZapViewModel) { panelWaitFired = maxOf(panelWaitFired, at) }
                 panelWaitWakes.update { it + 1 }
             }
         }

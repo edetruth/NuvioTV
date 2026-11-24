@@ -787,16 +787,20 @@ class SportsLiveViewModel internal constructor(
     private val waitWakes = MutableStateFlow(0L)
     private var waitWakeJob: Job? = null
     private var waitWakeAt: Long? = null
+    // The latest deadline already woken for: never armed again (a clock that has not moved past it, as in tests, would
+    // otherwise build, find the same deadline and re-arm forever).
+    private var waitWakeFired = Long.MIN_VALUE
 
-    /** One state build just after [deadline] (the score wait's), once; a later or no deadline replaces it. */
+    /** One state build just after [deadline] (the score wait's), once per deadline; a later or no deadline replaces it. */
     @Synchronized
     private fun scheduleWaitWake(deadline: Long?) {
         if (deadline == waitWakeAt && waitWakeJob?.isActive == true) return
         waitWakeJob?.cancel()
         waitWakeAt = deadline
-        waitWakeJob = deadline?.let { at ->
+        waitWakeJob = deadline?.takeIf { it > waitWakeFired }?.let { at ->
             viewModelScope.launch {
                 delay((at - nowMs()).coerceAtLeast(0L) + 1)
+                synchronized(this@SportsLiveViewModel) { waitWakeFired = maxOf(waitWakeFired, at) }
                 waitWakes.update { it + 1 }
             }
         }
