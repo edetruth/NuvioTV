@@ -194,10 +194,10 @@ internal interface AlertKeyHandler {
 /**
  * Registers [surface] while this composable is shown. [paused]: the full player's video is paused (not buffering, not
  * ended, no error); it is told to the alerts once it stayed paused [PAUSE_SETTLE_MS], so a seek's blip is not a pause (#91).
- * The pause ends when the video [playing] again, not on a seek's buffering while paused (review R1).
+ * The pause holds through [buffering] (a seek while paused, review R1) and ends when the video plays, ends or fails (F9).
  */
 @Composable
-internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, paused: Boolean = false, playing: Boolean = false) {
+internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, paused: Boolean = false, buffering: Boolean = false) {
     DisposableEffect(surface) {
         SportsLiveAlertSurfaces.register(surface)
         onDispose {
@@ -205,9 +205,9 @@ internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, pau
             SportsLiveAlertSurfaces.setPlayerPaused(false)
         }
     }
-    LaunchedEffect(paused, playing) {
+    LaunchedEffect(paused, buffering) {
         if (paused) delay(PAUSE_SETTLE_MS)
-        SportsLiveAlertSurfaces.setPlayerPaused(sportsLivePausedNow(paused, playing, SportsLiveAlertSurfaces.playerPaused.value))
+        SportsLiveAlertSurfaces.setPlayerPaused(sportsLivePausedNow(paused, buffering, SportsLiveAlertSurfaces.playerPaused.value))
     }
 }
 

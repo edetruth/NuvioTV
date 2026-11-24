@@ -309,12 +309,19 @@ class SportsLiveMovieKickoffTest {
     }
 
     @Test
-    fun `a seek while paused is not a resume - the player's pause holds until it plays`() {
-        // Paused, then buffering for a seek (neither paused nor playing): still paused.
-        assertTrue(sportsLivePausedNow(paused = false, playing = false, wasPaused = true))
-        assertFalse(sportsLivePausedNow(paused = false, playing = true, wasPaused = true))
+    fun `a seek while paused is not a resume - the player's pause holds only through its buffering`() {
+        // Paused, then buffering for a seek: still paused.
+        assertTrue(sportsLivePausedNow(paused = false, buffering = true, wasPaused = true))
+        // Playing again (not buffering, not paused): the pause is over.
+        assertFalse(sportsLivePausedNow(paused = false, buffering = false, wasPaused = true))
         // Buffering while it plays is never a pause.
-        assertFalse(sportsLivePausedNow(paused = false, playing = false, wasPaused = false))
+        assertFalse(sportsLivePausedNow(paused = false, buffering = true, wasPaused = false))
+    }
+
+    @Test
+    fun `a paused movie that ends or fails is no longer a viewer's pause (Gemini RC F9)`() {
+        // Ended or an error: the player says neither paused nor buffering.
+        assertFalse(sportsLivePausedNow(paused = false, buffering = false, wasPaused = true))
     }
 
     @Test
@@ -324,5 +331,98 @@ class SportsLiveMovieKickoffTest {
         assertFalse(SportsLiveAlertEngine.viewerFree(playing))
         // A game stream is not a movie: the card there keeps its OK (switching games is what people do).
         assertTrue(SportsLiveAlertEngine.viewerFree(sportsStream))
+    }
+
+    // RC review decision: over a movie, OK and Back are the movie's; the card's Watch needs one move onto it first
+
+    private fun overPausedMovie(card: AlertCard, focused: Boolean, nowMs: Long = 60_000L) =
+        SportsLiveAlertKeys.context(card, shownAtMs = 0L, nowMs = nowMs, needsFocus = true, focused = focused)
+
+    @Test
+    fun `over a paused movie the asking card takes no OK or Back until it has focus - Up moves to it`() {
+        val alerts = newAlerts()
+        alerts.setWatching(paused)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        val card = alerts.current.value!!
+        assertTrue(SportsLiveAlertCards.actionable(card.alert))
+        val idle = overPausedMovie(card, focused = false)
+        assertFalse(idle.cardOk)
+        assertFalse(idle.cardBack)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, idle))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_ENTER, idle))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, idle))
+        // Right seeks the movie, Down and Left are the player's: only Up goes to the card.
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_RIGHT, idle))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, idle))
+        assertEquals(AlertKeyAction.FOCUS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, idle))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, idle))
+    }
+
+    @Test
+    fun `with focus the card's OK watches at once, Back closes it, Down or Left go back to the movie`() {
+        val alerts = newAlerts()
+        alerts.setWatching(paused)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        val card = alerts.current.value!!
+        // Moving onto the card is the viewer's choice: no OK grace after it.
+        val focused = overPausedMovie(card, focused = true, nowMs = 100L)
+        assertTrue(focused.cardOk)
+        assertTrue(focused.cardBack)
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, focused))
+        assertEquals(AlertKeyAction.DISMISS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, focused))
+        assertEquals(AlertKeyAction.UNFOCUS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, focused))
+        assertEquals(AlertKeyAction.UNFOCUS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_LEFT, focused))
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, focused))
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_RIGHT, focused))
+        // Play/Pause and the volume stay the movie's: Play resumes it (and the card goes, R1).
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, focused))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_VOLUME_UP, focused))
+    }
+
+    @Test
+    fun `a card waiting under an overlay takes nothing, Up included`() {
+        val alerts = newAlerts()
+        alerts.setWatching(paused)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        val waiting = SportsLiveAlertKeys.context(alerts.current.value!!, shownAtMs = null, nowMs = 60_000L, needsFocus = true)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, waiting))
+    }
+
+    @Test
+    fun `the no-stream note over a movie needs focus too - Remind me never takes the movie's OK`() {
+        val alerts = newAlerts()
+        alerts.setWatching(playing)
+        alerts.enqueue(listOf(kickoff(noStreamYet = true)), System.currentTimeMillis())
+        val note = overPausedMovie(alerts.current.value!!, focused = false)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, note))
+        assertEquals(AlertKeyAction.FOCUS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, note))
+    }
+
+    @Test
+    fun `away from a movie nothing changes - the card's OK after its grace, Up is the screen's`() {
+        val alerts = newAlerts()
+        alerts.setWatching(sportsStream)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        val context = SportsLiveAlertKeys.context(alerts.current.value!!, shownAtMs = 0L, nowMs = 60_000L)
+        assertEquals(AlertKeyAction.OK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, context))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, context))
+        assertTrue(SportsLiveAlertKeys.needsFocus(paused))
+        assertTrue(SportsLiveAlertKeys.needsFocus(playing))
+        assertFalse(SportsLiveAlertKeys.needsFocus(sportsStream))
+        assertFalse(SportsLiveAlertKeys.needsFocus(browsing))
+    }
+
+    @Test
+    fun `a card waiting for the one before to fade out takes no key and its clock waits (Gemini RC F8)`() {
+        val alerts = newAlerts()
+        alerts.setWatching(sportsStream)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        val card = alerts.current.value!!
+        val waiting = SportsLiveAlertKeys.context(card, shownAtMs = 0L, nowMs = 60_000L, replacing = true)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, waiting))
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, waiting))
+        // Its time on screen starts only once it shows.
+        assertEquals(AlertCardClock(), AlertCardClock().step(1_000L, busy = SportsLiveAlertKeys.cardWaits(screenBusy = false, replacing = true)))
+        assertFalse(SportsLiveAlertKeys.cardWaits(screenBusy = false, replacing = false))
     }
 }

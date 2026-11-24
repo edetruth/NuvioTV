@@ -159,7 +159,9 @@ private data class CardUi(
     /** "At tip-off: Switch automatically" was looked at when the card first showed. */
     val autoTried: Boolean = false,
     /** A countdown's time left when the app left the foreground: it resumes from there. */
-    val pausedLeftMs: Long? = null
+    val pausedLeftMs: Long? = null,
+    /** Over a movie, the viewer moved onto the card's Watch (RC review decision): only then are OK and Back its. */
+    val focused: Boolean = false
 )
 
 /**
@@ -298,6 +300,8 @@ fun SportsLiveAlertsHost(
     val currentSurface by rememberUpdatedState(surface)
     val currentWatching by rememberUpdatedState(watching)
     var ui by remember { mutableStateOf(CardUi(cardId = -1L)) }
+    // The card before is still fading out (#101, Gemini RC F8): the new one neither takes keys nor starts its time yet.
+    val swap = remember { CardSwap() }
     fun uiFor(shown: AlertCard): CardUi = ui.takeIf { it.cardId == shown.id } ?: CardUi(shown.id)
 
     /** [item] plays here: [on]'s own way (a zap, the highlighted pane), else as Watch on a kickoff. */
@@ -380,7 +384,10 @@ fun SportsLiveAlertsHost(
             shownAtMs = if (countdown != null) 0L else state.clock.shownAtMs,
             nowMs = System.currentTimeMillis(),
             expanded = countdown != null,
-            canBoth = canBoth()
+            canBoth = canBoth(),
+            needsFocus = SportsLiveAlertKeys.needsFocus(currentWatching),
+            focused = state.focused,
+            replacing = swap.replacing
         )
     }
     val keyHandler = remember {
@@ -394,6 +401,8 @@ fun SportsLiveAlertsHost(
                     AlertKeyAction.OK -> if (keyContext().cardOk) onOk(shown)
                     AlertKeyAction.DISMISS, AlertKeyAction.CANCEL -> alerts.close(shown, AlertAnswer.DISMISS)
                     AlertKeyAction.PRESS -> uiFor(shown).countdown?.let { act(shown, it.selected) }
+                    AlertKeyAction.FOCUS -> { ui = uiFor(shown).copy(focused = true) }
+                    AlertKeyAction.UNFOCUS -> { ui = uiFor(shown).copy(focused = false) }
                     AlertKeyAction.MOVE -> {
                         val state = uiFor(shown)
                         state.countdown?.let { ui = state.copy(countdown = it.move()) }
@@ -429,7 +438,7 @@ fun SportsLiveAlertsHost(
                             return@repeatOnLifecycle
                         }
                     } else {
-                        state = state.copy(clock = state.clock.step(nowMs, screenBusy()))
+                        state = state.copy(clock = state.clock.step(nowMs, SportsLiveAlertKeys.cardWaits(screenBusy(), swap.replacing)))
                         if (state.clock.shownAtMs != null && !state.autoTried) {
                             // "At tip-off: Switch automatically" (opt-in, browsing only): straight into a 10 s countdown.
                             val kickoff = shown.alert as? SportsLiveAlert.Kickoff
@@ -491,6 +500,7 @@ fun SportsLiveAlertsHost(
         }
     }
     val leaving = card == null || outgoing != null
+    swap.replacing = outgoing != null
     val current = outgoing ?: card ?: held.card?.takeIf { it.id != goneId && it.id != cutId } ?: return
     LaunchedEffect(leaving, current.id) {
         if (leaving) {
@@ -505,7 +515,9 @@ fun SportsLiveAlertsHost(
     val actionable = SportsLiveAlertCards.actionable(current.alert)
     // Back closes a card that shows "OK", or cancels the countdown (never the screen under it), by the back callback
     // as by the key.
-    TakeBack(!leaving && visible && (actionable || countdown != null)) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
+    // Over a movie only once the card has focus (RC review decision): Back is the movie's until then.
+    val backIsCards = countdown != null || (actionable && (state.focused || !SportsLiveAlertKeys.needsFocus(watching)))
+    TakeBack(!leaving && visible && backIsCards) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
     // Audit G34: nothing draws into the picture-in-picture window, a countdown card up when it opened included.
     val inPip by SportsLivePip.inPip.collectAsState()
     if (inPip) return
@@ -571,12 +583,13 @@ fun SportsLiveAlertsHost(
                 }
             }
             // The 2 dp time-left line, on cards that ask something only (#101).
-            val timeLeft by rememberTimeLeft(
+            // Read only when drawing (Gemini RC F6): the overlay never recomposes as the line shrinks.
+            val timeLeft = rememberTimeLeft(
                 state.clock,
                 durationOf(alert),
                 running = timeLeftTicks(actionable, counting = countdown != null, leaving = leaving, clock = state.clock)
             )
-            val timeLine: (() -> Float)? = if (actionable) ({ timeLeft }) else null
+            val timeLine: (() -> Float)? = remember(actionable, timeLeft) { if (actionable) ({ timeLeft.value }) else null }
             val enter = remember(current.id) { MutableTransitionState(false) }
             enter.targetState = !leaving && visible
             val streamReady = remember(readyMarks, alert) { SportsLiveGameReadiness.shared.of(alert.item) == SportsLiveReadyMark.READY }
@@ -608,6 +621,8 @@ fun SportsLiveAlertsHost(
                                 .takeIf { sportsLiveKickoffShowsTime(alert.item.startMs, alert.item.startHasTimeOfDay, System.currentTimeMillis()) },
                             passive = kickoff.passive,
                             pausedMovie = SportsLiveAlertEngine.overMovie(watching) && watching.moviePaused,
+                            // Over a movie the Watch button takes focus with Up (RC review decision); null elsewhere.
+                            watchFocused = if (!kickoff.passive && SportsLiveAlertKeys.needsFocus(watching)) state.focused else null,
                             timeLeft = timeLine,
                             modifier = Modifier
                         )
@@ -722,6 +737,11 @@ private fun KickoffToast(
     passive: Boolean,
     /** Over a paused movie (#91): "OK Watch · Back Keep watching the movie". */
     pausedMovie: Boolean,
+    /**
+     * Over a movie (RC review decision): the card's button (Watch, or Remind me on the no-stream note) ringed when it has
+     * focus; until then the hint says Up moves to it. Null: no button, the card's keys as named.
+     */
+    watchFocused: Boolean?,
     timeLeft: (() -> Float)?,
     modifier: Modifier
 ) {
@@ -802,13 +822,20 @@ private fun KickoffToast(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        // Its keys, named (research 4): OK is the card's while it shows.
+        if (watchFocused != null) {
+            CountdownChoice(
+                stringResource(if (noStreamYet) R.string.sports_live_alert_choice_remind else R.string.sports_live_alert_choice_watch),
+                selected = watchFocused
+            )
+        }
+        // Its keys, named (research 4): OK is the card's while it shows; over a movie only once it has focus.
         Text(
             text = stringResource(
                 when {
                     passive -> R.string.sports_live_alert_hint_passive
+                    watchFocused == false -> R.string.sports_live_alert_hint_up_to_card
                     noStreamYet -> R.string.sports_live_alert_hint_ok_remind
-                    pausedMovie -> R.string.sports_live_alert_hint_ok_watch_movie
+                    pausedMovie || watchFocused == true -> R.string.sports_live_alert_hint_ok_watch_movie
                     else -> R.string.sports_live_alert_hint_ok_watch
                 }
             ),
@@ -933,6 +960,12 @@ private fun AlertCardView(
 }
 
 /** The card shown last, kept composed while it fades out (#101). */
+/** Whether a card on screen is fading out while the next one waits to show (Gemini RC F8); set as the host composes. */
+private class CardSwap {
+    @Volatile
+    var replacing: Boolean = false
+}
+
 private class HeldCard {
     var card: AlertCard? = null
     /** [card] was on screen when last drawn: replaced, it fades out before the next one shows (review R11). */

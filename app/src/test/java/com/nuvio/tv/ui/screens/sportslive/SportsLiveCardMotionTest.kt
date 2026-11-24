@@ -53,4 +53,25 @@ class SportsLiveCardMotionTest {
         // Waiting under an overlay: its clock stands still, so the line does too.
         assertFalse(timeLeftTicks(actionable = true, counting = false, leaving = false, clock = AlertCardClock(shownAtMs = null, shownMs = 4_000L)))
     }
+
+    @Test
+    fun `the time left line runs as one linear animation to empty over the card's remaining time (Gemini RC F6)`() {
+        // Showed 4 s of 10: from 0.6 down to 0 over the 6 s left.
+        val clock = AlertCardClock(shownAtMs = 1_000L)
+        assertEquals(TimeLeftRun(from = 0.6f, remainingMs = 6_000L), timeLeftRun(clock, 10_000L, nowMs = 5_000L))
+        // Out of time: nothing left to run.
+        assertEquals(TimeLeftRun(from = 0f, remainingMs = 0L), timeLeftRun(clock, 10_000L, nowMs = 20_000L))
+    }
+
+    @Test
+    fun `the time left line is read only when drawing - nothing recomposes the alert overlay while it runs (Gemini RC F6)`() {
+        val host = java.io.File("src/main/java/com/nuvio/tv/ui/screens/sportslive/SportsLiveAlertsHost.kt").readText()
+        val motion = java.io.File("src/main/java/com/nuvio/tv/ui/screens/sportslive/SportsLiveAlertMotion.kt").readText()
+        // A delegated read (by) would read the animated value in composition, every frame.
+        assertFalse(Regex("""by\s+rememberTimeLeft""").containsMatchIn(host))
+        // No ticking clock state read in composition, no target recomputed per tick.
+        val body = motion.substringAfter("fun rememberTimeLeft").substringBefore("fun Modifier.timeLeftLine")
+        assertFalse(body.contains("mutableLongStateOf"))
+        assertFalse(body.contains("animateFloatAsState"))
+    }
 }

@@ -1045,4 +1045,7 @@
     <string name="sports_live_player_failed_title">Couldn\'t load this player\'s stats</string>
     <string name="sports_live_alert_hint_passive">Pause to watch it \u00b7 your movie keeps its place</string>
     <string name="sports_live_alert_hint_ok_watch_movie">OK Watch \u00b7 Back Keep watching the movie</string>
+    <string name="sports_live_alert_choice_watch">Watch</string>
+    <string name="sports_live_alert_choice_remind">Remind me in 10 min</string>
+    <string name="sports_live_alert_hint_up_to_card">Press Up to choose \u00b7 your movie keeps its place</string>
 </resources>

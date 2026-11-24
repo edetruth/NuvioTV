@@ -171,6 +171,12 @@ enum class AlertKeyAction {
     /** Back on a card that shows "OK": it goes. */
     DISMISS,
 
+    /** Up onto a card over a movie (RC review decision): its Watch button takes focus; OK and Back are the card's then. */
+    FOCUS,
+
+    /** Down or Left off the focused card over a movie: the keys are the movie's again. */
+    UNFOCUS,
+
     /** OK on the expanded card: its selected choice (Watch now, Watch both). */
     PRESS,
 
@@ -191,7 +197,11 @@ data class AlertKeyContext(
     val cardOk: Boolean = false,
     val cardBack: Boolean = false,
     val expanded: Boolean = false,
-    val canBoth: Boolean = false
+    val canBoth: Boolean = false,
+    /** Over a movie, a card that asks but has no focus (RC review decision): Up moves onto it, nothing else is its. */
+    val awaitsFocus: Boolean = false,
+    /** Over a movie, the card has focus: OK and Back are its, Down or Left give the keys back to the movie. */
+    val focused: Boolean = false
 )
 
 /**
@@ -210,10 +220,26 @@ object SportsLiveAlertKeys {
      * Who takes keys now: [card] (null: none) is on screen since [shownAtMs] (null: it waits under the screen's own
      * overlays, so it takes nothing), [nowMs] now. [expanded]: its countdown card is up; [canBoth]: Watch both is offered.
      */
-    fun context(card: AlertCard?, shownAtMs: Long?, nowMs: Long, expanded: Boolean = false, canBoth: Boolean = false): AlertKeyContext {
-        if (card == null || shownAtMs == null) return AlertKeyContext()
+    fun context(
+        card: AlertCard?,
+        shownAtMs: Long?,
+        nowMs: Long,
+        expanded: Boolean = false,
+        canBoth: Boolean = false,
+        /** Over a movie ([needsFocus]): OK and Back are the movie's until the card has focus ([focused]). */
+        needsFocus: Boolean = false,
+        focused: Boolean = false,
+        /** The card before is still fading out (Gemini RC F8): this one is not on screen yet, so it takes nothing. */
+        replacing: Boolean = false
+    ): AlertKeyContext {
+        if (card == null || shownAtMs == null || replacing) return AlertKeyContext()
         if (expanded) return AlertKeyContext(expanded = true, canBoth = canBoth)
         val actionable = SportsLiveAlertCards.actionable(card.alert)
+        if (needsFocus) {
+            if (!actionable) return AlertKeyContext()
+            // Moving onto the card was the viewer's choice: no OK grace after it.
+            return if (focused) AlertKeyContext(cardOk = true, cardBack = true, focused = true) else AlertKeyContext(awaitsFocus = true)
+        }
         return AlertKeyContext(
             cardOk = actionable && nowMs - shownAtMs >= SportsLiveAlertCards.OK_GRACE_MS,
             cardBack = actionable
@@ -237,12 +263,38 @@ object SportsLiveAlertKeys {
                 else -> AlertKeyAction.CONSUME
             }
         }
+        if (context.awaitsFocus) {
+            // Up, toward the card in the top right: Right seeks the movie, so it stays the player's.
+            return if (keyCode == KeyEvent.KEYCODE_DPAD_UP) AlertKeyAction.FOCUS else AlertKeyAction.PASS
+        }
+        if (context.focused) {
+            return when {
+                isOk(keyCode) -> AlertKeyAction.OK
+                back -> AlertKeyAction.DISMISS
+                keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> AlertKeyAction.UNFOCUS
+                keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> AlertKeyAction.CONSUME
+                // Play/Pause, the volume and the rest stay the movie's.
+                else -> AlertKeyAction.PASS
+            }
+        }
         return when {
             isOk(keyCode) && context.cardOk -> AlertKeyAction.OK
             back && context.cardBack -> AlertKeyAction.DISMISS
             else -> AlertKeyAction.PASS
         }
     }
+
+    /**
+     * Over a movie or show (playing or paused) a card's OK and Back are the movie's until the viewer moves onto the card
+     * (RC review decision for #91: OK is the pause and resume key there). Elsewhere a card keeps its OK after its grace.
+     */
+    fun needsFocus(watching: SportsLiveWatching): Boolean = SportsLiveAlertEngine.overMovie(watching)
+
+    /**
+     * A card waits (its clock and OK grace stand still, [AlertCardClock.step]) under the screen's overlays ([screenBusy])
+     * and while the card it replaces fades out ([replacing], Gemini RC F8): its time starts when it shows.
+     */
+    fun cardWaits(screenBusy: Boolean, replacing: Boolean): Boolean = screenBusy || replacing
 
     fun isOk(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER

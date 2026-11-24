@@ -6,7 +6,7 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,10 +15,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -26,7 +23,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
 import com.nuvio.tv.core.sportslive.alerts.AlertCardClock
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
-import kotlinx.coroutines.delay
 
 /**
  * Overlay card motion (#101): a card enters from its own edge by [SportsLiveTokens.Motion.TRAVEL] with a fade
@@ -65,20 +61,31 @@ internal fun AlertCardClock.timeLeftFraction(nowMs: Long, duration: Long): Float
 internal fun timeLeftTicks(actionable: Boolean, counting: Boolean, leaving: Boolean, clock: AlertCardClock): Boolean =
     actionable && !counting && !leaving && clock.shownAtMs != null
 
+/** The time-left line's run from now: from [from] of the card's time down to empty over [remainingMs]. */
+internal data class TimeLeftRun(val from: Float, val remainingMs: Long)
+
+/** The time-left line's run for a card on [clock] with [duration], from [nowMs]. */
+internal fun timeLeftRun(clock: AlertCardClock, duration: Long, nowMs: Long): TimeLeftRun {
+    val from = clock.timeLeftFraction(nowMs, duration)
+    return TimeLeftRun(from, (from * duration).toLong())
+}
+
 /**
- * The time-left share of a card, updated every [tickMs] while [running] and eased linearly between ticks so the line
- * shrinks smoothly.
+ * The time-left share of a card (Gemini RC F6, Fable F10): one linear animation to empty over the card's remaining time
+ * while [running], stopped where it is otherwise. Nothing is read in composition: the caller reads the State's value only
+ * when drawing ([timeLeftLine]), so the line redraws without recomposing the overlay.
  */
 @Composable
-internal fun rememberTimeLeft(clock: AlertCardClock, duration: Long, running: Boolean = true, tickMs: Long = 250L): State<Float> {
-    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(tickMs, running) {
-        while (running) {
-            nowMs = System.currentTimeMillis()
-            delay(tickMs)
+internal fun rememberTimeLeft(clock: AlertCardClock, duration: Long, running: Boolean = true): State<Float> {
+    val share = remember { Animatable(timeLeftRun(clock, duration, System.currentTimeMillis()).from) }
+    LaunchedEffect(running, clock, duration) {
+        val run = timeLeftRun(clock, duration, System.currentTimeMillis())
+        share.snapTo(run.from)
+        if (running && run.remainingMs > 0L) {
+            share.animateTo(0f, tween(run.remainingMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), easing = LinearEasing))
         }
     }
-    return animateFloatAsState(clock.timeLeftFraction(nowMs, duration), tween(tickMs.toInt(), easing = LinearEasing), label = "timeLeft")
+    return share.asState()
 }
 
 /** The 2 dp time-left line along a card's bottom inside edge ([share] is read when drawing, so it never recomposes). */
