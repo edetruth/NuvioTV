@@ -57,6 +57,14 @@ class PlaybackHeaderRedirectTest {
         assertEquals("v", hop.getHeader("X-Custom"))
     }
 
+    @Test
+    fun `a stream client with no headers of its own still scopes the ones a request sets (P8)`() {
+        redirectToOther()
+        PlayerPlaybackNetworking.createHttpClient(emptyMap()).newCall(streamRequest()).execute().close()
+        assertEquals("s=1", take(link).getHeader("Cookie"))
+        assertNoLogin(take(other))
+    }
+
     /** A client the way the parallel connections path builds it: headers set on the request, a cookie jar. */
     private fun parallelClient(jar: CookieJar) = PlaybackStreamHeaders.scoped(
         PlayerPlaybackNetworking.playbackHttpClient.newBuilder().cookieJar(jar).build()

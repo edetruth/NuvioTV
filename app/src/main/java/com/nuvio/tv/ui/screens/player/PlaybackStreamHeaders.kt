@@ -6,6 +6,7 @@ import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -48,9 +49,8 @@ internal object PlaybackStreamHeaders {
          * cookie the cookie jar holds for it (P7).
          */
         fun apply(request: Request, streamHeaders: Headers? = null): Request {
-            link.compareAndSet(null, request.url)
+            if (inOrigin(request.url)) return request
             val scope = link.get() ?: return request
-            if (StreamOrigin.same(scope, request.url)) return request
             val downgrade = StreamOrigin.isDowngrade(scope, request.url)
             val names = request.headers.names().filter { name ->
                 (isCredential(name) || (downgrade && name.lowercase() in DOWNGRADE_NAMES)) &&
@@ -58,6 +58,33 @@ internal object PlaybackStreamHeaders {
             }
             if (names.isEmpty()) return request
             return request.newBuilder().apply { names.forEach { removeHeader(it) } }.build()
+        }
+
+        /** Whether [url] is within the link's origin (the first url seen is the link). */
+        fun inOrigin(url: HttpUrl): Boolean {
+            link.compareAndSet(null, url)
+            val scope = link.get() ?: return true
+            return StreamOrigin.same(scope, url)
+        }
+    }
+
+    /**
+     * The network interceptor of a stream's player client (#434): sets the stream's [injected] headers on every
+     * hop (login headers only within the link's origin) and removes the stream's login headers elsewhere ([scope]).
+     * Installed whether or not the stream has headers of its own, since a caller can set them on a request (P8).
+     */
+    class StreamGuard(private val scope: HostScope, private val injected: Map<String, String> = emptyMap()) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request()
+            val inOrigin = scope.inOrigin(request.url)
+            val next = request.newBuilder()
+            for ((key, value) in injected) {
+                if (inOrigin || !isCredential(key)) next.header(key, value)
+            }
+            val stream = chain.call().request().headers.newBuilder().apply {
+                injected.forEach { (key, value) -> runCatching { add(key, value) } }
+            }.build()
+            return chain.proceed(scope.apply(next.build(), stream))
         }
     }
 
@@ -96,10 +123,6 @@ internal object PlaybackStreamHeaders {
     }
 
     /** [client] with its own [HostScope] (#434), for a player client that sets the stream's headers itself. */
-    fun scoped(client: OkHttpClient): OkHttpClient {
-        val scope = HostScope()
-        return client.newBuilder()
-            .addNetworkInterceptor(Interceptor { chain -> chain.proceed(scope.apply(chain.request(), chain.call().request().headers)) })
-            .build()
-    }
+    fun scoped(client: OkHttpClient): OkHttpClient =
+        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope())).build()
 }
