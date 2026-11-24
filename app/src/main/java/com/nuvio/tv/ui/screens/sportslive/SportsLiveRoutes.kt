@@ -70,7 +70,8 @@ internal fun sportsLiveOpenDetail(item: SportsLiveItem, hidden: Boolean, open: (
  */
 internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
     val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
-    SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id })
+    // The page plays under meta.id, which an addon may give differently from the catalog's id (F8).
+    SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id } + meta.id)
     return meta.copy(
         name = spoilerSafeLinkText(meta.name) ?: meta.name,
         description = null,

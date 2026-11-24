@@ -97,6 +97,14 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a replay whose addon names it by another id plays under that id masked too`() {
+        // F8: the Detail page plays under meta.id, which an addon may give differently from the catalog's id.
+        SportsLiveExtraSources.markSpoilerSafe("catalog:1", true)
+        sportsLiveDetailMeta("catalog:1", folder.copy(id = "canonical:1"))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe("canonical:1"))
+    }
+
+    @Test
     fun `any other title, or a replay whose result shows, opens its Detail page as the addon gives it`() {
         assertSame(folder, sportsLiveDetailMeta("folder", folder))
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
