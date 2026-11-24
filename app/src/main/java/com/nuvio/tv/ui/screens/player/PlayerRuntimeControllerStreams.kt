@@ -2371,7 +2371,9 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             }
             val streamToPlay = resolveRun?.resolved
             if (streamToPlay != null) {
-                val sourceName = (streamToPlay.name?.takeIf { it.isNotBlank() } ?: streamToPlay.addonName).trim()
+                // Sports & Live F2-1: a hidden replay's next episode is named with any score masked.
+                val shownStream = SportsLiveExtraSources.spoilerSafeStream(contentId, streamToPlay)
+                val sourceName = (shownStream.name?.takeIf { it.isNotBlank() } ?: shownStream.addonName).trim()
                 for (remaining in 3 downTo 1) {
                     _uiState.update { current ->
                         val episodeForMode = current.nextEpisode ?: nextInfo
@@ -2394,10 +2396,10 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
                     )
                 }
                 switchToEpisodeStream(
-                    stream = streamToPlay,
+                    stream = shownStream,
                     forcedTargetVideo = nextVideo,
                     isAutoPlay = !userInitiated,
-                    fallbackStreams = StreamAutoPlaySelector.orderAddonStreams(lastSuccessData.orEmpty(), sourceOrder).flatMap { it.streams },
+                    fallbackStreams = SportsLiveExtraSources.spoilerSafeStreams(contentId, StreamAutoPlaySelector.orderAddonStreams(lastSuccessData.orEmpty(), sourceOrder).flatMap { it.streams }),
                     // Auto source selection picked it whether or not the user asked for the episode.
                     autoSelection = SourceFallbackHandoff.TriedSources(
                         keys = resolveRun.triedKeys,

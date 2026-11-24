@@ -301,6 +301,13 @@ object SportsLiveExtraSources {
             contentId in spoilerSafeIds || spoilerSafeVideos.values.any { contentId in it }
         }
 
+    /**
+     * [stream] of [contentId] as the player names it, for a single link it shows or keeps (the next episode's, a redirect's
+     * target: F2-1, F2-2): a spoiler-safe replay's with any score masked.
+     */
+    fun spoilerSafeStream(contentId: String?, stream: Stream): Stream =
+        if (!isSpoilerSafe(contentId)) stream else spoilerSafeReplayStream(stream)
+
     /** [streams] of [contentId] as its lists name them: a spoiler-safe replay's with any score masked. */
     fun spoilerSafeStreams(contentId: String?, streams: List<Stream>): List<Stream> =
         if (!isSpoilerSafe(contentId)) streams else streams.map(::spoilerSafeReplayStream)

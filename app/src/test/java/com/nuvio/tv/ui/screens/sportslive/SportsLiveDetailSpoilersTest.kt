@@ -216,6 +216,16 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `the next episode's link and a redirect's target are named masked in a hidden folder's player`() {
+        // F2-1, F2-2: one link the player shows (the countdown's "via …", the Source toast, a redirect's target).
+        assertSame(scored, SportsLiveExtraSources.spoilerSafeStream("folder", scored))
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        val shown = SportsLiveExtraSources.spoilerSafeStream("folder", scored)
+        assertEquals("Team A – Team B", shown.name)
+        assertEquals(scored.url, shown.url)
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)
