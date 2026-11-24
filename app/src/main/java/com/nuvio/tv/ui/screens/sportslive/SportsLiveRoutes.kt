@@ -57,6 +57,9 @@ internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta =
  * masked ([sportsLiveDetailMeta]); anything else as the addon gives it.
  */
 internal fun sportsLiveOpenDetail(item: SportsLiveItem, hidden: Boolean, open: (SportsLiveItem) -> Unit) {
+    // Played from there it is Sports & Live playback, as from every other path (F3): no upstream watch progress (the
+    // addon's raw card on Home), and a replay's player gets the Hold OK sheet (#254).
+    SportsLiveExtraSources.markSportsPlayback(item.id, item)
     SportsLiveExtraSources.markSpoilerSafe(item.id, hidden)
     open(item)
 }
@@ -69,6 +72,8 @@ internal fun sportsLiveOpenDetail(item: SportsLiveItem, hidden: Boolean, open: (
  * and player mask as the replay does. Any other title's as is.
  */
 internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
+    // The page plays under meta.id, which an addon may give differently from the catalog's id (F3, F8).
+    if (meta.id != itemId && SportsLiveExtraSources.isSportsPlayback(itemId)) SportsLiveExtraSources.markSportsPlayback(meta.id)
     val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
     // The page plays under meta.id, which an addon may give differently from the catalog's id (F8).
     SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id } + meta.id)

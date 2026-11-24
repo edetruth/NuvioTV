@@ -97,6 +97,21 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `a replay opened on its Detail page plays as Sports and Live, never into Continue Watching`() {
+        // F3: as every other sports play path, so the player keeps no upstream watch progress (the addon's raw card on
+        // Home) and a replay's player gets the Hold OK sheet (#254), whether its result is hidden or shown.
+        listOf(true, false).forEach { hidden ->
+            SportsLiveExtraSources.reset()
+            sportsLiveOpenDetail(folderCard, hidden) {}
+            assertTrue(SportsLiveExtraSources.isSportsPlayback("folder"))
+            assertFalse(sportsLiveKeepsWatchProgress("folder"))
+        }
+        // An addon's own meta id is the one the Detail page plays under.
+        sportsLiveDetailMeta("folder", folder.copy(id = "canonical:folder"))
+        assertTrue(SportsLiveExtraSources.isSportsPlayback("canonical:folder"))
+    }
+
+    @Test
     fun `a replay whose addon names it by another id plays under that id masked too`() {
         // F8: the Detail page plays under meta.id, which an addon may give differently from the catalog's id.
         SportsLiveExtraSources.markSpoilerSafe("catalog:1", true)
