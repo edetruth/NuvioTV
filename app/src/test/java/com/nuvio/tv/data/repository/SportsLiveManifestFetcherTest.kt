@@ -32,6 +32,8 @@ class SportsLiveManifestFetcherTest {
         assertTrue(same.keepHeaders)
         val elsewhere = SportsLiveManifestFetcher.nextHop(from, "https://edge.invalid/live/index.m3u8")!!
         assertFalse(elsewhere.keepHeaders)
+        // Another port is another service (P4).
+        assertFalse(SportsLiveManifestFetcher.nextHop(from, "https://cdn.invalid:9000/live/index.m3u8")!!.keepHeaders)
     }
 
     @Test

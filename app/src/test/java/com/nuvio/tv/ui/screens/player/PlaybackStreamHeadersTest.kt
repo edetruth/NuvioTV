@@ -58,6 +58,14 @@ class PlaybackStreamHeadersTest {
     }
 
     @Test
+    fun `another port on the link's host gets no login headers (P4)`() {
+        val scope = PlaybackStreamHeaders.HostScope()
+        scope.apply(request("https://cdn.invalid:8443/live/master.m3u8"))
+        assertNull(scope.apply(request("https://cdn.invalid:9000/live/seg1.ts")).header("Authorization"))
+        assertEquals("Bearer t", scope.apply(request("https://cdn.invalid:8443/live/seg1.ts")).header("Authorization"))
+    }
+
+    @Test
     fun `the link's host down from https to http gets no login headers`() {
         val scope = PlaybackStreamHeaders.HostScope()
         scope.apply(request(link))

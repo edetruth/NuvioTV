@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.core.network.StreamOrigin
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -8,8 +9,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Fork (#434, #435): where a stream's request headers may go in the player.
- * - Login and cookie headers ([isCredential]) go only to the host the addon's link names (and not down from https
- *   to http); every other header (Referer, Origin, User-Agent, ...) still goes along, as content servers need them.
+ * - Login and cookie headers ([isCredential]) go only to the origin the addon's link names ([StreamOrigin]: scheme,
+ *   host and port; never down from https to http); every other header (Referer, Origin, User-Agent, ...) still goes along, as content servers need them.
  * - The unchecked TLS retry ([forUncheckedRetry]) sends no stream header to a public host: only transport headers
  *   and the app's own User-Agent. A home server ([isLocalHost], self-signed certificates are common there) keeps them.
  */
@@ -36,8 +37,7 @@ internal object PlaybackStreamHeaders {
         fun apply(request: Request): Request {
             link.compareAndSet(null, request.url)
             val scope = link.get() ?: return request
-            val downgrade = scope.isHttps && !request.url.isHttps
-            if (!downgrade && request.url.host == scope.host) return request
+            if (StreamOrigin.same(scope, request.url)) return request
             val names = request.headers.names().filter(::isCredential)
             if (names.isEmpty()) return request
             return request.newBuilder().apply { names.forEach { removeHeader(it) } }.build()

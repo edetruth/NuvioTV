@@ -1,11 +1,12 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.network.StreamOrigin
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
  * Where a stream's request headers may go (#279). An addon's headers (a token, a cookie, a referer) are meant for
- * the host its link names: a follow-up request (an HLS variant) gets them only on that same host, and never down
- * from https to http. Redirects follow the same rule ([com.nuvio.tv.data.repository.SportsLiveManifestFetcher.nextHop]).
+ * the origin its link names ([StreamOrigin]: scheme, host and port): a follow-up request (an HLS variant) gets them
+ * only there, and never down from https to http. Redirects follow the same rule ([com.nuvio.tv.data.repository.SportsLiveManifestFetcher.nextHop]).
  */
 object SportsLiveStreamHeaders {
 
@@ -14,7 +15,6 @@ object SportsLiveStreamHeaders {
         if (headers.isEmpty()) return headers
         val from = original.trim().toHttpUrlOrNull() ?: return emptyMap()
         val to = next.trim().toHttpUrlOrNull() ?: return emptyMap()
-        if (from.isHttps && !to.isHttps) return emptyMap()
-        return if (from.host.equals(to.host, ignoreCase = true)) headers else emptyMap()
+        return if (StreamOrigin.same(from, to)) headers else emptyMap()
     }
 }

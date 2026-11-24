@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.core.network.StreamOrigin
 import com.nuvio.tv.core.sportslive.ManifestResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -81,12 +82,12 @@ class SportsLiveManifestFetcher @Inject constructor() {
 
         /**
          * The redirect from [from] to [location]: null (not followed, no verdict) when there is no usable
-         * location or it goes from https down to http; the headers only go on to the same host.
+         * location or it goes from https down to http; the headers only go on to the same origin ([StreamOrigin]).
          */
         fun nextHop(from: HttpUrl, location: String?): Hop? {
             val to = location?.let { from.resolve(it) } ?: return null
             if (from.isHttps && !to.isHttps) return null
-            return Hop(to, keepHeaders = to.host.equals(from.host, ignoreCase = true))
+            return Hop(to, keepHeaders = StreamOrigin.same(from, to))
         }
     }
 }

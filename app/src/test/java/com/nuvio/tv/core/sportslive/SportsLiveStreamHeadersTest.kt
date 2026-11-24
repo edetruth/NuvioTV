@@ -22,6 +22,11 @@ class SportsLiveStreamHeadersTest {
     }
 
     @Test
+    fun `a variant on another port of the link's host gets none (P4)`() {
+        assertEquals(emptyMap<String, String>(), SportsLiveStreamHeaders.forFollowUp(original, "https://cdn.invalid:9000/live/720/index.m3u8", headers))
+    }
+
+    @Test
     fun `a variant down from https to http gets none, even on the same host`() {
         assertEquals(emptyMap<String, String>(), SportsLiveStreamHeaders.forFollowUp(original, "http://cdn.invalid/live/720/index.m3u8", headers))
         // Up from http to https on the same host keeps them.
