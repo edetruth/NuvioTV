@@ -45,7 +45,7 @@ class SportsLiveHomeLiveTruthTest {
     private val all = listOf(covered, uncovered, over)
 
     private fun truth(mode: ScoresMode?, wait: SportsLiveScoreWait = SportsLiveScoreWait(), at: Long = nowMs, scores: Map<String, com.nuvio.tv.core.sportslive.scores.ScoreSnapshot> = emptyMap()) =
-        homeLiveTruth(all, all, scores, mode, emptySet(), at, wait, SportsLiveEndedGames()) { false }
+        homeLiveTruth(all, all, scores, mode, emptySet(), at, wait, SportsLiveEndedGames(), hasRecentLinks = { false })
 
     @Test
     fun `a covered game waits for ESPN on Home, an uncovered one is live as before, one over long ago reads Probably ended`() {
@@ -53,6 +53,19 @@ class SportsLiveHomeLiveTruthTest {
         assertEquals(setOf(covered.streamKey), truth.awaiting)
         assertEquals(setOf(over.streamKey), truth.probablyEnded)
         assertEquals(nowMs + SportsLiveScoreWait.MAX_WAIT_MS, truth.deadline)
+    }
+
+    @Test
+    fun `#465 - one off-main-thread pass gives the row's finals, the live truth and what the count leaves out`() {
+        val fixture = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val final = fixture.copy(startMs = covered.startMs)
+        val work = homeLiveWork(all, all, mapOf(covered.streamKey to final), ScoresMode.SHOW, emptySet(), nowMs, nowMs, SportsLiveScoreWait(), SportsLiveEndedGames(), hasRecentLinks = { false })
+        // ESPN final: out of the row at once (in its grace too), and no longer waiting.
+        assertEquals(setOf(covered.streamKey), work.ended)
+        assertTrue(work.truth.awaiting.isEmpty())
+        // The count leaves out the game over long ago (Probably ended); the final is still in its grace there.
+        assertEquals(setOf(over.streamKey), work.over)
+        assertEquals(setOf(over.streamKey), work.truth.probablyEnded)
     }
 
     @Test

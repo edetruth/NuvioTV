@@ -2173,7 +2173,7 @@ class SportsLiveViewModelTest {
         )
         val viewModel = SportsLiveViewModel(
             repo,
-            endedInputs = flowOf(EndedInputs(scores) { false }),
+            endedInputs = flowOf(EndedInputs(scores, canEstimate = { false })),
             endedGames = SportsLiveEndedGames(),
             clock = linkTicks,
             linkChecker = checker,
@@ -2269,7 +2269,7 @@ class SportsLiveViewModelTest {
         nextLoad = load(listOf(nba, cricket))
         val viewModel = SportsLiveViewModel(
             repo,
-            endedInputs = flowOf(EndedInputs(emptyMap()) { false }),
+            endedInputs = flowOf(EndedInputs(emptyMap(), canEstimate = { false })),
             endedGames = SportsLiveEndedGames(),
             mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
             computeDispatcher = compute

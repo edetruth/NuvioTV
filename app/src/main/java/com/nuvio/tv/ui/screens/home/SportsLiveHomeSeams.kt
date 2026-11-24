@@ -257,29 +257,25 @@ private fun SportsLiveHomeScores(
     val clockMs by rememberSportsLiveClockMs()
     val startsFormat = stringResource(R.string.sports_live_waiting_starts)
     val tomorrowFormat = stringResource(R.string.sports_live_tomorrow)
-    // Games ESPN shows final leave the row (#60), at once (l24 polish P1: in the postgame grace too, so a final never
-    // reads "Live now"); an estimate never drops one.
-    val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.finalKeys(items, current, clockMs) }
     // #375: the games Live Now calls Probably ended (an estimate, overdue) are labelled so on their card and in the hero,
     // never hidden, and leave the "N live" count and the zap list as Live Now's strip does. An ESPN-covered game reads its
     // start, not "Live", until ESPN answers (at most SportsLiveScoreWait.MAX_WAIT_MS, then as before), as on Live Now; a game
     // no feed covers and Scores Off are unchanged. One update at the wait's deadline.
+    // #465: the verdicts over every live game ([homeLiveWork]) are worked out off the main thread, then handed back.
     val unmatchedNow = unmatched.value
     val wait = remember { SportsLiveScoreWait() }
     var wake by remember { mutableStateOf(0) }
-    val homeTruth = remember(items, current, mode, unmatchedNow, clockMs, wake) {
-        homeLiveTruth(
-            items, viewModel.liveNowAllItems, current, mode, unmatchedNow, System.currentTimeMillis(), wait,
-            SportsLiveEndedGames.shared, viewModel.sportsLiveRepository::hasRecentLinks, espnDown
-        )
+    var work by remember { mutableStateOf<HomeLiveWork?>(null) }
+    LaunchedEffect(items, current, mode, unmatchedNow, clockMs, wake) {
+        work = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            homeLiveWork(
+                items, viewModel.liveNowAllItems, current, mode, unmatchedNow, clockMs, System.currentTimeMillis(), wait,
+                SportsLiveEndedGames.shared, viewModel.sportsLiveRepository::hasRecentLinks, espnDown
+            )
+        }
     }
-    // live.25 #226: the "N live" count and the zap list keep a final through the grace, as Live Now does.
-    val over = remember(items, current, clockMs, homeTruth) {
-        SportsLiveEndedGames.shared.confirmedEndedKeys(viewModel.liveNowAllItems, current, clockMs) + homeTruth.probablyEnded +
-            // L5: a game ESPN has postponed or cancelled is no live game in the count or the zap list either.
-            SportsLiveEndedGames.postponedKeys(viewModel.liveNowAllItems, current)
-    }
-    LaunchedEffect(ended, over) { viewModel.setLiveNowEnded(ended, over) }
+    val homeTruth = work?.truth ?: HomeLiveTruth(emptySet(), emptySet(), null)
+    LaunchedEffect(work) { work?.let { viewModel.setLiveNowEnded(it.ended, it.over) } }
     LaunchedEffect(homeTruth.deadline) {
         val at = homeTruth.deadline ?: return@LaunchedEffect
         kotlinx.coroutines.delay((at - System.currentTimeMillis()).coerceAtLeast(0L) + 1)
@@ -301,6 +297,35 @@ private fun SportsLiveHomeScores(
         truth.awaiting.value = homeTruth.awaiting
         truth.probablyEnded.value = homeTruth.probablyEnded
     }
+}
+
+/**
+ * #465: one off-main-thread pass of Home's Live now verdicts: the live [truth] ([homeLiveTruth]), the row's ESPN finals
+ * ([ended], they leave the row at once, in the postgame grace too: a final never reads "Live now") and what the "N live"
+ * count and the zap list leave out ([over]: finals past the grace, Probably ended, postponed or cancelled).
+ */
+internal data class HomeLiveWork(val truth: HomeLiveTruth, val ended: Set<String>, val over: Set<String>)
+
+/** #465: [HomeLiveWork] for the row [items] and every live game [allItems]; [clockMs] the 30 s clock, [nowMs] the wait's. */
+internal fun homeLiveWork(
+    items: List<SportsLiveItem>,
+    allItems: List<SportsLiveItem>,
+    scores: Map<String, ScoreSnapshot>,
+    mode: ScoresMode?,
+    unmatched: Set<String>,
+    clockMs: Long,
+    nowMs: Long,
+    wait: SportsLiveScoreWait,
+    endedGames: SportsLiveEndedGames,
+    hasRecentLinks: (SportsLiveItem) -> Boolean,
+    espnDown: (SportsLiveItem) -> Boolean = { false }
+): HomeLiveWork {
+    val ended = endedGames.finalKeys(items, scores, clockMs)
+    val truth = homeLiveTruth(items, allItems, scores, mode, unmatched, nowMs, wait, endedGames, hasRecentLinks, espnDown)
+    val over = endedGames.confirmedEndedKeys(allItems, scores, clockMs) + truth.probablyEnded +
+        // L5: a game ESPN has postponed or cancelled is no live game in the count or the zap list either.
+        SportsLiveEndedGames.postponedKeys(allItems, scores)
+    return HomeLiveWork(truth, ended, over)
 }
 
 /** #375: what Home's Live now row reads of the live truth: the cards waiting for ESPN, the Probably ended ones, the wait's deadline. */
