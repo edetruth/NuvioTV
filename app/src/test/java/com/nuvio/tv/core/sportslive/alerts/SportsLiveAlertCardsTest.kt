@@ -233,6 +233,52 @@ class SportsLiveAlertCardsTest {
         assertEquals(null, alerts.current.value)
     }
 
+    // Tier 1 C6: the card already up is read again when Scores, a switch or spoiler protection changes.
+
+    @Test
+    fun `a score card up goes when Scores turns to Hide, and the next card waiting shows`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.onRules(ScoresMode.SHOW, SportsLiveAlertSettings())
+        alerts.enqueue(listOf(score(pacers)), now)
+        val card = alerts.current.value!!
+        val kickoff = SportsLiveAlert.Kickoff(item("Bulls @ Nets", followed = true), null)
+        alerts.enqueue(listOf(kickoff), now + 1_000)
+        assertEquals(card, alerts.current.value)
+        // The same Show read again changes nothing.
+        alerts.onRules(ScoresMode.SHOW, SportsLiveAlertSettings())
+        assertEquals(card, alerts.current.value)
+        alerts.onRules(ScoresMode.HIDE_UNTIL_FOCUSED, SportsLiveAlertSettings())
+        assertEquals(kickoff, alerts.current.value!!.alert)
+    }
+
+    @Test
+    fun `a full time card up shows names only once Scores turns to Hide, and goes under Off`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.onRules(ScoresMode.SHOW, SportsLiveAlertSettings())
+        val fullTime = SportsLiveAlert.FullTime(pacers, final(101, 99).copy(eventId = "c6-final-$now"), namesOnly = false)
+        alerts.enqueue(listOf(fullTime), now)
+        val card = alerts.current.value!!
+        alerts.onRules(ScoresMode.HIDE_UNTIL_FOCUSED, SportsLiveAlertSettings())
+        val hidden = alerts.current.value!!
+        // The same card (its time on screen kept), its score gone.
+        assertEquals(card.id, hidden.id)
+        assertTrue((hidden.alert as SportsLiveAlert.FullTime).namesOnly)
+        alerts.onRules(ScoresMode.OFF, SportsLiveAlertSettings())
+        assertEquals(null, alerts.current.value)
+    }
+
+    @Test
+    fun `a score card up goes once my teams' scores are hidden`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(score(pacers)), now)
+        assertTrue(alerts.current.value!!.alert is SportsLiveAlert.ScoreChange)
+        alerts.onProtection(SpoilerProtection(myTeams = true, followed = sixers))
+        assertEquals(null, alerts.current.value)
+    }
+
     @Test
     fun `waiting alerts keep one per game and kind, the newest score, and drop the oldest scores past five`() {
         val waiting = mutableListOf<Pair<SportsLiveAlert, Long>>()

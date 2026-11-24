@@ -252,8 +252,7 @@ class SportsLiveAlerts @Inject constructor(
                 Inputs(b.cards, b.reminders, b.settings, b.followed, mode, now, b.mySports)
             }.collect { inputs ->
                 val nowMs = System.currentTimeMillis()
-                lastMode = inputs.mode
-                lastSettings = inputs.settings
+                onRules(inputs.mode, inputs.settings)
                 val scores = liveScores.scores.value
                 val ended = synchronized(lock) {
                     inputs.cards.forEach { card ->
@@ -397,6 +396,35 @@ class SportsLiveAlerts @Inject constructor(
     @VisibleForTesting
     internal fun onProtection(protection: SpoilerProtection) {
         lastProtection = protection
+        recheckCurrent()
+    }
+
+    /** The Scores setting and alert switches now; the card up is read again against them (tier 1 C6). */
+    @VisibleForTesting
+    internal fun onRules(mode: ScoresMode, settings: SportsLiveAlertSettings) {
+        lastMode = mode
+        lastSettings = settings
+        recheckCurrent()
+    }
+
+    /**
+     * The card up under the Scores setting, switches and spoiler protection as they are now (tier 1 C6): a card may wait
+     * up under an overlay while Scores turns to Hide, so its score goes (a score or close finish card with it, a full
+     * time to names only). The same id is kept, so the host keeps its time on screen.
+     */
+    private fun recheckCurrent() {
+        synchronized(lock) {
+            val card = currentFlow.value ?: return
+            val nowMs = System.currentTimeMillis()
+            val next = SportsLiveAlertEngine.stillShowable(card.alert, lastMode, lastSettings)
+                ?.let { underProtection(it, lastProtection.copy(nowMs = nowMs)) }
+            if (next == null) {
+                currentFlow.value = null
+                showNextLocked(nowMs)
+            } else if (next != card.alert) {
+                currentFlow.value = card.copy(alert = next)
+            }
+        }
     }
 
     /**
