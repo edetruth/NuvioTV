@@ -1194,9 +1194,14 @@ object SportsLiveItemBucketer {
     // An upcoming-named catalog vouches only for items without a known time of day;
     // a timed start in the past never counts as upcoming. An events item with no start at
     // all is kept as "Time TBA" so a manually included catalog never disappears.
+    // #356: a date with no time (parsed as that date's UTC midnight) counts only until that date has ended everywhere
+    // ([DATE_ONLY_KEEP_MS]): yesterday's date-only row leaves Upcoming.
     private fun isUpcoming(item: SportsLiveItem, nowMs: Long): Boolean =
         (item.startMs != null && item.startMs > nowMs) ||
             (item.startMs == null && item.kind == SportsLiveKind.EVENTS) ||
-            (!item.startHasTimeOfDay &&
+            (!item.startHasTimeOfDay && (item.startMs == null || nowMs < item.startMs + DATE_ONLY_KEEP_MS) &&
                 SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING))
+
+    /** #356: a date-only start (UTC midnight) is that date until it has ended in every zone (UTC-12): 36 h. */
+    internal const val DATE_ONLY_KEEP_MS = 36 * 60 * 60 * 1000L
 }
