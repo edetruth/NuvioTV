@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.player
 
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -52,5 +55,39 @@ class PlaybackHeaderRedirectTest {
         assertNoLogin(hop)
         assertEquals("https://ref.invalid/", hop.getHeader("Referer"))
         assertEquals("v", hop.getHeader("X-Custom"))
+    }
+
+    /** A client the way the parallel connections path builds it: headers set on the request, a cookie jar. */
+    private fun parallelClient(jar: CookieJar) = PlaybackStreamHeaders.scoped(
+        PlayerPlaybackNetworking.playbackHttpClient.newBuilder().cookieJar(jar).build()
+    )
+
+    private fun streamRequest() = Request.Builder().url(link.url("/movie.mkv")).apply {
+        streamHeaders.forEach { (name, value) -> header(name, value) }
+    }.build()
+
+    @Test
+    fun `a redirect target keeps the cookie the jar holds for it (P7)`() {
+        redirectToOther()
+        val jar = object : CookieJar {
+            override fun loadForRequest(url: HttpUrl): List<Cookie> =
+                if (url.port == other.port) listOf(Cookie.Builder().name("edge").value("1").hostOnlyDomain(url.host).build()) else emptyList()
+
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = Unit
+        }
+        parallelClient(jar).newCall(streamRequest()).execute().close()
+        take(link)
+        val hop = take(other)
+        assertEquals("edge=1", hop.getHeader("Cookie"))
+        assertNull(hop.getHeader("Authorization"))
+        assertNull(hop.getHeader("X-Api-Key"))
+    }
+
+    @Test
+    fun `a redirect target with no cookie of its own gets none of the stream's (P7)`() {
+        redirectToOther()
+        parallelClient(CookieJar.NO_COOKIES).newCall(streamRequest()).execute().close()
+        assertEquals("s=1", take(link).getHeader("Cookie"))
+        assertNoLogin(take(other))
     }
 }

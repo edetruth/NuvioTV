@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.core.network.StreamOrigin
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -35,18 +36,26 @@ internal object PlaybackStreamHeaders {
     }
 
     /**
-     * One player client's header scope: the first request it sends is the addon's link, and its host is the
-     * scope. A request elsewhere has its login headers removed.
+     * One player client's header scope: the first request it sends is the addon's link, and its origin is the
+     * scope. A request elsewhere has the stream's login headers removed.
      */
     class HostScope {
         private val link = AtomicReference<HttpUrl?>(null)
 
-        fun apply(request: Request): Request {
+        /**
+         * [request] with the stream's login headers removed when it leaves the link's origin. With [streamHeaders]
+         * (the values the stream set), a header holding another value stays: it is the other host's own, e.g. a
+         * cookie the cookie jar holds for it (P7).
+         */
+        fun apply(request: Request, streamHeaders: Headers? = null): Request {
             link.compareAndSet(null, request.url)
             val scope = link.get() ?: return request
             if (StreamOrigin.same(scope, request.url)) return request
             val downgrade = StreamOrigin.isDowngrade(scope, request.url)
-            val names = request.headers.names().filter { isCredential(it) || (downgrade && it.lowercase() in DOWNGRADE_NAMES) }
+            val names = request.headers.names().filter { name ->
+                (isCredential(name) || (downgrade && name.lowercase() in DOWNGRADE_NAMES)) &&
+                    (streamHeaders == null || request.header(name) in streamHeaders.values(name))
+            }
             if (names.isEmpty()) return request
             return request.newBuilder().apply { names.forEach { removeHeader(it) } }.build()
         }
@@ -90,7 +99,7 @@ internal object PlaybackStreamHeaders {
     fun scoped(client: OkHttpClient): OkHttpClient {
         val scope = HostScope()
         return client.newBuilder()
-            .addNetworkInterceptor(Interceptor { chain -> chain.proceed(scope.apply(chain.request())) })
+            .addNetworkInterceptor(Interceptor { chain -> chain.proceed(scope.apply(chain.request(), chain.call().request().headers)) })
             .build()
     }
 }

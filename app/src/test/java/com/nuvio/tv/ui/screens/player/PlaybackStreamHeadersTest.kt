@@ -61,6 +61,16 @@ class PlaybackStreamHeadersTest {
     }
 
     @Test
+    fun `another host keeps its own cookie, only the stream's goes (P7)`() {
+        val scope = PlaybackStreamHeaders.HostScope()
+        val stream = request(link).headers
+        scope.apply(request(link), stream)
+        val jarCookie = request("https://edge.invalid/seg1.ts").newBuilder().header("Cookie", "edge=1").build()
+        assertEquals("edge=1", scope.apply(jarCookie, stream).header("Cookie"))
+        assertNull(scope.apply(request("https://edge.invalid/seg1.ts"), stream).header("Cookie"))
+    }
+
+    @Test
     fun `another port on the link's host gets no login headers (P4)`() {
         val scope = PlaybackStreamHeaders.HostScope()
         scope.apply(request("https://cdn.invalid:8443/live/master.m3u8"))
