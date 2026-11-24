@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertFixtures
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Meta
+import com.nuvio.tv.domain.model.MetaBehaviorHints
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
@@ -87,6 +88,32 @@ class SportsLiveDetailSpoilersTest {
         assertNull(shown.videos.single().runtime)
         // An episode's own date only orders the list; it stays.
         assertEquals(episode.released, shown.videos.single().released)
+    }
+
+    @Test
+    fun `a hidden replay's Detail page keeps only what identifies and plays it, every other field dropped`() {
+        // F7-1: an allow-list, not a deny-list: any field the addon fills (now or in a later upstream) may carry the result.
+        val full = folder.copy(
+            ageRating = "FT 2-1", director = listOf("Winner: Team A"), writer = listOf("Team A won"), cast = listOf("MVP Player"),
+            imdbRating = 9.9f, country = "Won 2-1", language = "en", imdbId = "tt0000001", slug = "team-a-replays",
+            behaviorHints = MetaBehaviorHints(defaultVideoId = "folder:ep1"),
+            videos = listOf(episode.copy(rating = 9.5, runtime = 128, available = true))
+        )
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        val expected = Meta(
+            id = "folder", type = ContentType.SERIES, rawType = "series", name = "Team A replays", poster = null,
+            posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null, releaseInfo = null,
+            imdbRating = null, genres = listOf("Soccer"), runtime = null, director = emptyList(), cast = emptyList(),
+            videos = listOf(
+                Video(
+                    id = "folder:ep1", title = "Team A – Team B highlights", released = "2026-11-22", thumbnail = null,
+                    streams = listOf(spoilerSafeReplayStream(scored)), season = 1, episode = 1, overview = null, available = true
+                )
+            ),
+            country = null, awards = null, language = null, links = emptyList(), imdbId = "tt0000001", slug = "team-a-replays",
+            behaviorHints = MetaBehaviorHints(defaultVideoId = "folder:ep1")
+        )
+        assertEquals(expected, sportsLiveDetailMeta("folder", full))
     }
 
     @Test

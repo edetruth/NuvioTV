@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLocalTime
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.ui.navigation.Screen
 import java.time.ZoneId
 import java.util.Locale
@@ -81,32 +82,46 @@ internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
     return spoilerMaskedMeta(meta)
 }
 
-/** [meta] with nothing that may carry a result (see [sportsLiveDetailMeta]): the one mask of an addon's meta. */
-private fun spoilerMaskedMeta(meta: Meta): Meta =
-    meta.copy(
-        name = spoilerSafeLinkText(meta.name) ?: meta.name,
-        description = null,
-        releaseInfo = null,
-        released = null,
-        status = null,
-        awards = null,
-        runtime = null,
-        poster = null,
-        background = null,
-        landscapePoster = null,
-        logo = null,
-        rawPosterUrl = null,
-        seasonPosters = emptyMap(),
-        trailerYtIds = emptyList(),
-        trailers = emptyList(),
-        videos = meta.videos.map { video ->
-            video.copy(
-                title = spoilerSafeLinkText(video.title) ?: video.title,
-                overview = null,
-                runtime = null,
-                thumbnail = null,
-                seasonPoster = null,
-                streams = video.streams.map(::spoilerSafeReplayStream)
-            )
-        }
-    )
+/**
+ * [meta] with nothing that may carry a result (see [sportsLiveDetailMeta]): the one mask of an addon's meta. An allow-list
+ * (F7-1): only what identifies and plays it (ids, type, default video), its sport (genres) and its title, score masked,
+ * are kept; every other field, filled by the addon now or added by a later upstream, is left out.
+ */
+private fun spoilerMaskedMeta(meta: Meta): Meta = Meta(
+    id = meta.id,
+    type = meta.type,
+    rawType = meta.rawType,
+    name = spoilerSafeLinkText(meta.name) ?: meta.name,
+    poster = null,
+    posterShape = meta.posterShape,
+    background = null,
+    logo = null,
+    description = null,
+    releaseInfo = null,
+    imdbRating = null,
+    genres = meta.genres,
+    runtime = null,
+    director = emptyList(),
+    cast = emptyList(),
+    videos = meta.videos.map(::spoilerMaskedVideo),
+    country = null,
+    awards = null,
+    language = null,
+    links = emptyList(),
+    imdbId = meta.imdbId,
+    slug = meta.slug,
+    behaviorHints = meta.behaviorHints
+)
+
+/** [video] as a hidden replay's lists show it: its ids, place and date, title and links score-masked; nothing else. */
+private fun spoilerMaskedVideo(video: Video): Video = Video(
+    id = video.id,
+    title = spoilerSafeLinkText(video.title) ?: video.title,
+    released = video.released,
+    thumbnail = null,
+    streams = video.streams.map(::spoilerSafeReplayStream),
+    season = video.season,
+    episode = video.episode,
+    overview = null,
+    available = video.available
+)
