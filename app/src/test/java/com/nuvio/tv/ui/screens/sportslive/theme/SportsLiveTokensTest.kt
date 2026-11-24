@@ -21,7 +21,7 @@ class SportsLiveTokensTest {
 
     @Test
     fun `the type scale is the board's in sp`() {
-        assertEquals(SportsLiveTokens.pxToSp(22), Type.Tag.fontSize)
+        assertEquals(SportsLiveTokens.pxToSp(24), Type.Tag.fontSize) // #95: decorative caps 11 -> 12 sp
         assertEquals(SportsLiveTokens.pxToSp(26), Type.Meta.fontSize)
         assertEquals(SportsLiveTokens.pxToSp(30), Type.RowName.fontSize)
         assertEquals(SportsLiveTokens.pxToSp(40), Type.RowScore.fontSize)
