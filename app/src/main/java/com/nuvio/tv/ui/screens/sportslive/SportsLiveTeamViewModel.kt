@@ -8,7 +8,9 @@ import com.nuvio.tv.core.sportslive.scores.ScoreCard
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
@@ -29,11 +31,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -43,8 +44,18 @@ import javax.inject.Inject
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
-/** What opens a Team page (#62): the team and the game it was opened from. */
-data class SportsLiveTeamRequest(val team: TeamRef)
+/**
+ * What opens a Team page (#62): the team and the game it was opened from. [spoilerSafe]: that Game page was
+ * spoiler-safe (Catch up), so the page keeps results and record behind Reveal, whatever the Scores setting.
+ */
+data class SportsLiveTeamRequest(val team: TeamRef, val spoilerSafe: Boolean = false)
+
+/**
+ * Hold OK → Team page on a card of [tab]: spoiler-safe from Replays, as its Game stats is ([sportsLiveReplayGameRequest]):
+ * the team's last results and record would tell the replay's result.
+ */
+internal fun sportsLiveCardTeamRequest(team: TeamRef, tab: SportsLiveTab): SportsLiveTeamRequest =
+    SportsLiveTeamRequest(team, spoilerSafe = tab == SportsLiveTab.REPLAYS)
 
 /** Hands the request to the Team page's ViewModel, once (like [SportsLiveGameRequests]). */
 internal object SportsLiveTeamRequests {
@@ -67,6 +78,8 @@ data class SportsLiveTeamUiState(
     val stale: Boolean = false,
     val mode: ScoresMode = ScoresMode.SHOW,
     val revealed: Boolean = false,
+    /** Opened from a spoiler-safe Game page: hidden until revealed, even under Show. */
+    val spoilerSafe: Boolean = false,
     val followed: Boolean = false,
     /** The strict replay match of each of the last results, by event id (the Replay pill). */
     val replays: Map<String, SportsLiveItem> = emptyMap(),
@@ -76,10 +89,10 @@ data class SportsLiveTeamUiState(
     val protection: SpoilerProtection = SpoilerProtection()
 ) {
     /** Record, standing, upcoming games and leaders (decision 5: shown under Hide until focused). */
-    val showsRecord: Boolean get() = TeamPageSpoilers.showsRecord(mode, revealed)
+    val showsRecord: Boolean get() = TeamPageSpoilers.showsRecord(mode, revealed, spoilerSafe)
 
     /** The last results' W/L and scores: Show, or once revealed. */
-    val showsResults: Boolean get() = TeamPageSpoilers.showsResults(mode, revealed)
+    val showsResults: Boolean get() = TeamPageSpoilers.showsResults(mode, revealed, spoilerSafe)
 
     /** One of the last results is spoiler-protected (#151): whatever sums it up would give it away. */
     val hasProtectedResult: Boolean get() = data?.recent.orEmpty().any { protection.protects(it) }
@@ -159,33 +172,40 @@ class SportsLiveTeamViewModel internal constructor(
             stale = page.stale,
             mode = page.mode,
             revealed = page.revealed,
+            spoilerSafe = request?.spoilerSafe == true,
             followed = isFollowed,
             replays = data?.let { TeamPages.replaysFor(it.recent, SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.REPLAYS, nowMs), nowMs) }.orEmpty(),
             cards = data?.let { teamPageCards(it.upcoming, items, isFollowed, nowMs) }.orEmpty(),
             protection = protection
         )
-    }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team))
+    }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team, spoilerSafe = request?.spoilerSafe == true))
 
     init {
         val team = request?.team
         if (team != null) {
             viewModelScope.launch {
-                combine(settings, revealRequested, visible) { settings, revealed, visible -> Triple(settings.mode, revealed, visible) }
-                    .distinctUntilChanged()
-                    .collectLatest { (mode, revealed, isVisible) ->
+                revealGatedLoad(
+                    settings = settings.map { it.mode },
+                    revealed = revealRequested,
+                    visible = visible,
+                    mode = { it },
+                    context = SpoilerContext(SpoilerSurface.TEAM, spoilerSafe = request.spoilerSafe),
+                    onChange = { mode, revealed, mayLoad ->
                         page.update { it.copy(mode = mode, revealed = revealed) }
-                        if (!TeamPageSpoilers.mayLoad(mode, revealed)) {
+                        if (!mayLoad) {
                             page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL) }
-                            return@collectLatest
-                        }
-                        if (page.value.status == GameLoadStatus.WAITING_REVEAL) page.update { it.copy(status = GameLoadStatus.LOADING) }
-                        // Loaded once per open; the repository serves a return from a Game page.
-                        if (!isVisible || page.value.status == GameLoadStatus.READY) return@collectLatest
-                        when (val load = loadTeam(team.league, team.teamId)) {
-                            is TeamPageLoad.Loaded -> page.update { it.copy(data = load.data, stale = load.stale, status = GameLoadStatus.READY) }
-                            TeamPageLoad.Failed -> page.update { it.copy(status = GameLoadStatus.FAILED) }
+                        } else if (page.value.status == GameLoadStatus.WAITING_REVEAL) {
+                            page.update { it.copy(status = GameLoadStatus.LOADING) }
                         }
                     }
+                ) {
+                    // Loaded once per open; the repository serves a return from a Game page.
+                    if (page.value.status == GameLoadStatus.READY) return@revealGatedLoad
+                    when (val load = loadTeam(team.league, team.teamId)) {
+                        is TeamPageLoad.Loaded -> page.update { it.copy(data = load.data, stale = load.stale, status = GameLoadStatus.READY) }
+                        TeamPageLoad.Failed -> page.update { it.copy(status = GameLoadStatus.FAILED) }
+                    }
+                }
             }
         }
     }

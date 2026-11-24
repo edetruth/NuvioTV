@@ -9,6 +9,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.sportslive.ScoreboardRow
+import com.nuvio.tv.ui.screens.sportslive.YourTeamsEntry
 
 /**
  * The game "Watch with another game" pairs with [first] (#57), and the one "Next live game" in the
@@ -96,6 +98,40 @@ internal object SportsLiveSecondGame {
             left.sortedBy { item -> ((position[item.streamKey] ?: 0) - here - 1 + lineup.size) % lineup.size }
         }
         return forward.firstOrNull(knownGood) ?: forward.first()
+    }
+
+    /**
+     * "Watch with the ‹team› game" (live.26 item 4) in Hold OK on a game: the first followed team's live game of Live
+     * Now's Your teams [strip] (the list's order) that the picker offers beside it ([candidates]:
+     * [SportsLiveDualPick.candidates], so the same games and rules as "Watch with another game": never the game itself,
+     * one of its sources or one over), never a channel, nor one saved with Watch later ([savedForLater], as [pick]).
+     * Null: no entry (the focused game is the only followed one live, or none is).
+     */
+    fun teamPair(
+        strip: List<YourTeamsEntry>,
+        candidates: List<SportsLiveItem>,
+        savedForLater: (SportsLiveItem) -> Boolean = { false }
+    ): ScoreboardRow? {
+        if (strip.isEmpty() || candidates.isEmpty()) return null
+        val offered = candidates.filterNot { it.isChannel }.mapTo(HashSet()) { it.streamKey }
+        return strip.asSequence()
+            .filterIsInstance<YourTeamsEntry.Live>()
+            .map { it.row }
+            .firstOrNull { it.item.streamKey in offered && !savedForLater(it.item) }
+    }
+
+    /**
+     * The name in [teamPair]'s entry: the followed side's short name ("Lakers"); with both sides (or neither) flagged,
+     * the match ([vs]: "Lakers vs Celtics"). Only the drawn sides ([ScoreboardRow.art]), never the listing's own title,
+     * which may carry a score, so the entry is the same under every Scores setting. Null with no drawn sides.
+     */
+    fun teamPairName(row: ScoreboardRow, vs: (String, String) -> String): String? {
+        val art = row.art ?: return null
+        return when {
+            row.firstFollowed && !row.secondFollowed -> art.first.shortName
+            row.secondFollowed && !row.firstFollowed -> art.second.shortName
+            else -> vs(art.first.shortName, art.second.shortName)
+        }
     }
 
     /** ESPN's delayed view shows [item]'s strict match over (final) or off (postponed, suspended). */

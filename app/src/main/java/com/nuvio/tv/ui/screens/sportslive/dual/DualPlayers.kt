@@ -252,6 +252,7 @@ internal class DualPlayers(
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, disabled)
                     .build()
             }
+            com.nuvio.tv.core.debug.TestMute.applyTo(appContext, player, "dual") // debug-only test mute
         }
 
         fun show(pane: DualPane) {

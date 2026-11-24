@@ -11,6 +11,10 @@ import com.nuvio.tv.core.sportslive.scores.PlayerGame
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
+import com.nuvio.tv.core.sportslive.scores.SpoilerVisibility
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -74,14 +78,17 @@ data class SportsLivePlayerCardUiState(
      */
     val protection: SpoilerProtection? = null
 ) {
+    private val spoilers: SpoilerVisibility
+        get() = SpoilerPolicy.visibility(mode, revealed, SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = spoilerSafe))
+
     /** The last games' results and stat lines show: Scores Show (unless [spoilerSafe]), or revealed. */
-    val showsLastGames: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
+    val showsLastGames: Boolean get() = spoilers.showsScore
 
     /** Hide until focused (#134): each last game's result and line show while its row has focus; no Reveal needed. */
-    val revealsOnFocus: Boolean get() = mode == ScoresMode.HIDE_UNTIL_FOCUSED && !spoilerSafe && !revealed
+    val revealsOnFocus: Boolean get() = spoilers.revealsOnFocus
 
     /** Whether a last game's result and stat line show, its row [focused] or not. */
-    fun showsGame(focused: Boolean): Boolean = showsLastGames || (revealsOnFocus && focused)
+    fun showsGame(focused: Boolean): Boolean = spoilers.showsRow(focused)
 
     /** Whether [game]'s result and stat line show: as [showsGame], never a spoiler-protected game's, whatever Reveal. */
     fun showsGame(game: PlayerGame, focused: Boolean): Boolean {
@@ -132,22 +139,25 @@ class SportsLivePlayerCardViewModel internal constructor(
         if (target != null) {
             viewModelScope.launch { protection.collect { latest -> state.update { it.copy(protection = latest) } } }
             viewModelScope.launch {
-                combine(settings.map { it.mode }, revealRequested) { mode, revealed -> mode to revealed }
-                    .distinctUntilChanged()
-                    .collectLatest { (mode, revealed) ->
+                revealGatedLoad(
+                    settings = settings.map { it.mode },
+                    revealed = revealRequested,
+                    mode = { it },
+                    context = SpoilerContext(SpoilerSurface.PLAYER_CARD, spoilerSafe = request?.spoilerSafe == true),
+                    onChange = { mode, revealed, mayLoad ->
                         state.update { it.copy(mode = mode, revealed = revealed) }
-                        if (mode == ScoresMode.OFF && !revealed && state.value.card == null) {
-                            state.update { it.copy(status = PlayerCardStatus.WAITING_REVEAL) }
-                            return@collectLatest
-                        }
-                        if (state.value.card != null) return@collectLatest
-                        state.update { it.copy(status = PlayerCardStatus.LOADING) }
-                        val card = loadCard(target.league, target.athleteId)
-                        state.update {
-                            if (card != null) it.copy(card = card, status = PlayerCardStatus.READY)
-                            else it.copy(status = PlayerCardStatus.FAILED)
-                        }
+                        // A card already loaded stays (Scores turned Off while it is open).
+                        if (!mayLoad && state.value.card == null) state.update { it.copy(status = PlayerCardStatus.WAITING_REVEAL) }
                     }
+                ) {
+                    if (state.value.card != null) return@revealGatedLoad
+                    state.update { it.copy(status = PlayerCardStatus.LOADING) }
+                    val card = loadCard(target.league, target.athleteId)
+                    state.update {
+                        if (card != null) it.copy(card = card, status = PlayerCardStatus.READY)
+                        else it.copy(status = PlayerCardStatus.FAILED)
+                    }
+                }
             }
         }
     }

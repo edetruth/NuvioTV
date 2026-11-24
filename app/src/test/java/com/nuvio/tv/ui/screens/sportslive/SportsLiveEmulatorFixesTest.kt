@@ -17,7 +17,6 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
-import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerSections
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -30,17 +29,6 @@ class SportsLiveEmulatorFixesTest {
 
     private val now = 1_800_000_000_000L
     private val minute = 60_000L
-
-    @Test
-    fun `the dual picker lists live games first and channels last, each in the order given`() {
-        val g1 = item("g1", "Lakers vs Celtics")
-        val c1 = item("c1", "Sports Channel 1").copy(isChannel = true)
-        val g2 = item("g2", "Bulls vs Knicks")
-        val c2 = item("c2", "Sports Channel 2").copy(isChannel = true)
-        val (games, channels) = dualPickerSections(listOf(c1, g1, c2, g2))
-        assertEquals(listOf("g1", "g2"), games.map { it.id })
-        assertEquals(listOf("c1", "c2"), channels.map { it.id })
-    }
 
     @Test
     fun `a competition after a team's name comes off it and becomes the league`() {

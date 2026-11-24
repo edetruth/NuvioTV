@@ -125,7 +125,8 @@ internal fun resultsOffersYesterday(daysAgo: Int?, hasRows: Boolean): Boolean = 
  * Now, so a score sits right after its names; ◂ ▸ on a row jump to the previous / next league ([resultsLeagueJump]).
  * The stage on the right shows the focused game's drawn matchup, its final score (spoiler rules applied, or why it
  * is hidden), and **Watch replay** (a strict replay match) and **More…** (Game page, Reveal, Team page, Follow).
- * OK on a row opens the Game page. A followed team's score shows only once revealed; a row reveals under Hide until
+ * OK on a row opens the Game page; on a protected row with a replay (Watch later: any age; your team's: the last 36 h), which reads only "▶ Watch replay"
+ * ([resultsRowWatchesReplay], live.26), it plays the replay. A followed team's score shows only once revealed; a row reveals under Hide until
  * focused only after a key press in the list, never on entry or when focus comes back ([ResultsRevealGuard], #86).
  */
 @Composable
@@ -305,6 +306,8 @@ internal fun SportsLiveResultsView(
     // More… → Reveal all for this day: offered while a listed result is hidden by the Scores setting (review S3: your
     // teams' and saved games keep their own Reveal result).
     val dayHasHidden = items.any { it is ResultListItem.Row && state.hiddenReason(it.row) == ResultHiddenReason.SETTING }
+    // live.26 (#223): the clock for "hidden today" (the last 36 h), read once per list so a row never flips while shown.
+    val listNowMs = remember(items) { System.currentTimeMillis() }
     items.firstNotNullOfOrNull { (it as? ResultListItem.Row)?.row?.takeIf { row -> row.key == menuRowKey } }?.let { row ->
         val sides = listOf(ScoreSide.AWAY to row.event.away, ScoreSide.HOME to row.event.home)
         val rowHiddenForGood = state.hiddenReason(row).let { it == ResultHiddenReason.SAVED || it == ResultHiddenReason.YOUR_TEAM }
@@ -503,6 +506,9 @@ internal fun SportsLiveResultsView(
                                 itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
                                     val isRow = item is ResultListItem.Row
                                     val hasStage = isRow && resultsStageButtons((item as ResultListItem.Row).row, state.replays[item.key]).isNotEmpty()
+                                    val watchesReplay = (item as? ResultListItem.Row)?.let { row ->
+                                        resultsRowWatchesReplay(state.hiddenReason(row.row), row.hasReplay, row.row.event.individual != null, row.row.event.startMs, listNowMs)
+                                    } == true
                                     val focusModifier = Modifier
                                         .focusRequester(itemFocusRequester(item.key))
                                         // ◂ ▸ jump to the previous / next league's first game (results redesign).
@@ -568,8 +574,13 @@ internal fun SportsLiveResultsView(
                                             row = item.row,
                                             showScore = state.showsScore(item.row),
                                             hasReplay = item.hasReplay,
+                                            watchReplay = watchesReplay,
                                             selected = stageHasFocus && item.key == stageItem?.key,
-                                            onClick = { onOpen(item.row) },
+                                            onClick = {
+                                                // live.26 (#223): "▶ Watch replay" says what OK does; the replay plays spoiler-safe.
+                                                val replay = state.replays[item.key]
+                                                if (watchesReplay && replay != null) onWatchReplay(item.row, replay) else onOpen(item.row)
+                                            },
                                             onLongClick = { menuRowKey = item.key },
                                             menuOpen = menuRowKey == item.key,
                                             onFocus = {
@@ -729,6 +740,24 @@ internal fun resultsStageButtons(row: ResultRow, replay: SportsLiveItem?): List<
     replay != null -> listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.MORE)
     else -> listOf(ResultsStageButton.MORE)
 }
+
+/** live.26 (#223): a hidden result counts as today's for 36 h from its start, not by the calendar (late West Coast games). */
+internal const val RESULTS_HIDDEN_TODAY_MS = 36 * 60 * 60 * 1000L
+
+/**
+ * A Results row that reads only "▶ Watch replay" and whose OK plays its replay (live.26 shorter paths, #223): the safe
+ * path for the most spoiler-sensitive job. Its score is protected ([hidden] Watch later or your team's, which focus never
+ * reveals; "Hide until I reveal" rows reveal on focus, so they keep "Score hidden"), it has a strict replay
+ * ([hasReplay]) and it is a team game ([individual] rows have their own OK). A Watch later game ([ResultHiddenReason.SAVED])
+ * has no time limit (live.26 decision: it stays offered until its replay is gone); your team's game started in the
+ * last 36 h ([startMs], [nowMs]; unknown: no). Otherwise the row is as before and OK opens the Game page.
+ */
+internal fun resultsRowWatchesReplay(hidden: ResultHiddenReason?, hasReplay: Boolean, individual: Boolean, startMs: Long?, nowMs: Long): Boolean =
+    hasReplay && !individual && when (hidden) {
+        ResultHiddenReason.SAVED -> true
+        ResultHiddenReason.YOUR_TEAM -> startMs != null && nowMs - startMs <= RESULTS_HIDDEN_TODAY_MS
+        else -> false
+    }
 
 /** The title's day name: "Today", "Yesterday", else its date ("Sun 15 Nov", the device's locale). */
 @Composable
@@ -929,7 +958,9 @@ private fun ResultBoardRow(
     onLongClick: () -> Unit,
     menuOpen: Boolean,
     onFocus: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** live.26 (#223, [resultsRowWatchesReplay]): the row reads only "▶ Watch replay" (no score, note or pill). */
+    watchReplay: Boolean = false
 ) {
     val shape = SportsLiveTokens.Radius.RowShape
     val event = row.event
@@ -1009,18 +1040,19 @@ private fun ResultBoardRow(
                     Text(
                         // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score; the game
                         // grammar's final words (live.24): "Final · OT", "FT · Pens"; a plain end per sport (#102).
-                        text = if (showScore) {
-                            resultsFinalWords(event)
-                        } else {
-                            stringResource(R.string.sports_live_results_score_hidden)
+                        text = when {
+                            showScore -> resultsFinalWords(event)
+                            watchReplay -> stringResource(R.string.sports_live_results_watch_replay_row)
+                            else -> stringResource(R.string.sports_live_results_score_hidden)
                         },
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium),
-                        color = Colors.TextSecondary,
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = if (watchReplay && !showScore) FontWeight.Bold else FontWeight.Medium),
+                        color = if (watchReplay && !showScore) Colors.TextPrimary else Colors.TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // Only a strict replay match gets the tag (#51); it stays visible while a score is hidden.
-                    if (hasReplay) ReplayPill()
+                    // Only a strict replay match gets the tag (#51); it stays visible while a score is hidden, except where
+                    // the row already says "▶ Watch replay".
+                    if (hasReplay && !(watchReplay && !showScore)) ReplayPill()
                 }
             }
             val bar = when {

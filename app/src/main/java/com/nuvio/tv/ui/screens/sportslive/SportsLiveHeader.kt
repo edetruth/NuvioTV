@@ -63,7 +63,9 @@ internal data class SportsLiveHeaderDropdown(
     val title: String,
     val actions: List<Pair<String, () -> Unit>> = emptyList(),
     val faceLabel: String? = null,
-    val menu: (@Composable (close: () -> Unit) -> Unit)? = null
+    val menu: (@Composable (close: () -> Unit) -> Unit)? = null,
+    /** A view shown in place of the options (Live now's More live or All sports): the pill names it. */
+    val viewLabel: String? = null
 )
 
 /**
@@ -227,6 +229,7 @@ internal fun SportsLiveHeader(
                         actions = filterDropdown.actions,
                         faceLabel = filterDropdown.faceLabel,
                         menu = filterDropdown.menu,
+                        viewLabel = filterDropdown.viewLabel,
                         modifier = filterModifier
                     )
                 } else {

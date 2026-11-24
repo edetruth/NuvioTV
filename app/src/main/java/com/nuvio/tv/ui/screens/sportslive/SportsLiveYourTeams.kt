@@ -231,6 +231,13 @@ internal object YourTeams {
     }
 
     /**
+     * Where Live Now opens (live.24 A7, live.26 item 4): on the strip's first card when it is a followed team's live
+     * game (one press to watch your team), else on the list's first row. Once per visit, on the finished board only: it
+     * never moves focus later (settled screens), and Back from another screen keeps its own return.
+     */
+    fun opensOnStrip(strip: List<YourTeamsEntry>): Boolean = strip.firstOrNull() is YourTeamsEntry.Live
+
+    /**
      * OK on a strip card plays (live, replay); on a game not started yet it plays only once its verified link is held
      * ([mark] READY: "Watch now", the held link at once, 1b HARD RULE), else it sets the reminder.
      */
@@ -258,6 +265,32 @@ internal object YourTeams {
             probablyEnded = false,
             twoSided = true
         )
+    }
+}
+
+/**
+ * Settled screens (live.26 TV: "Your teams · 1 today" landed above Live now's list 15 s after opening, and every row
+ * moved down): once Live now's rows have been on screen for the landing window ([SportsLiveSettledRows.READY_MS]), a strip
+ * that was not showing is held back until the list is laid out afresh ("N new", a follow, My sports: a new layout epoch),
+ * the tab is left, or the next open. A strip already showing keeps following its games; one that empties goes.
+ */
+internal class YourTeamsStripHold(private val readyMs: Long = SportsLiveSettledRows.READY_MS) {
+    private var epoch: Int? = null
+    private var listShownAtMs: Long? = null
+    private var stripShown = false
+
+    /** The strip to draw for [fresh] at [nowMs]: [listShown] while Live now's rows are on screen, in layout [epoch]. */
+    fun <E> shown(fresh: List<E>, listShown: Boolean, epoch: Int, nowMs: Long): List<E> {
+        if (epoch != this.epoch) {
+            this.epoch = epoch
+            listShownAtMs = null
+        }
+        if (!listShown) listShownAtMs = null else if (listShownAtMs == null) listShownAtMs = nowMs
+        val since = listShownAtMs
+        val held = since != null && !stripShown && nowMs - since >= readyMs
+        val out = if (held) emptyList() else fresh
+        stripShown = out.isNotEmpty()
+        return out
     }
 }
 

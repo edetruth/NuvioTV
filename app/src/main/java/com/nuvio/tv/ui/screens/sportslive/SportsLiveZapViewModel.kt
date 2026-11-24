@@ -2,12 +2,14 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
 import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.SportsLiveJustWatched
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
+import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
@@ -203,7 +205,10 @@ class SportsLiveZapViewModel internal constructor(
     // Channels phase 1: the profile's favorite channels, first and starred in the panel and the guide.
     channelPicks: Flow<SportsLiveChannelPicks> = flowOf(SportsLiveChannelPicks.NONE),
     // Saves a change of the profile's channel picks (Hold OK on a channel row: Add to / Remove from favorites).
-    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {}
+    private val updateChannelPicks: suspend ((SportsLiveChannelPicks) -> SportsLiveChannelPicks) -> Unit = {},
+    // live.26 (#223): the clock key events' down times count in, for the held-key guard ([SportsLiveHeldKeyGuard]).
+    private val uptimeMs: () -> Long = { android.os.SystemClock.uptimeMillis() },
+    private val heldKeys: SportsLiveHeldKeyGuard = SportsLiveHeldKeyGuard.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -324,6 +329,12 @@ class SportsLiveZapViewModel internal constructor(
 
     /** True when this player was opened with a zap session for its content; only then is the overlay shown. */
     val hasSession: Boolean = SportsLiveZapSessions.activeFor(contentId) != null
+
+    // G-C10: a sports replay plays with no session (so no player menu); the app-wide Hold OK sheet serves it.
+    private val replayPlayer = !hasSession && SportsLiveExtraSources.isSportsPlayback(contentId)
+    init {
+        if (replayPlayer) SportsLiveHoldOk.replayPlayerOpen = true
+    }
 
     // live.20 B2: streams resolved before OK or CH± asks (a panel row rested on, the games ▲ and ▼ go to).
     private val prefetcher = prefetchHooks?.takeIf { hasSession }?.let { SportsLiveStreamPrefetcher(viewModelScope, it) }
@@ -469,13 +480,16 @@ class SportsLiveZapViewModel internal constructor(
         }.flowOn(computeDispatcher)
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
         // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).
-        val items = combine(all, panelChip, mySports, logos.revision) { (list, followed), chip, sports, _ ->
+        val items = combine(all, panelChip, mySports, logos.revision) { (loaded, followed), chip, sports, _ ->
             // #218: every report says what My sports holds.
             SportsLiveReportTrail.onMySports(mySportsReportLine(sports))
             // Audit G15: a session started on Channels lists its channels, in the order CH± walks them, never Live now's games.
             controller.session(contentId)?.channelGuideItems()?.let { channels ->
                 return@combine PanelList(channels, chip, filterPanelItems(channels, chip), followed, channels, channels = true, mySports = sports)
             }
+            // live.27: "A vs B" listings that are no game in progress (Live now's Other streams) are never in the lineup or
+            // its counts (SportsLiveOtherStreams).
+            val list = SportsLiveOtherStreams.split(loaded, System.currentTimeMillis()).first
             // More live (user 2026-11-21): under My sports the listings that are no game (H) are never in the lineup, and the
             // All sports value shows More live's games, by sport (the games My sports leaves out), not everything.
             val (games, others) = if (sports.isDefault) list to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(list)
@@ -627,6 +641,7 @@ class SportsLiveZapViewModel internal constructor(
             )
             // Laid out here, off the main thread.
             state.guide
+            ShownGamesLog.noteItems(if (guideTable.value) ShownGamesLog.TABLE else ShownGamesLog.PANEL, current.rows.map { it.item }, current.boardScores.takeIf { current.mode != ScoresMode.OFF })
             ShownPanel(current, state, session)
         }
     }.flowOn(computeDispatcher)
@@ -1125,6 +1140,8 @@ class SportsLiveZapViewModel internal constructor(
             if (_playerMenu.value || !guideTable.value) return false
             return guideKeyHandler?.invoke(event) ?: false
         }
+        // The rest of a ▲ ▼ / CH± press held as the table closed: taken, never a zap (#223, A4).
+        if (heldKeys.swallows(event.keyCode, event.downTime)) return true
         val idle = playerIdle && !partyActive && controller.session(contentId) != null
         val menu = idle && playerOkOffered()
         // Audit G9 (live.24): in every other player state (a replay, OK = Pause, the end card, the controls) the press
@@ -1204,6 +1221,7 @@ class SportsLiveZapViewModel internal constructor(
     fun closePanel(): Boolean {
         if (!_panelOpen.value) return false
         _panelOpen.value = false
+        heldKeys.onClosed(uptimeMs())
         guideIdle.stop()
         panelSession.value = null
         // #164: the next open (and CH± meanwhile) takes the fresh order.
@@ -1465,6 +1483,7 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     override fun onCleared() {
+        if (replayPlayer) SportsLiveHoldOk.replayPlayerOpen = false
         scoreTracker.onStop()
         nowTracker.onStop()
         WatchingNow.shared.stop(watchOwner)

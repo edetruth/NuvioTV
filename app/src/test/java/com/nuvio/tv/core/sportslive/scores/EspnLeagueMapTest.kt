@@ -24,6 +24,18 @@ class EspnLeagueMapTest {
     }
 
     @Test
+    fun `competitionOf names one league from its name or alias, never from a sport word`() {
+        assertEquals("soccer/eng.1", EspnLeagueMap.competitionOf("EPL")?.path)
+        assertEquals("soccer/eng.1", EspnLeagueMap.competitionOf("Premier League")?.path)
+        assertEquals("soccer/eng.1", EspnLeagueMap.competitionOf("English Premier League")?.path)
+        assertEquals("basketball/nba", EspnLeagueMap.competitionOf("NBA")?.path)
+        assertNull(EspnLeagueMap.competitionOf("Indian Premier League"))
+        assertNull(EspnLeagueMap.competitionOf("Euro Basketball"))
+        assertNull(EspnLeagueMap.competitionOf("Football"))
+        assertNull(EspnLeagueMap.competitionOf(" "))
+    }
+
+    @Test
     fun `college leagues only when the card says so`() {
         assertEquals(listOf("football/college-football"), slugs(null, "NCAAF: Ohio State vs Michigan"))
         assertEquals(listOf("football/college-football"), slugs("College Football", "Alabama vs Auburn"))

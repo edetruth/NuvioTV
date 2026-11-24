@@ -243,7 +243,8 @@ class SportsLiveSecondGameTest {
         assertTrue(channels.offersWatchWith(channel, null))
         val pick = channels.watchWithFor(channel, emptyMap())!!
         assertEquals(channel, pick.chosen)
-        assertEquals(listOf(earlier), pick.candidates)
+        // live.26 (#222): Live now's live games first (the channel's own source left out), then the tab's list.
+        assertEquals(listOf(first, earlier), pick.candidates)
         assertEquals(SportsLiveTab.CHANNELS, pick.session(earlier).tab)
 
         // A live game from the More… menu: the picker too, never straight into dual screen.

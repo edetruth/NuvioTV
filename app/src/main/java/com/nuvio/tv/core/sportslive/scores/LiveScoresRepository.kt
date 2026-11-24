@@ -3,6 +3,7 @@ package com.nuvio.tv.core.sportslive.scores
 import android.content.Context
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
+import com.nuvio.tv.core.sportslive.SportsLiveNoEspnGames
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
@@ -131,7 +132,9 @@ class LiveScoresRepository internal constructor(
     /** Fetch followed teams' and My sports' feeds when scores are first collected (live.23, [prewarmFeeds]). */
     private val prewarm: Boolean = false,
     /** The active profile's id: kept scores belong to it, and its spoiler settings are read again on a switch (live.23). */
-    private val profile: Flow<Int?> = flowOf(null)
+    private val profile: Flow<Int?> = flowOf(null),
+    /** Where live listings ESPN has no game for go (live.27, [SportsLiveOtherStreams]): team channels, replays, passes. */
+    private val noEspnGames: SportsLiveNoEspnGames = SportsLiveNoEspnGames.shared
 ) : LiveScoreTracking {
     @Inject
     constructor(
@@ -928,9 +931,11 @@ class LiveScoresRepository internal constructor(
                     cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused && it.isFresh(nowMs) } == true }
                 ) {
                     markUnmatched(card.key)
+                    noteNoGame(entry, cardFeeds, nowMs)
                 }
                 return
             }
+            if (entry.liveKeys.isNotEmpty()) noEspnGames.forget(entry.liveKeys)
             unmatchedKeys -= card.key
             learnLogos(match)
             // Matched: only the feeds holding the game (and any not fetched yet) keep polling, so a
@@ -1220,6 +1225,53 @@ class LiveScoresRepository internal constructor(
                 file.write(logos.encode())
             }
         }
+    }
+
+    /**
+     * live.27 (TV reports #29-#36: team channels, replays and passes listed live as "A vs B"): a live card confirmed
+     * unmatched on [cardFeeds] (every one answered afresh) is no game ESPN has when [hasNoEspnGame] says so; its sources go
+     * to [noEspnGames], else leave it. Never a tennis card (matched by surname), never one its addon does not list live.
+     */
+    private fun noteNoGame(entry: TrackedCard, cardFeeds: List<ScoreFeed>, nowMs: Long) {
+        if (entry.liveKeys.isEmpty() || entry.tennis) return
+        if (hasNoEspnGame(entry.card, cardFeeds, nowMs)) {
+            noEspnGames.record(entry.liveKeys, entry.card.teams, nowMs)
+        } else {
+            noEspnGames.forget(entry.liveKeys)
+        }
+    }
+
+    /**
+     * True when ESPN has no game today for [card] (live.27). Fails open (false) unless all of:
+     * - one of its leagues (never soccer/all, which has no team list) has ESPN's (US Eastern) today among [cardFeeds], and
+     *   the loaded team list of that league names each of its two sides as one team, two different teams;
+     * - ESPN gives no later start for it ([espnStarts]: a game listed live too early is Upcoming's, not this);
+     * - neither team plays on any fresh scoreboard at hand of the card's leagues, its own days (yesterday's too, for an
+     *   undated card: a late game across Eastern midnight) and any other day polled (ESPN's tomorrow, for a later
+     *   start): not by ESPN id, nor by any name the matcher reads ([ScoreMatcher.touches], even WEAK).
+     * The caller has checked that every one of [cardFeeds] answered afresh (no stale, failed or paused feed).
+     */
+    private fun hasNoEspnGame(card: ScoreCard, cardFeeds: List<ScoreFeed>, nowMs: Long): Boolean {
+        if (espnStarts.startOf(card.key, nowMs) != null) return false
+        val directory = logos.directory
+        val easternToday = Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate()
+        val leagues = cardFeeds.map { it.league }.distinct()
+        val ids = HashSet<String>()
+        for (league in leagues) {
+            if (league == EspnLeagueMap.SOCCER_ALL || cardFeeds.none { it.league == league && it.date == easternToday }) continue
+            val home = directory.teamId(league, card.teams.home) ?: continue
+            val away = directory.teamId(league, card.teams.away) ?: continue
+            if (home == away) continue
+            ids += home
+            ids += away
+        }
+        if (ids.isEmpty()) return false
+        val events = feeds.entries
+            .filter { (feed, state) -> feed.league in leagues && state.fetched && !state.paused && state.isFresh(nowMs) }
+            .flatMap { it.value.events }
+            .distinctBy { it.eventId }
+        if (events.any { it.home.id in ids || it.away.id in ids }) return false
+        return !matcher.touches(card, events)
     }
 
     private fun markUnmatched(key: String) {

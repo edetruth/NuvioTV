@@ -68,6 +68,20 @@ class SportsLiveHoldOkTest {
     }
 
     @Test
+    fun `a hold in the player opens no sheet while the player has its own Hold OK`() {
+        val run = Run(SportsLiveHoldOkKey(graceMs = 500), Screens(consumeRepeats = false))
+        hold(run, at = 1_000, releaseAt = 2_000, route = { "player" })
+        assertTrue(run.opened.isEmpty())
+    }
+
+    @Test
+    fun `a hold in a sports replay's player opens the sheet`() {
+        val run = Run(SportsLiveHoldOkKey(graceMs = 500, playerHasOwnHold = { false }), Screens(consumeRepeats = false))
+        hold(run, at = 1_000, releaseAt = 2_000, route = { "player" })
+        assertEquals(listOf<String?>("player"), run.opened)
+    }
+
+    @Test
     fun `a release before the long-press time is a normal click`() {
         val run = Run(SportsLiveHoldOkKey(), Screens(consumeRepeats = true))
         hold(run, at = 1_000, releaseAt = 1_200)

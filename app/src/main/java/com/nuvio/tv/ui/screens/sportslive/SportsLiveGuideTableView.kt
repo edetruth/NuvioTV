@@ -315,9 +315,11 @@ internal fun SportsLiveGuideTable(
                 if (at < end - 1) GuideRowGap()
             }
         }
+        // live.26 (#223): "6–10 of 56" once the games fill more than one page.
+        val gameLines = remember(lines) { lines.map { it is PanelGuideEntry.Game } }
         GuideFooter(
             legend = keysHint,
-            moreBelow = (lines.size - (start + GUIDE_VISIBLE_ROWS)).coerceAtLeast(0),
+            position = guidePosition(gameLines, start),
             scoreHold = scoreHold,
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -704,9 +706,12 @@ private fun GuideScoreTime(row: GuideRow, style: TextStyle, modifier: Modifier =
     )
 }
 
-/** The one footer line: the keys; the marks' legend while the keys hint shows; how many rows wait below. */
+/**
+ * The one footer line: the keys; the marks' legend while the keys hint shows; then, on the right, the scores' hold and
+ * the table's [position] ("6–10 of 56", live.26), the position last so it always sits at the line's end.
+ */
 @Composable
-private fun GuideFooter(legend: Boolean, moreBelow: Int, scoreHold: String? = null, modifier: Modifier = Modifier) {
+private fun GuideFooter(legend: Boolean, position: GuidePosition?, scoreHold: String? = null, modifier: Modifier = Modifier) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = stringResource(R.string.sports_live_guide_footer),
@@ -740,10 +745,10 @@ private fun GuideFooter(legend: Boolean, moreBelow: Int, scoreHold: String? = nu
                 modifier = Modifier.padding(start = 24.dp)
             )
         }
-        if (moreBelow > 0) {
+        if (position != null) {
             if (scoreHold != null) Spacer(modifier = Modifier.width(24.dp))
             Text(
-                text = stringResource(R.string.sports_live_guide_more_below, moreBelow),
+                text = stringResource(R.string.sports_live_guide_position, position.first, position.last, position.total),
                 style = SportsLiveTokens.style(GuideType.Footer),
                 color = Colors.TextMuted,
                 maxLines = 1,

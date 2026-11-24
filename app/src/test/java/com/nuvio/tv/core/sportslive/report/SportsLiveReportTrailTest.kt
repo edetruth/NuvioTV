@@ -29,4 +29,21 @@ class SportsLiveReportTrailTest {
         assertEquals("player", SportsLiveReportTrail.screen)
         assertEquals("Celtics vs 76ers", SportsLiveReportTrail.focused)
     }
+
+    // Report #23: saved from a row, the report said "Game: none" for the focused Arsenal vs West Ham.
+    @Test
+    fun `a report from the section list describes the focused game when none is playing`() {
+        assertEquals("focused", SportsLiveReportTrail.gameOf(null, "focused", "watched", "sports_live"))
+    }
+
+    @Test
+    fun `the game playing wins over the focused card`() {
+        assertEquals("playing", SportsLiveReportTrail.gameOf("playing", "focused", "watched", "sports_live"))
+    }
+
+    @Test
+    fun `a focus left on the list never describes another screen`() {
+        assertEquals("watched", SportsLiveReportTrail.gameOf(null, "focused", "watched", "home"))
+        assertEquals(null, SportsLiveReportTrail.gameOf<String>(null, "focused", null, null))
+    }
 }

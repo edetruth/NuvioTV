@@ -81,8 +81,14 @@ data class SportsLiveBoardInputs(
     val otherEvents: Set<String> = emptySet(),
     /** Live now's More live view is open: [items] are its games, each by its group key (the list's sections). */
     val moreLive: Map<String, String> = emptyMap(),
+    /** That view is All sports (My sports ▾): every live game, a view of its own apart from More live's. */
+    val moreLiveAll: Boolean = false,
     /** live.24: Upcoming's later dates not sorted yet: their day tabs show ahead of their games. Empty on other tabs. */
-    val pendingDates: List<LocalDate> = emptyList()
+    val pendingDates: List<LocalDate> = emptyList(),
+    /** Live now's list is settled (live.26, [SportsLiveSettledRows]): the board keeps the shown board's rows in place. */
+    val settled: Boolean = false,
+    /** Live now's layout epoch ([SportsLiveUiState.liveNowEpoch]): it settles only on a board of the same one. */
+    val settleEpoch: Int = 0
 )
 
 /**
@@ -114,13 +120,16 @@ internal fun sportsLiveBoardInputsOf(
         excitement = if (live) state.whyTags else emptyMap(),
         otherEvents = if (live && state.moreLiveOpen) state.moreLiveOther else emptySet(),
         moreLive = if (live && state.moreLiveOpen) state.moreLiveGroupOf else emptyMap(),
+        moreLiveAll = live && state.moreLiveAll,
         followed = followed,
         clockMs = state.nowMs / SPORTS_LIVE_BOARD_MINUTE_MS * SPORTS_LIVE_BOARD_MINUTE_MS,
         logoRevision = logoRevision,
         // Upcoming's big games (#137) read them.
         standings = if (tab == SportsLiveTab.UPCOMING) standings else emptyMap(),
         pendingDates = if (tab == SportsLiveTab.UPCOMING) state.upcomingPendingDates else emptyList(),
-        channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE
+        channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE,
+        settled = live && state.liveNowSettled && !state.moreLiveOpen,
+        settleEpoch = if (live) state.liveNowEpoch else 0
     )
 }
 
@@ -146,7 +155,11 @@ data class SportsLiveBoard(
     /** Channels (phase 2): its view, counts and countries; null on the other tabs. */
     val channels: SportsLiveChannelSummary? = null,
     /** Live now's More live view: [rows] are its games, by sport ([ScoreboardRow.section]). */
-    val moreLive: Boolean = false
+    val moreLive: Boolean = false,
+    /** That view is All sports' ([SportsLiveBoardInputs.moreLiveAll]). */
+    val moreLiveAll: Boolean = false,
+    /** Live now's layout epoch it was built in ([SportsLiveBoardInputs.settleEpoch]). */
+    val settleEpoch: Int = 0
 ) {
     /** True when this board shows [tab] with [filter]. */
     fun shows(tab: SportsLiveTab, filter: String?): Boolean = this.tab == tab && this.filter == filter
@@ -255,7 +268,9 @@ data class SportsLiveBoard(
             }
             return SportsLiveBoard(
                 tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda, channels = channelView?.summary,
-                moreLive = liveNow && inputs.moreLive.isNotEmpty()
+                moreLive = liveNow && inputs.moreLive.isNotEmpty(),
+                moreLiveAll = liveNow && inputs.moreLive.isNotEmpty() && inputs.moreLiveAll,
+                settleEpoch = inputs.settleEpoch
             )
         }
     }
@@ -442,10 +457,14 @@ internal class SportsLiveBoardCache(
         fun viewOf(inputs: SportsLiveBoardInputs): String = viewOf(
             inputs.tab,
             inputs.filter,
-            inputs.channelLists.browse?.kind?.name ?: MORE_LIVE_VIEW.takeIf { inputs.moreLive.isNotEmpty() || inputs.otherEvents.isNotEmpty() }
+            inputs.channelLists.browse?.kind?.name ?: (if (inputs.moreLiveAll) ALL_SPORTS_VIEW else MORE_LIVE_VIEW)
+                .takeIf { inputs.moreLive.isNotEmpty() || inputs.otherEvents.isNotEmpty() }
         )
 
         private const val MORE_LIVE_VIEW = "moreLive"
+
+        // All sports (My sports ▾) lists My sports' games too: never More live's board (gemini review #4).
+        private const val ALL_SPORTS_VIEW = "allSports"
 
         private fun viewOf(tab: SportsLiveTab, filter: String?, browse: String?): String = "${tab.name}|${filter.orEmpty()}|${browse.orEmpty()}"
     }

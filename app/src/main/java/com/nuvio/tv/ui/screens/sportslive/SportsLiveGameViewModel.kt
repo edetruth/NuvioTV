@@ -17,8 +17,11 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -32,9 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -135,7 +136,10 @@ data class SportsLiveGameUiState(
     val settled: Boolean = true
 ) {
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
-    val showsScore: Boolean get() = settled && !spoilerProtected && ((mode == ScoresMode.SHOW && !spoilerSafe) || revealed)
+    val showsScore: Boolean
+        get() = SpoilerPolicy.visibility(
+            mode.takeIf { settled }, revealed, SpoilerContext(SpoilerSurface.GAME, spoilerSafe = spoilerSafe, spoilerProtected = spoilerProtected)
+        ).showsScore
 
     /**
      * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), which is
@@ -292,18 +296,21 @@ class SportsLiveGameViewModel internal constructor(
         val event = request?.event
         if (event != null) {
             viewModelScope.launch {
-                combine(settings, revealRequested, visible) { settings, revealed, visible -> Triple(settings, revealed, visible) }
-                    .distinctUntilChanged()
-                    .collectLatest { (settings, revealed, isVisible) ->
-                        page.update { it.copy(mode = settings.mode, revealed = revealed) }
-                        if (settings.mode == ScoresMode.OFF && !revealed) {
+                revealGatedLoad(
+                    settings = settings,
+                    revealed = revealRequested,
+                    visible = visible,
+                    mode = { it.mode },
+                    context = SpoilerContext(SpoilerSurface.GAME, spoilerSafe = request?.spoilerSafe == true),
+                    onChange = { current, revealed, mayLoad ->
+                        page.update { it.copy(mode = current.mode, revealed = revealed) }
+                        if (!mayLoad) {
                             page.update { it.copy(status = GameLoadStatus.WAITING_REVEAL) }
-                            return@collectLatest
+                        } else if (page.value.status == GameLoadStatus.WAITING_REVEAL) {
+                            page.update { it.copy(status = GameLoadStatus.LOADING) }
                         }
-                        if (page.value.status == GameLoadStatus.WAITING_REVEAL) page.update { it.copy(status = GameLoadStatus.LOADING) }
-                        if (!isVisible) return@collectLatest
-                        refreshWhileVisible(event, settings.effectiveDelayMs, scoresOff = settings.mode == ScoresMode.OFF)
                     }
+                ) { current -> refreshWhileVisible(event, current.effectiveDelayMs, scoresOff = current.mode == ScoresMode.OFF) }
             }
         }
     }

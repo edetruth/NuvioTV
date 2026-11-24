@@ -43,6 +43,8 @@ internal fun rememberLiveNowCardArt(
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
     val listedWord = stringResource(R.string.sports_live_listed_live)
+    // The game playing in a player (live.26 TV): "▶ Watching", as Live Now's row says, never "No score yet".
+    val watchingWord = stringResource(R.string.sports_live_row_watching)
     val startsFormat = stringResource(R.string.sports_live_waiting_starts)
     // Live Now's tag words (RC TV finding): the same league tag as its row, else the sport word, never a catalog's name.
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -52,7 +54,7 @@ internal fun rememberLiveNowCardArt(
     // #207: the lookup changes with the cards only, never with a score. Every card on Home reads it, so a new one on
     // each score update redrew them all; each drawn card reads its own game's score instead, and only a card whose game
     // changed is drawn again.
-    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, startsFormat, sportWord) {
+    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, startsFormat, sportWord, watchingWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
@@ -68,14 +70,18 @@ internal fun rememberLiveNowCardArt(
                 val scheduled = remember(snapshot) { ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.PRE }
                 val kickoff = if (scheduled) art?.let { kickoffText(it) } else null
                 // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
-                val footer = remember(snapshot, confirmedUnmatched, kickoff) {
+                // live.26 TV (spoiler): keyed on the Scores setting too. A setting change rebuilds this lookup, but the new
+                // card is drawn in the old card's place, so a footer keyed on the score alone kept the old setting's
+                // (a score under Hide) until the score next changed.
+                val footer = remember(snapshot, confirmedUnmatched, kickoff, mode) {
                     // #215: listed live by its addon, not found by ESPN ([listedLiveOnly]).
                     val listed = item.isLive && !item.isChannel && SportsLiveHomeMeta.listedLiveOnly(mode, confirmedUnmatched, ScoreChips.matchedEvent(item, snapshot) != null)
                     SportsLiveHomeMeta.cardFooter(
                         ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed },
                         halves = com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves(snapshot?.league),
                         noScoreYet = noScoreYet,
-                        startsAt = kickoff?.let { String.format(startsFormat, it) }
+                        startsAt = kickoff?.let { String.format(startsFormat, it) },
+                        watching = watchingWord.takeIf { snapshot?.watched == true }
                     )
                 }
                 val tag = remember(snapshot) { liveNowItemTag(item, snapshot, sportWord).ifEmpty { null } }

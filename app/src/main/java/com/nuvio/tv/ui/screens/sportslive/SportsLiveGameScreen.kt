@@ -246,7 +246,7 @@ fun SportsLiveGameScreen(
         // A team with a page (#62): its header name and logo take focus, OK opens it (BUG12, Q9).
         fun teamOpener(side: ScoreSide): (() -> Unit)? = TeamPages.refOf(event, side)?.let { ref ->
             {
-                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                 onOpenTeam()
             }
         }
@@ -278,7 +278,15 @@ fun SportsLiveGameScreen(
                     GameAction.REMIND -> remindCard?.let { remindersViewModel.toggle(it) } ?: remindEvent?.let { remindersViewModel.toggle(it) }
                     GameAction.REPLAY -> state.replay?.let { replay ->
                         viewModel.onReplayStarted(replay)
-                        if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
+                        // As Results' and Replays' Watch replay: at once under ESPN's matchup, links named without the score.
+                        if (replay.apiType == "series") {
+                            onOpenDetail(replay)
+                        } else {
+                            playViewModel.playReplay(
+                                listOf(replay) + replay.alternates,
+                                context.getString(R.string.sports_live_results_menu_title, event.away.catchUpName, event.home.catchUpName)
+                            )
+                        }
                     }
                     GameAction.REVEAL -> {
                         revealPressed = true
@@ -329,7 +337,7 @@ fun SportsLiveGameScreen(
                     onOpenPlayerCard()
                 },
                 onOpenTeam = { ref ->
-                    SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                    SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                     onOpenTeam()
                 },
                 standingRanks = standingRanks
@@ -383,7 +391,7 @@ fun SportsLiveGameScreen(
                 TeamPages.refOf(event, side)?.let { ref ->
                     sideOf(side).name to {
                         menuOpen = false
-                        SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                        SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                         onOpenTeam()
                     }
                 }

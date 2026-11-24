@@ -324,16 +324,20 @@ object TeamPages {
  * shows until Reveal, as on the Game page.
  */
 object TeamPageSpoilers {
-    fun mayLoad(mode: ScoresMode, revealed: Boolean): Boolean = mode != ScoresMode.OFF || revealed
+    /** The page's rule ([SpoilerPolicy]); a [spoilerProtected] row hides its result. */
+    fun visibility(mode: ScoresMode, revealed: Boolean, spoilerProtected: Boolean = false, spoilerSafe: Boolean = false): SpoilerVisibility =
+        SpoilerPolicy.visibility(mode, revealed, SpoilerContext(SpoilerSurface.TEAM, spoilerSafe = spoilerSafe, spoilerProtected = spoilerProtected))
 
-    fun showsRecord(mode: ScoresMode, revealed: Boolean): Boolean = mode != ScoresMode.OFF || revealed
+    fun mayLoad(mode: ScoresMode, revealed: Boolean, spoilerSafe: Boolean = false): Boolean = visibility(mode, revealed, spoilerSafe = spoilerSafe).mayLoad
 
-    fun showsResults(mode: ScoresMode, revealed: Boolean): Boolean = mode == ScoresMode.SHOW || revealed
+    fun showsRecord(mode: ScoresMode, revealed: Boolean, spoilerSafe: Boolean = false): Boolean = visibility(mode, revealed, spoilerSafe = spoilerSafe).showsRecord
+
+    fun showsResults(mode: ScoresMode, revealed: Boolean, spoilerSafe: Boolean = false): Boolean = visibility(mode, revealed, spoilerSafe = spoilerSafe).showsScore
 
     /**
      * One of the last results (#134): as [showsResults], and under Hide until focused while its row has focus.
      * Never a [spoilerProtected] game's (#151), whatever the page's Reveal.
      */
-    fun showsResult(mode: ScoresMode, revealed: Boolean, focused: Boolean, spoilerProtected: Boolean = false): Boolean =
-        !spoilerProtected && (showsResults(mode, revealed) || (mode == ScoresMode.HIDE_UNTIL_FOCUSED && focused))
+    fun showsResult(mode: ScoresMode, revealed: Boolean, focused: Boolean, spoilerProtected: Boolean = false, spoilerSafe: Boolean = false): Boolean =
+        visibility(mode, revealed, spoilerProtected, spoilerSafe).showsRow(focused)
 }

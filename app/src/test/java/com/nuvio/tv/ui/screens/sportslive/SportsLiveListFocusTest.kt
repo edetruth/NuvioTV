@@ -5,8 +5,11 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SportsLiveListFocusTest {
@@ -100,5 +103,71 @@ class SportsLiveListFocusTest {
             addonId = "x", addonName = "x", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Live",
             kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = null
         )
+    }
+
+    /**
+     * The Scoreboard list as Compose builds it on the TV: its focus restorer remembers the row focus was on when the
+     * section was left (the row played from), and a request from outside the list lands on that row while it is listed;
+     * once the list holds focus, a request moves inside it.
+     */
+    private class RestoringList(private val remembered: String?, private val listed: List<String>) {
+        var focused: String? = null
+        var requests = 0
+
+        fun request(key: String) {
+            requests++
+            if (key !in listed) return
+            focused = if (focused == null && remembered != null && remembered in listed) remembered else key
+        }
+    }
+
+    private val board = listOf("hawks", "broncos", "chargers", "giants")
+
+    @Test
+    fun `back after a zap focuses the game playing though the list restores the row played from`() = runTest {
+        // Path A on the TV: Broncos played from its row, zapped down to Chargers (the mini player's game), then Back.
+        val target = checkNotNull(sportsLiveReturnTarget(board, board, focusedKey = "broncos", watchedKey = "chargers"))
+        assertEquals("chargers", target)
+        val list = RestoringList(remembered = "broncos", listed = board)
+        val done = sportsLiveFocusReturnRow(
+            target = target,
+            attempts = 10,
+            focusedKey = { list.focused },
+            request = { list.request(target) },
+            awaitFrame = {}
+        )
+        assertTrue(done)
+        assertEquals("chargers", list.focused)
+        // The first request was answered with the row played from: the list holding focus is not the return.
+        assertEquals(2, list.requests)
+    }
+
+    @Test
+    fun `back after zaps and the panel focuses the game playing on a rebuilt board without the row played from`() = runTest {
+        // Path B on the TV: Hawks played, zapped to Broncos, the live games panel opened and closed, then Back while
+        // the board was rebuilt without Hawks.
+        val rebuilt = listOf("bears", "cowboys", "broncos", "lions", "chargers")
+        val target = checkNotNull(sportsLiveReturnTarget(rebuilt, board, focusedKey = "hawks", watchedKey = "broncos"))
+        assertEquals("broncos", target)
+        val list = RestoringList(remembered = "hawks", listed = rebuilt)
+        assertTrue(
+            sportsLiveFocusReturnRow(target, 10, { list.focused }, { list.request(target) }, {})
+        )
+        assertEquals("broncos", list.focused)
+    }
+
+    @Test
+    fun `back with no zap focuses the row played from at the first request`() = runTest {
+        val list = RestoringList(remembered = "broncos", listed = board)
+        assertTrue(sportsLiveFocusReturnRow("broncos", 10, { list.focused }, { list.request("broncos") }, {}))
+        assertEquals(1, list.requests)
+    }
+
+    @Test
+    fun `a row that never takes focus is asked for at most the attempts given`() = runTest {
+        val list = RestoringList(remembered = null, listed = board)
+        assertFalse(sportsLiveFocusReturnRow("gone", 10, { list.focused }, { list.request("gone") }, {}))
+        assertEquals(10, list.requests)
+        assertNull(list.focused)
     }
 }

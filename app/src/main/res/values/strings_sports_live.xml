@@ -18,7 +18,8 @@
     <string name="sports_live_guide_footer">OK Watch  ·  ◂ ▸ Sport  ·  Back Close</string>
     <!-- TV report #14: every score is held back while a stream plays; %1$s is the hold, m:ss. -->
     <string name="sports_live_scores_held">Scores held %1$s to match your stream</string>
-    <string name="sports_live_guide_more_below">▼ %1$d more</string>
+    <!-- live.26 (#223): the table's position while its games fill more than one page: "6–10 of 56". -->
+    <string name="sports_live_guide_position">%1$d–%2$d of %3$d</string>
     <string name="sports_live_guide_legend_hold_ok">Hold OK More</string>
     <string name="sports_live_guide_legend_close">Close, late</string>
     <string name="sports_live_guide_legend_my_team">Your team</string>
@@ -130,6 +131,8 @@
         <item quantity="other">%d games live now →</item>
     </plurals>
     <string name="sports_live_results_score_hidden">Score hidden</string>
+    <!-- live.26 (#223): a hidden result of the last 36 h with a replay: the row's only words, OK plays the replay. -->
+    <string name="sports_live_results_watch_replay_row">▶ Watch replay</string>
     <!-- Score chip on game cards: clock · score, e.g. "Q3 4:12 · 88–80"; final "FT 3–1". -->
     <string name="sports_live_chip_score">%1$d–%2$d</string>
     <string name="sports_live_chip_live">%1$s · %2$s</string>
@@ -457,8 +460,14 @@
     <string name="sports_live_more_live_row">More live: %1$s ›</string>
     <!-- One sport's count in the More live row: "4 Racing". -->
     <string name="sports_live_more_live_count">%1$d %2$s</string>
+    <!-- live.26 (#223): Live now's My sports ▾ menu, one other sport and its live games (game counts, never scores): "Cricket · 7". -->
+    <string name="sports_live_all_sports_entry">%1$s · %2$d</string>
     <string name="sports_live_more_live_fights">Fights</string>
     <string name="sports_live_more_live_other">Other</string>
+    <!-- live.27: Live now's "A vs B" listings that are no game in progress (team channels, replays, season passes), at the end. -->
+    <string name="sports_live_more_live_other_streams">Other streams</string>
+    <!-- live.27: Live now's last row when Other streams is all it holds (nothing picked in My sports): "Other streams · 12 ›". -->
+    <string name="sports_live_other_streams_row">Other streams · %1$d ›</string>
     <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->
     <string name="sports_live_more_live_title">More live</string>
     <!-- After a More live game was played: the card at the top of Live now, and the toast after Add. -->
@@ -735,6 +744,8 @@
         <item quantity="other">%1$d sources didn\'t respond</item>
     </plurals>
     <string name="sports_live_dual_watch_with">Watch with another game</string>
+    <!-- live.26 item 4: Hold OK on a game, one press into dual screen with a followed team's live game ("Lakers", or "Lakers vs Celtics"). -->
+    <string name="sports_live_dual_watch_with_team">Watch with the %1$s game</string>
     <string name="sports_live_dual_pick">Pick another to watch</string>
     <string name="sports_live_preview_label">Preview</string>
     <string name="sports_live_mini_hint">%1$s · Play/Pause full screen</string>
@@ -756,6 +767,13 @@
     <string name="sports_live_stop">Stop</string>
     <string name="sports_live_dual_paired_hint">Paired with %1$s · Hold OK to change</string>
     <string name="sports_live_dual_no_pair">No other live game to watch with</string>
+    <!-- live.26 (#222): the picker's section headings, and OK on a game that ended while it was open. -->
+    <string name="sports_live_dual_picker_your_teams">Your teams</string>
+    <string name="sports_live_dual_picker_same_league">Same league</string>
+    <string name="sports_live_dual_picker_more_live">More live</string>
+    <string name="sports_live_dual_picker_ended">This game has ended</string>
+    <!-- live.26: two decoders failed, so dual screen leaves for the game that plays, full screen (one line). -->
+    <string name="sports_live_dual_fallback">This TV can\'t play two games at once · Full screen</string>
     <string name="sports_live_full_time">Full time</string>
     <string name="sports_live_full_time_score">Full time · %1$s</string>
     <string name="sports_live_full_time_actions">Stay for postgame · Next live game →</string>

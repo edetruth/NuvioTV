@@ -60,6 +60,29 @@ class SportsLiveExtraSourcesTest {
         assertTrue(sportsLiveKeepsWatchProgress(null))
     }
 
+    @Test
+    fun `a spoiler-safe replay's Sources panel and extras read with the score masked, until it plays as a game`() = runTest {
+        val scored = stream("A 2-1 B", "https://one.example/replay.m3u8", "one")
+        val groups = listOf(AddonStreams(addonName = "one", addonLogo = null, streams = listOf(scored)))
+        SportsLiveExtraSources.install { _, _ ->
+            SportsLiveExtraLookup(listOf(stream("B 0:3 A", "https://two.example/replay.m3u8", "two")), complete = true)
+        }
+        SportsLiveExtraSources.register("game", MERGED)
+        assertSame(groups, SportsLiveExtraSources.orderGroups("game", groups))
+
+        SportsLiveExtraSources.markSpoilerSafe("game", true)
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe("game"))
+        assertEquals("A – B", SportsLiveExtraSources.orderGroups("game", groups).single().streams.single().name)
+        SportsLiveExtraSources.extraStreamsFor("game")
+        assertEquals(listOf("B – A"), SportsLiveExtraSources.availableStreamsFor("game").map { it.name })
+        assertEquals(listOf("B – A"), SportsLiveExtraSources.cachedStreamsFor("game").map { it.name })
+
+        SportsLiveExtraSources.markSpoilerSafe("game", false)
+        assertFalse(SportsLiveExtraSources.isSpoilerSafe("game"))
+        assertSame(groups, SportsLiveExtraSources.orderGroups("game", groups))
+        assertEquals(listOf("B 0:3 A"), SportsLiveExtraSources.availableStreamsFor("game").map { it.name })
+    }
+
     // --- holder ---
 
     @Test

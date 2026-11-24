@@ -220,6 +220,22 @@ class SportsLiveSlimPanelTest {
         assertEquals(session.withLineup(rows), session.withFrozenLineup(rows))
     }
 
+    @Test
+    fun `a session started from the All sports view keeps its own games until a chip is picked`() {
+        // TV F4: the panel's list (My sports) replaced the view's games, so CH+ and CH- never reached the others.
+        val view = listOf(a, soccer1, f)
+        val session = SportsLiveZapSession.of(
+            view, a.streamKey, SportsLiveTab.LIVE_NOW, SportsLiveUiState.ALL_SPORTS_FILTER, returnToHomeOnBack = false
+        )!!
+        val myRows = lineupOf(listOf(a, f))
+        assertEquals(session, session.withFrozenLineup(myRows))
+        assertEquals(session, session.withLineup(myRows))
+        assertEquals("o1", session.step(true, emptySet())!!.current.id)
+        // Picking a chip in the panel takes the panel's list as before.
+        val picked = session.copy(panelChip = ZapPanelChip(null))
+        assertNotEquals(session, picked.withFrozenLineup(myRows))
+    }
+
     // ---- live.24 (user): channel up and down are predictable ----
 
     @Test

@@ -120,6 +120,12 @@ internal fun SportsLiveCardMenu(
     @StringRes watchWithText: Int = R.string.sports_live_dual_watch_with,
     /** [onWatchWith] before Choose stream (the in-player panel's "Watch both", which Hold OK on a row is for). */
     watchWithFirst: Boolean = false,
+    /**
+     * "Watch with the ‹team› game" (live.26 item 4): dual screen with a followed team's live game in one press, named
+     * by [watchWithTeamName] (a team or a match, never a score); null hides it. Only beside [onWatchWith].
+     */
+    onWatchWithTeam: (() -> Unit)? = null,
+    watchWithTeamName: String? = null,
     /** "Choose stream…": the card's streams to pick from; null hides it (live games and channels offer it). */
     onChooseStream: (() -> Unit)? = null,
     /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
@@ -174,6 +180,7 @@ internal fun SportsLiveCardMenu(
             chooseStream = onChooseStream != null,
             watchWith = onWatchWith != null,
             watchWithFirst = watchWithFirst,
+            watchWithTeam = onWatchWithTeam != null && watchWithTeamName != null,
             gameStats = onGameStats != null,
             follows = sides.size,
             teamReminders = teamReminders.size,
@@ -243,6 +250,13 @@ internal fun SportsLiveCardMenu(
                 }
                 SportsLiveMenuSlot.WATCH_WITH -> onWatchWith?.let {
                     SportsLiveMenuButton(text = stringResource(watchWithText), onClick = it, modifier = first())
+                }
+                SportsLiveMenuSlot.WATCH_WITH_TEAM -> onWatchWithTeam?.let {
+                    SportsLiveMenuButton(
+                        text = stringResource(R.string.sports_live_dual_watch_with_team, watchWithTeamName.orEmpty()),
+                        onClick = it,
+                        modifier = first()
+                    )
                 }
                 SportsLiveMenuSlot.GAME_STATS -> onGameStats?.let {
                     SportsLiveMenuButton(
@@ -326,7 +340,7 @@ private fun SportsLiveTeamReminderEntry(team: Pair<String, Boolean>, onClick: ()
 
 /** A top-level entry of the Hold OK / More… sheet (Hold OK menu trim), in [sportsLiveMenuSlots]' order. */
 internal enum class SportsLiveMenuSlot {
-    REPORT, FAVORITE, HIDE, POSTGAME, REMIND, CHOOSE_STREAM, WATCH_WITH, GAME_STATS, WATCH_LATER,
+    REPORT, FAVORITE, HIDE, POSTGAME, REMIND, CHOOSE_STREAM, WATCH_WITH_TEAM, WATCH_WITH, GAME_STATS, WATCH_LATER,
     REVEAL_DAY, FOLLOW, TEAM_REMINDER, TEAM_PAGE, TEAMS, SCORES_AHEAD, DETAILS
 }
 
@@ -341,6 +355,8 @@ internal data class SportsLiveMenuOffer(
     val chooseStream: Boolean = false,
     val watchWith: Boolean = false,
     val watchWithFirst: Boolean = false,
+    /** "Watch with the ‹team› game" (live.26 item 4): only with [watchWith], just before it. */
+    val watchWithTeam: Boolean = false,
     val gameStats: Boolean = false,
     val follows: Int = 0,
     val teamReminders: Int = 0,
@@ -360,7 +376,8 @@ internal data class SportsLiveMenuOffer(
  * (before Choose stream where [SportsLiveMenuOffer.watchWithFirst], the player's "Watch both") · Game stats ·
  * Watch later · Reveal all for this day (Results) · **Teams…** · Scores ahead · Details · Hide from Live Now · Report a problem (last, always on screen).
  * Teams… holds Follow ‹team›, Remind me for every ‹team› game and the team pages when there is more than one of them;
- * a lone one is listed as itself.
+ * a lone one is listed as itself. "Watch with the ‹team› game" (live.26 item 4) sits just before Watch with another
+ * game; where it would make an 8th entry, Details (the least used) leaves the top level so the sheet never scrolls.
  */
 internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMenuSlot> = buildList {
     if (offer.favorite) add(SportsLiveMenuSlot.FAVORITE)
@@ -369,6 +386,7 @@ internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMen
     if (offer.remind) add(SportsLiveMenuSlot.REMIND)
     if (offer.watchWith && offer.watchWithFirst) add(SportsLiveMenuSlot.WATCH_WITH)
     if (offer.chooseStream) add(SportsLiveMenuSlot.CHOOSE_STREAM)
+    if (offer.watchWith && offer.watchWithTeam) add(SportsLiveMenuSlot.WATCH_WITH_TEAM)
     if (offer.watchWith && !offer.watchWithFirst) add(SportsLiveMenuSlot.WATCH_WITH)
     if (offer.gameStats) add(SportsLiveMenuSlot.GAME_STATS)
     if (offer.watchLater) add(SportsLiveMenuSlot.WATCH_LATER)
@@ -384,7 +402,11 @@ internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMen
     if (offer.hide && !offer.hideFirst) add(SportsLiveMenuSlot.HIDE)
     // Report a problem last everywhere (user, live.25; NN/g and Android TV: most-used first, the rare one last, always shown).
     if (offer.report) add(SportsLiveMenuSlot.REPORT)
+    if (size > SPORTS_LIVE_MENU_MAX && SportsLiveMenuSlot.WATCH_WITH_TEAM in this) remove(SportsLiveMenuSlot.DETAILS)
 }
+
+/** The most top-level entries the sheet holds, so it never scrolls at 1080p (docs/design/hold-ok-menu-trim.md). */
+internal const val SPORTS_LIVE_MENU_MAX = 7
 
 /**
  * The sheet's frame (#134): a borderless full-window dialog with no dim, whose 360 dp panel sits over the stage

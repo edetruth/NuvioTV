@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.scores.ResultsNextGames
@@ -11,7 +12,10 @@ import com.nuvio.tv.core.sportslive.scores.ResultsRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -340,6 +344,7 @@ class SportsLiveResultsViewModel internal constructor(
         combine(otherAsked, other, selection) { asked, other, selected -> Triple(asked, other, selected.jump) }
     ) { (days, load, earlier, fresh), (mode, protection), revealed, listing, (asked, other, jump) ->
         val loaded = load as? ResultsLoad.Loaded
+        ShownGamesLog.noteEvents(ShownGamesLog.RESULTS, listing.items.mapNotNull { (it as? ResultListItem.Row)?.row?.event })
         SportsLiveResultsUiState(
             daysAgo = days,
             freshOpens = fresh,
@@ -871,16 +876,8 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
         const val REVEAL_AFTER_MS = 1_000L
 
         /** Show: always; Hide until focused: once revealed; Off: never. A [spoilerProtected] game (#151): never. */
-        fun showsScore(mode: ScoresMode, revealed: Set<String>, eventId: String, spoilerProtected: Boolean = false): Boolean = when {
-            spoilerProtected -> false
-            else -> byMode(mode, revealed, eventId)
-        }
-
-        private fun byMode(mode: ScoresMode, revealed: Set<String>, eventId: String): Boolean = when (mode) {
-            ScoresMode.SHOW -> true
-            ScoresMode.HIDE_UNTIL_FOCUSED -> eventId in revealed
-            ScoresMode.OFF -> false
-        }
+        fun showsScore(mode: ScoresMode, revealed: Set<String>, eventId: String, spoilerProtected: Boolean = false): Boolean =
+            SpoilerPolicy.visibility(mode, eventId in revealed, SpoilerContext(SpoilerSurface.RESULTS, spoilerProtected = spoilerProtected)).showsScore
     }
 }
 

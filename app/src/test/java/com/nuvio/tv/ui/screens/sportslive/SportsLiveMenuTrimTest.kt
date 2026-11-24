@@ -14,6 +14,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuSlot.TEAMS
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuSlot.TEAM_PAGE
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuSlot.WATCH_LATER
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuSlot.WATCH_WITH
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuSlot.WATCH_WITH_TEAM
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,18 +81,43 @@ class SportsLiveMenuTrimTest {
     fun `every section and player combination stays at 7 or fewer with Report on screen`() {
         val bools = listOf(false, true)
         for (watchWith in bools) for (choose in bools) for (stats in bools) for (later in bools) for (remind in bools)
-            for (hide in bools) for (sides in 0..2) {
+            for (hide in bools) for (sides in 0..2) for (team in bools) {
                 // The section: a game offers Remind me (upcoming) or Choose stream / Watch with (live), never both;
-                // Hide only for an item with no ESPN game and no team.
+                // Hide only for an item with no ESPN game and no team; Watch with ‹team› only beside Watch with.
                 if (remind && (choose || watchWith)) continue
                 if (hide && (stats || sides > 0 || later)) continue
+                if (team && !watchWith) continue
                 val offer = SportsLiveMenuOffer(
                     report = true, chooseStream = choose, watchWith = watchWith, gameStats = stats, remind = remind,
-                    follows = sides, teamReminders = sides, teamPages = sides, watchLater = later, details = true, hide = hide
+                    follows = sides, teamReminders = sides, teamPages = sides, watchLater = later, details = true, hide = hide,
+                    watchWithTeam = team
                 )
                 val slots = sportsLiveMenuSlots(offer)
                 assertTrue("$offer gives ${slots.size}", slots.size <= 7)
                 assertEquals(REPORT, slots.last())
+                if (team) assertTrue("$offer drops Watch with ‹team›", WATCH_WITH_TEAM in slots)
             }
+    }
+
+    @Test
+    fun `Watch with your team's game sits just before Watch with another game`() {
+        // live.26 item 4: the one-press pair beside the picker; a game with fewer entries keeps Details.
+        val unmatched = SportsLiveMenuOffer(report = true, chooseStream = true, watchWith = true, watchWithTeam = true, details = true)
+        assertEquals(listOf(CHOOSE_STREAM, WATCH_WITH_TEAM, WATCH_WITH, DETAILS, REPORT), sportsLiveMenuSlots(unmatched))
+    }
+
+    @Test
+    fun `on a full live matched game Details makes room for Watch with your team's game`() {
+        // 8 would scroll the sheet (hold-ok-menu-trim.md: at most 7): Details, the least used, leaves the top level.
+        assertEquals(
+            listOf(CHOOSE_STREAM, WATCH_WITH_TEAM, WATCH_WITH, GAME_STATS, WATCH_LATER, TEAMS, REPORT),
+            sportsLiveMenuSlots(liveMatched.copy(watchWithTeam = true))
+        )
+    }
+
+    @Test
+    fun `Watch with your team's game needs Watch with another game`() {
+        val noDual = SportsLiveMenuOffer(report = true, chooseStream = true, watchWithTeam = true, details = true)
+        assertEquals(listOf(CHOOSE_STREAM, DETAILS, REPORT), sportsLiveMenuSlots(noDual))
     }
 }

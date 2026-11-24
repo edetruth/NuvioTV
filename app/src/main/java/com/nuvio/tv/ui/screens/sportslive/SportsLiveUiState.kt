@@ -14,6 +14,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
+import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerOffers
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
 import java.time.LocalDate
@@ -79,8 +80,17 @@ data class SportsLiveUiState(
      * (H), by sport, largest first, Other last ([SportsLiveMoreLive]); empty with nothing picked, or on a chip.
      */
     val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
-    /** Its view is open: [visibleItems] are [moreLive]'s games, group by group. */
+    /**
+     * All sports (live.26 decision, the My sports ▾ menu): every live game by sport, My sports' own too, in the same
+     * groups; empty when [moreLive] is.
+     */
+    val allSports: List<SportsLiveMoreLive.Group> = emptyList(),
+    /** The groups the open view lists: [allSports] when opened from the menu, else [moreLive]; null: [moreLive]. */
+    val moreLiveViewGroups: List<SportsLiveMoreLive.Group>? = null,
+    /** Its view is open: [visibleItems] are [moreLiveViewGroups]' games, group by group. */
     val moreLiveOpen: Boolean = false,
+    /** That open view is All sports (My sports ▾), every live game; false: More live's, the games My sports leaves out. */
+    val moreLiveAll: Boolean = false,
     /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
     val moreLiveOther: Set<String> = emptySet(),
     /** "You watched ‹sport› · Add to My sports?": the sport its card at the top of Live now offers; null for none. */
@@ -89,11 +99,18 @@ data class SportsLiveUiState(
      * live.24: Upcoming's later dates whose games are not sorted yet ([SportsLiveUpcomingWindow]): their day tabs show,
      * and going to one sorts it ([SportsLiveViewModel.showUpcomingDay]).
      */
-    val upcomingPendingDates: List<LocalDate> = emptyList()
+    val upcomingPendingDates: List<LocalDate> = emptyList(),
+    /** live.26 settled screens: Live now was kept as shown this build, past its landing ([SportsLiveSettledRows.settles]). */
+    val liveNowSettled: Boolean = false,
+    /**
+     * Bumped by each Live now build laid out afresh ("N new", a follow, My sports, a fresh open): a settled board settles
+     * only on a board of the same epoch, so a thaw is never undone by a later build (gemini review #7).
+     */
+    val liveNowEpoch: Int = 0
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {
-        moreLive.flatMap { group -> group.items.map { it.streamKey to group.key } }.toMap()
+        (moreLiveViewGroups ?: moreLive).flatMap { group -> group.items.map { it.streamKey to group.key } }.toMap()
     }
 
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
@@ -166,18 +183,26 @@ internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: S
 /**
  * "Watch with another game" on [item] from the More… menu ([scores]: the delayed snapshots by card key):
  * always the picker (F13), for a game as for a channel, so the viewer sees what goes beside it; null when
- * nothing may.
+ * no other live game may (live.26, #222: the entry is then not offered). On Channels the picker offers Live now's
+ * games first, then the channels (only the favourite and recent ones show, [dualPickerList]).
  */
 internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveDualPick? {
+    val pool = if (selectedTab == SportsLiveTab.CHANNELS) {
+        // Each card once (the picker's rows are keyed by card key).
+        (tabs[SportsLiveTab.LIVE_NOW].orEmpty().filter { !it.isChannel } + visibleItems).distinctBy { it.streamKey }
+    } else {
+        visibleItems
+    }
     val pick = SportsLiveDualPick(
         chosen = item,
         items = visibleItems,
         filter = selectedFilter,
         tab = selectedTab,
         endedKeys = finishedKeys(scores),
-        zapItems = zapItems
+        zapItems = zapItems,
+        pool = pool
     )
-    return pick.takeIf { it.candidates.isNotEmpty() }
+    return pick.takeIf { dualPickerOffers(it.candidates) }
 }
 
 /**
@@ -220,3 +245,9 @@ internal fun SportsLiveUiState.finishedKeys(scores: Map<String, ScoreSnapshot>):
  */
 internal fun sportsLiveSameScreen(old: SportsLiveUiState, new: SportsLiveUiState): Boolean =
     old.nowMs == new.nowMs && old == new.copy(selectedItemId = old.selectedItemId)
+
+/**
+ * The screen draws a list (and so a board) for [state] (live.26 TV, settled screens): not the placeholder or a loading
+ * state, which show the loading rows, nor one before the claimed catalogs are known.
+ */
+internal fun sportsLiveListsBoard(state: SportsLiveUiState): Boolean = !state.isLoading && state.hasClaimedCatalogs

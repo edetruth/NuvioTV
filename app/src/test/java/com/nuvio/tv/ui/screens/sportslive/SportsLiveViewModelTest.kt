@@ -428,6 +428,27 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `no board is published before the first list, so a cold open never reads Nothing live`() = runTest {
+        // live.26 TV: a Live now board built from the placeholder or loading state (no rows) was still the board shown
+        // when the first list's state landed, and the screen read its zero rows as "Nothing live right now" for 1-2 s.
+        nextLoad = load(listOf(item("live", isLive = true, sport = "Soccer", name = "A vs B")))
+        val gate = CompletableDeferred<Unit>()
+        loadGate = gate
+        val viewModel = SportsLiveViewModel(repo, computeDispatcher = StandardTestDispatcher(testScheduler, name = "compute"))
+        viewModel.nowMs = { NOW }
+        val boards = mutableListOf<SportsLiveBoard>()
+        backgroundScope.launch { viewModel.board.collect { board -> board?.let(boards::add) } }
+        advanceUntilIdle()
+        assertTrue("loading", viewModel.uiState.value.isLoading)
+        assertNull("no board while the first load runs", viewModel.board.value)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("live"), viewModel.board.value!!.items.map { it.id })
+        assertTrue("never an empty Live now board", boards.none { it.tab == SportsLiveTab.LIVE_NOW && it.items.isEmpty() })
+    }
+
+    @Test
     fun `boards are built on the compute dispatcher, and a focus move builds none`() = runTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer", name = "A"), item("b", isLive = true, sport = "Soccer", name = "B")))
         val boardDispatcher = StandardTestDispatcher(testScheduler, name = "compute")
@@ -864,6 +885,100 @@ class SportsLiveViewModelTest {
         runCurrent()
         assertEquals(listOf("o"), viewModel.uiState.value.visibleItems.map { it.id })
         assertEquals("o", viewModel.uiState.value.selectedItemId)
+    }
+
+    // Report #25 (live.25 on the TV, 20:18): Upcoming's Today still listed games of 14:00-15:25, long final, with Watch.
+    // Upcoming is sorted at a load, a directory change or a tip-off of a game whose start alone says it is on; a game its
+    // addon marks itself schedules no tip-off, so time passing alone never took it off.
+    private fun TestScope.clockedViewModel(inputs: Flow<EndedInputs>, ticks: Flow<Unit>, now: () -> Long): SportsLiveViewModel {
+        val viewModel = SportsLiveViewModel(
+            repo, endedInputs = inputs, endedGames = SportsLiveEndedGames(), clock = ticks, computeDispatcher = compute
+        )
+        viewModel.nowMs = now
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        return viewModel
+    }
+
+    private fun SportsLiveViewModel.upcomingIds(): List<String> =
+        uiState.value.tabs[SportsLiveTab.UPCOMING].orEmpty().map { it.id }
+
+    @Test
+    fun `Upcoming built at 13h00 lists no game that started by 20h18 with no load in between (report 25)`() = runTest {
+        var now = NOW
+        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+        // Its addon's own mark says whether it is on (no tip-off by the clock); the evening game and a Time TBA one stay.
+        nextLoad = load(
+            listOf(
+                item("getafe", isLive = false, sport = "Soccer", name = "Getafe vs Atletico Madrid", startMs = NOW + HOUR),
+                item("hawks", isLive = false, sport = "Basketball", name = "Atlanta Hawks vs Detroit Pistons", startMs = NOW + 90 * MINUTE),
+                item("evening", isLive = false, sport = "Football", name = "Evening vs Game", startMs = NOW + 8 * HOUR),
+                item("tba", isLive = false, sport = "Football", name = "Night vs Owls")
+            )
+        )
+        val viewModel = clockedViewModel(flowOf(EndedInputs()), ticks) { now }
+        advanceUntilIdle()
+        assertEquals(setOf("getafe", "hawks", "evening", "tba"), viewModel.upcomingIds().toSet())
+        val loadsBefore = kindsAsked.size
+
+        now = NOW + 7 * HOUR + 18 * MINUTE
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(setOf("evening", "tba"), viewModel.upcomingIds().toSet())
+        assertEquals(loadsBefore, kindsAsked.size)
+    }
+
+    @Test
+    fun `a game ESPN calls final leaves Upcoming at once, even with focus on it (report 25)`() = runTest {
+        // Listed with no time of its own: Upcoming keeps it as Time TBA and the Agenda places it at ESPN's time.
+        val game = item("p", isLive = false, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers")
+        val other = item("o", isLive = false, sport = "Soccer", name = "O", startMs = NOW + 3 * HOUR)
+        nextLoad = load(listOf(game, other))
+        val inputs = MutableStateFlow(EndedInputs(canEstimate = { false }))
+        val viewModel = clockedViewModel(inputs, flowOf(Unit)) { NOW }
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        viewModel.selectItem("p")
+        runCurrent()
+        assertEquals(setOf("p", "o"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+
+        val pacers = nbaGames.first { it.eventId == "401909985" }
+        val over = pacers.copy(
+            state = ScoreState.POST, isFinal = true, clockText = "Final", startMs = NOW - 5 * HOUR, timeValid = true,
+            home = pacers.home.copy(score = 110), away = pacers.away.copy(score = 100)
+        )
+        inputs.value = EndedInputs(mapOf(game.streamKey to over), canEstimate = { false })
+        runCurrent()
+        assertEquals(listOf("o"), viewModel.upcomingIds())
+        assertEquals(listOf("o"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `a game that starts with focus on it stays on Upcoming until focus moves on (report 25)`() = runTest {
+        // Settled screens (live.26): no row jumps under focus; the started game goes on the next build after focus moves.
+        var now = NOW
+        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+        nextLoad = load(
+            listOf(
+                item("soon", isLive = false, sport = "Soccer", name = "Soon vs Game", startMs = NOW + 10 * MINUTE),
+                item("later", isLive = false, sport = "Soccer", name = "Later vs Game", startMs = NOW + 3 * HOUR)
+            )
+        )
+        val viewModel = clockedViewModel(flowOf(EndedInputs()), ticks) { now }
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        viewModel.selectItem("soon")
+        runCurrent()
+
+        now = NOW + 20 * MINUTE
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(listOf("soon", "later"), viewModel.upcomingIds())
+        assertEquals("soon", viewModel.uiState.value.selectedItemId)
+
+        viewModel.selectItem("later")
+        runCurrent()
+        assertEquals(listOf("later"), viewModel.upcomingIds())
+        assertEquals("later", viewModel.uiState.value.selectedItemId)
     }
 
     @Test
@@ -1697,6 +1812,43 @@ class SportsLiveViewModelTest {
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
 
     @Test
+    fun `a game played from the All sports view zaps through every game that view lists`() = runTest {
+        val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
+        val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
+        nextLoad = load(listOf(nba, cricket))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        try {
+            viewModel.openAllSports()
+            runCurrent()
+            val shown = viewModel.uiState.value.visibleItems.map { it.streamKey }
+            assertEquals(setOf("nba", "cri"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+            // Gemini final review #9: a My sports game and a game outside it both zap through the view's whole list.
+            viewModel.startZapSession(nba)
+            assertEquals(shown, SportsLiveZapSessions.current()!!.items.map { it.streamKey })
+            // Marked so the player's My sports panel list never replaces the view's games (TV F4).
+            assertEquals(SportsLiveUiState.ALL_SPORTS_FILTER, SportsLiveZapSessions.current()!!.filter)
+            viewModel.startZapSession(cricket)
+            assertEquals(shown, SportsLiveZapSessions.current()!!.items.map { it.streamKey })
+            // More live's own view still zaps among its games only.
+            viewModel.closeMoreLive()
+            runCurrent()
+            viewModel.openMoreLive()
+            runCurrent()
+            viewModel.startZapSession(cricket)
+            assertEquals(listOf("cri"), SportsLiveZapSessions.current()!!.items.map { it.id })
+        } finally {
+            SportsLiveZapSessions.clear()
+        }
+    }
+
+    @Test
     fun `My sports scopes Live now and Upcoming, keeps followed games, and More live holds the rest`() = runTest {
         val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
         val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
@@ -1740,6 +1892,53 @@ class SportsLiveViewModelTest {
         assertTrue(viewModel.uiState.value.moreLiveOpen)
         viewModel.closeMoreLive()
         runCurrent()
+        assertEquals(setOf("nba", "fc"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+
+        // All sports (the menu's entry, live.26 decision): EVERY live game, My sports' own included, counts matching.
+        viewModel.openAllSports()
+        runCurrent()
+        val all = viewModel.uiState.value
+        assertTrue(all.moreLiveOpen)
+        assertEquals(setOf("nba", "fc", "cri", "unk"), all.visibleItems.map { it.id }.toSet())
+        assertEquals(4, all.allSports.sumOf { it.items.size })
+        assertEquals(all.visibleItems.size, all.moreLiveGroupOf.size)
+        // The row's own groups stay the games My sports leaves out.
+        assertEquals(listOf("CRICKET" to 1, SportsLiveMoreLive.OTHER to 1), SportsLiveMoreLive.summary(all.moreLive))
+        viewModel.closeMoreLive()
+        runCurrent()
+        viewModel.openMoreLive()
+        runCurrent()
+        assertEquals(listOf("cri", "unk"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertFalse(viewModel.uiState.value.moreLiveAll)
+        viewModel.closeMoreLive()
+        runCurrent()
+
+        // Gemini review #4: My teams or My sports picked in My sports ▾ leaves All sports (and More live).
+        viewModel.openAllSports()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.moreLiveAll)
+        viewModel.selectFilter(SportsLiveUiState.MY_TEAMS_FILTER)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.moreLiveOpen)
+        assertFalse(viewModel.uiState.value.moreLiveAll)
+        viewModel.selectFilter(null)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.moreLiveOpen)
+        assertEquals(setOf("nba", "fc"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        // All sports opened from ★ My teams lists every live game, not only the followed ones.
+        viewModel.selectFilter(SportsLiveUiState.MY_TEAMS_FILTER)
+        runCurrent()
+        // Gemini final review #5: My sports ▾ still offers All sports and its sports under ★ My teams; the row at the
+        // list's end (More live) stays off while a filter is picked.
+        assertEquals(4, viewModel.uiState.value.allSports.sumOf { it.items.size })
+        assertTrue(viewModel.uiState.value.moreLive.isEmpty())
+        viewModel.openAllSports()
+        runCurrent()
+        assertEquals(null, viewModel.uiState.value.selectedFilter)
+        assertEquals(setOf("nba", "fc", "cri", "unk"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        viewModel.selectFilter(null)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.moreLiveOpen)
         assertEquals(setOf("nba", "fc"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
 
         viewModel.selectTab(SportsLiveTab.UPCOMING)

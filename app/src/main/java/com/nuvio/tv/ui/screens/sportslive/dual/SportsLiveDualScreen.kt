@@ -163,6 +163,8 @@ fun SportsLiveDualScreen(
     val keysHint by viewModel.keysHint.collectAsStateWithLifecycle()
     val pairHint by viewModel.pairHint.collectAsStateWithLifecycle()
     val pairPicker by viewModel.pairPicker.collectAsStateWithLifecycle()
+    // Read while the screen shows, so the picker's Channels are known as it opens (live.26).
+    val channelPicks by viewModel.channelPicksNow.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -181,12 +183,12 @@ fun SportsLiveDualScreen(
     }
 
     // Full screen for [item] (#39): its pane, playing with sound, plays on (held) until the full player's first
-    // frame; the other pane stops. Otherwise both stop, as before.
+    // frame; the other pane stops. Otherwise both stop, as before (also when this TV ran out of decoders).
     fun handOverPlayers(item: SportsLiveItem) {
         val current = players ?: return
         val state = viewModel.state.value
         val side = state?.sideOf(item)
-        val audible = state != null && side != null && side == state.audibleSide && state.pane(side).status == PaneStatus.Playing
+        val audible = state != null && side != null && state.keepsPlayerOnHandOver(side)
         // The kept pane's frame is copied before its view lets the player go (live.23 TV test): it shows full screen
         // at once, never the panes; it is kept only once that player is held.
         if (audible && side != null) current.player(side)?.let { SportsLiveFullScreenHold.captureStill(it, views[side]?.videoSurfaceView) }
@@ -326,6 +328,20 @@ fun SportsLiveDualScreen(
         }
     }
     BackHandler { handleBack() }
+
+    // Two decoders failed (live.26 item 3): the game that plays goes on alone, full screen, with one line saying why;
+    // Back from it never returns to dual screen (as Close this side).
+    val fallback = dualDecoderFallback(dual)
+    LaunchedEffect(fallback?.item?.streamKey) {
+        val pane = fallback ?: return@LaunchedEffect
+        val stream = pane.okStream ?: return@LaunchedEffect
+        if (backPlayed) return@LaunchedEffect
+        backPlayed = true
+        viewModel.closePairPicker()
+        menuOpen = false
+        SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_dual_fallback))
+        playViewModel.playResolved(pane.item, stream)
+    }
 
     // The highlighted pane's starting card (#138): Up/Down move through its buttons, OK presses one.
     val highlightedPane = dual.pane(dual.highlighted)
@@ -606,7 +622,8 @@ fun SportsLiveDualScreen(
 
     if (menuOpen) {
         DualMenu(
-            entries = dualMenuEntries(dual),
+            // Change the other game only while another live game can go beside the two (live.26).
+            entries = dualMenuEntries(dual, canChange = remember { viewModel.offersPairPicker() }),
             onPick = { entry ->
                 menuOpen = false
                 val report = heldReport
@@ -631,10 +648,14 @@ fun SportsLiveDualScreen(
         val nowMs = rememberSportsLiveClockMs().value
         SportsLiveDualPickerDialog(
             candidates = candidates,
-            rows = remember(candidates, scores, scoresMode, revealed, nowMs) { dualPickerRows(candidates, scores, scoresMode, revealed, nowMs) },
+            // Each row as Live now draws it, under the one spoiler gate (live.26, #222).
+            boards = rememberDualPickerBoards(candidates, scores, scoresMode, revealed, nowMs, channelPicks),
             onPick = viewModel::pickPair,
             onDismiss = viewModel::closePairPicker,
-            onFocus = scoresViewModel::onCardFocus
+            onFocus = scoresViewModel::onCardFocus,
+            anchor = remember(candidates) { viewModel.pairPickerAnchor() },
+            scores = scores,
+            channelPicks = channelPicks
         )
     }
 }

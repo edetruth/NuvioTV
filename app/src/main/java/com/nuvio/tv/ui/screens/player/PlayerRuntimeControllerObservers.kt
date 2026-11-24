@@ -354,6 +354,7 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
 
                 state.copy(
                     subtitleStyle = settings.subtitleStyle,
+                    assSubtitleStyle = settings.assSubtitleStyle,
                     loadingOverlayEnabled = settings.loadingOverlayEnabled,
                     showPlayerLoadingStatus = settings.showPlayerLoadingStatus,
                     playbackIssueReportsEnabled = settings.playbackIssueReportsEnabled,
@@ -974,6 +975,8 @@ internal fun PlayerRuntimeController.handleVc1PlaybackFailure(errorMessage: Stri
     val displayMessage = errorMessage?.takeIf { it.isNotBlank() }
         ?: _exoPlayer?.playerError?.toDisplayMessage(context)
         ?: return
+    if (returnToFeatureAfterExtraFailure(displayMessage)) return
+    if (tryNextStream(displayMessage)) return
     cancelFirstFrameWatchdog()
     cancelStallWatchdog()
     cancelStableProgressReset()

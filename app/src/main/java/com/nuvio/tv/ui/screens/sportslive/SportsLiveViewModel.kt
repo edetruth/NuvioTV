@@ -26,6 +26,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveLineup
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
+import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -35,6 +36,7 @@ import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
@@ -42,6 +44,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.SportsLiveInferredSport
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.debug.ShownGamesLog
 import com.nuvio.tv.core.sportslive.SportsLiveListCache
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshots
@@ -90,7 +93,10 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -314,8 +320,12 @@ class SportsLiveViewModel internal constructor(
         val thaw: Int = 0,
         /** Live now's "More live" view is open (user 2026-11-21): the games My sports leaves out, by sport. */
         val moreLiveOpen: Boolean = false,
+        /** That view lists every live game, My sports' own too (the menu's All sports), not only the ones it leaves out. */
+        val moreLiveAll: Boolean = false,
         /** J1: [SportsLiveCalmOpen.HOLD_MS] has passed since opening: Live now may show the saved list of an earlier visit. */
         val holdOver: Boolean = false,
+        /** live.26: [SportsLiveCalmOpen.READY_MS] has passed since opening: a recent saved list may show. */
+        val readyOver: Boolean = false,
         /** O (live.25): back after a long absence, at most [SportsLiveCalmOpen.HOLD_MS] ago: Live now may still wait. */
         val freshHold: Boolean = false,
         /** The sport of a More live game just played, to offer adding to My sports ([SportsLiveAddSportPrompt]). */
@@ -378,8 +388,20 @@ class SportsLiveViewModel internal constructor(
     // Live now as last built, so the focused card is kept when a load drops it (#145).
     private var shownLiveNow: List<SportsLiveItem> = emptyList()
 
+    // Upcoming as last built, and its started row kept only while it has focus (report #25, [sportsLiveUpcomingShown]).
+    private var shownUpcoming: List<SportsLiveItem> = emptyList()
+    @Volatile
+    private var upcomingHeldId: String? = null
+
     // The last "N new" press applied ([Selection.thaw]).
     private var thawApplied = 0
+
+    // Live now's layout epoch ([SportsLiveUiState.liveNowEpoch]): bumped by each build laid out afresh.
+    private var liveNowEpoch = 0
+
+    // [SportsLiveCalmOpen.HOLD_MS] has passed since opening ([Selection.holdOver] is set only while Live now still waits).
+    @Volatile
+    private var holdPassed = false
 
     // The profile's answers to "Add ‹sport› to My sports?", as last read.
     @Volatile
@@ -392,6 +414,14 @@ class SportsLiveViewModel internal constructor(
     // J1: Live now has been shown this visit of the screen (reset when the screen is left): it stays calm, also across tabs.
     @Volatile
     private var liveNowShown = false
+
+    // live.26 settled screens: when Live now was first shown this visit (null: not yet); its board settles READY_MS later.
+    @Volatile
+    private var liveNowShownAtMs: Long? = null
+
+    // live.26 settled screens: the board last published; a new Live now board settles only on the view shown.
+    @Volatile
+    private var lastShownBoard: SportsLiveBoard? = null
 
     // O (live.25): when the section stopped being watched (hidden, or ambient up); null while watched.
     private var unwatchedSinceMs: Long? = null
@@ -447,10 +477,15 @@ class SportsLiveViewModel internal constructor(
     // A team list landing or a team identified (live.18) buckets the same load again, so copies that resolve to
     // the same teams fold without waiting for the next catalog refresh; Live now's focused card stays put
     // ([sportsLiveKeepFocused]).
-    @OptIn(FlowPreview::class)
     // RC regression (#143): bucketing the whole load (4-6 s on the onn) ran every few seconds while team lists and
     // identities kept landing; now at most once per rebucketGapMs after the first.
-    private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).firstThenCoalesce(rebucketGapMs).onStart { emit(Unit) }
+    // live.26: Upcoming opened while its sorting is stale ([SortInputs.upcomingStale]) sorts again at once, outside the
+    // debounce and the gap.
+    private val upcomingResorts = MutableStateFlow(0)
+    @OptIn(FlowPreview::class)
+    private val rebucket: Flow<Unit> =
+        merge(directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).firstThenCoalesce(rebucketGapMs), upcomingResorts.drop(1).map { })
+            .onStart { emit(Unit) }
 
     // live.24: Upcoming's days and sports asked for so far this visit ([showUpcomingDay], All sports).
     private val upcomingAsk = MutableStateFlow(UpcomingAsk(days = upcomingWindowDays ?: SportsLiveUpcomingWindow.NEAR_DAYS))
@@ -489,10 +524,44 @@ class SportsLiveViewModel internal constructor(
         val addonOrder: List<String>,
         val stamp: Long,
         val upcoming: UpcomingInputs?,
-        val atMs: Long
-    )
+        val atMs: Long,
+        /** live.26: Upcoming's windowed sorting as listed, the directory stamp and time it was sorted at (null: none). */
+        val upcomingBucket: SportsLiveUpcomingBucket? = null,
+        val upcomingStamp: Long = stamp,
+        val upcomingAtMs: Long = atMs
+    ) {
+        /** Upcoming was kept from a sorting under an older directory ([keptUpcoming]): it is sorted again once shown. */
+        val upcomingStale: Boolean get() = upcomingBucket != null && upcomingStamp != stamp
+    }
 
+    @Volatile
     private var lastSortInputs: SortInputs? = null
+
+    private fun resortUpcomingIfStale() {
+        if (selectionState.value.tab == SportsLiveTab.UPCOMING && lastSortInputs?.upcomingStale == true) upcomingResorts.update { it + 1 }
+    }
+
+    /**
+     * live.26: Upcoming's last sorting, kept when only the team directory moved since it, while Upcoming is not the tab
+     * shown. On the TV each directory change (team lists and score matches landing after the open's score prefetch)
+     * sorted Upcoming again in full (3-7 s, 3 times per open, competing with the first sport inference), for a tab
+     * nobody was looking at. Kept only for the same load, catalogs, order and Upcoming ask, while no game changed tab by
+     * the clock since it was sorted and the sorting is under [SportsLiveSharedBuckets.MAX_AGE_MS] old. A directory change
+     * only folds copies or tells a team: its rows stay right meanwhile, and opening Upcoming sorts it again.
+     */
+    private fun keptUpcoming(
+        latest: SportsLiveLoad,
+        claimedKeys: Set<String>,
+        addonOrder: List<String>,
+        upcoming: UpcomingInputs?,
+        items: List<SportsLiveItem>,
+        now: Long
+    ): SortInputs? = lastSortInputs?.takeIf { last ->
+        upcoming != null && last.upcomingBucket != null && selectionState.value.tab != SportsLiveTab.UPCOMING &&
+            last.load === latest && last.claimedKeys == claimedKeys && last.addonOrder == addonOrder && last.upcoming == upcoming &&
+            now - last.upcomingAtMs in 0 until SportsLiveSharedBuckets.MAX_AGE_MS &&
+            !SportsLiveItemBucketer.clockChangedBetween(items, last.upcomingAtMs, now)
+    }
 
     /** Runs between the cold open's Live now and the other tabs' sorting; tests hold it to see Live now first. */
     @VisibleForTesting
@@ -520,10 +589,12 @@ class SportsLiveViewModel internal constructor(
         // live.25 (#221): a signal with nothing new for the last sorting sorts nothing again: Upcoming was sorted 3 times in
         // one open on the TV (3-7 s each), one of them for a directory change the sorting before had already read (its
         // debounced signal landed after it). Same load, catalogs, order, directory, Upcoming ask, and no game changed tab.
+        // live.26: not while Upcoming, kept from an older directory ([keptUpcoming]), is the tab shown.
         lastSortInputs?.let { last ->
             if (last.load === latest && last.stamp == stamp && last.claimedKeys == claimedKeys && last.addonOrder == addonOrder &&
                 last.upcoming == upcoming && now - last.atMs in 0 until SportsLiveSharedBuckets.MAX_AGE_MS &&
-                !SportsLiveItemBucketer.clockChangedBetween(items, last.atMs, now)
+                !SportsLiveItemBucketer.clockChangedBetween(items, last.atMs, now) &&
+                !(last.upcomingStale && selectionState.value.tab == SportsLiveTab.UPCOMING)
             ) {
                 SportsLiveDebugTiming.log { "sportsOpen stage=bucketSkipped t=${sinceOpenMs()}" }
                 return@combineTransform
@@ -537,6 +608,7 @@ class SportsLiveViewModel internal constructor(
                 !SportsLiveItemBucketer.clockChangedBetween(items, it.builtAtMs, now)
         }
         var upcomingBucket: SportsLiveUpcomingBucket? = null
+        val kept = if (sharedBuckets != null) keptUpcoming(latest, claimedKeys, addonOrder, upcoming, items, now) else null
         val tabs = if (reused != null) {
             SportsLiveDebugTiming.log { "sportsOpen stage=bucketReused t=${sinceOpenMs()}" }
             reused.tabs
@@ -567,7 +639,9 @@ class SportsLiveViewModel internal constructor(
                     mySports = upcoming.mySports.takeUnless { upcoming.ask.allSports },
                     followed = upcoming.followed
                 )
-                val windowed = sharedBuckets.upcoming(latest, claimedKeys, addonOrder, now, window, stamp)
+                val windowed = kept?.upcomingBucket?.also {
+                    SportsLiveDebugTiming.log { "sportsOpen stage=upcomingKept t=${sinceOpenMs()} rows=${it.rows.size}" }
+                } ?: sharedBuckets.upcoming(latest, claimedKeys, addonOrder, now, window, stamp)
                 upcomingBucket = windowed
                 SportsLiveTab.entries.associateWith { tab ->
                     if (tab == SportsLiveTab.UPCOMING) windowed.rows else sharedBuckets.tab(latest, claimedKeys, addonOrder, tab, now, stamp)
@@ -596,7 +670,12 @@ class SportsLiveViewModel internal constructor(
             upcomingPending = upcomingBucket?.pendingDates.orEmpty(), upcomingWaiting = upcomingBucket?.waitingBySport ?: 0
         )
         lastSorted = done
-        lastSortInputs = SortInputs(latest, claimedKeys, addonOrder, stamp, upcoming, now)
+        lastSortInputs = SortInputs(
+            latest, claimedKeys, addonOrder, stamp, upcoming, now, upcomingBucket,
+            upcomingStamp = kept?.upcomingStamp ?: stamp, upcomingAtMs = kept?.upcomingAtMs ?: now
+        )
+        // Upcoming opened while this kept it (the selection read above was Live now's).
+        resortUpcomingIfStale()
         emit(done)
     }.flowOn(computeDispatcher)
 
@@ -731,6 +810,7 @@ class SportsLiveViewModel internal constructor(
                     }
                 }.also { state ->
                     stateBuilds++
+                    ShownGamesLog.noteTab(state.selectedTab, state.visibleItems, boardScores.value.let { b -> b.scores.takeUnless { b.mode == null || b.mode == ScoresMode.OFF } }, state.justEnded.keys)
                     lastBuild = StateBuild(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick, lastBuiltLiveNow, lastBuiltLiveCount, state)
                 }
         }
@@ -772,6 +852,10 @@ class SportsLiveViewModel internal constructor(
     // a favorite added or removed never moves a row under focus; the ★ follows the picks at once.
     private val channelOrderTakes = MutableStateFlow(0)
     private val storedChannelPicks: Flow<SportsLiveChannelPicks> = channelPicks.catch { emit(SportsLiveChannelPicks.NONE) }
+
+    /** The profile's channel picks now: the dual picker's Channels are its favourites and recent ones only (live.26, #222). */
+    val channelPicksNow: StateFlow<SportsLiveChannelPicks> =
+        storedChannelPicks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveChannelPicks.NONE)
     private val channelBrowseState = MutableStateFlow<SportsLiveChannelBrowse?>(null)
 
     /** Channels' browse view (phase 2): null while the tab shows its own sections. */
@@ -862,7 +946,10 @@ class SportsLiveViewModel internal constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val board: StateFlow<SportsLiveBoard?> =
         combine(
-            uiState,
+            // live.26 TV (settled screens): only a state the screen draws a list for. A board built from the placeholder
+            // or a loading state (no rows yet) was still the board shown when the first list's state landed, and the
+            // screen read its zero rows as "Nothing live right now" until the real board followed (1-2 s on the TV).
+            uiState.filter { sportsLiveListsBoard(it) },
             // live.25 #226: back from the player, the current scores right after the stale first value, never a window later.
             boardScores.firstThenCoalesce(scoresSettleMs, SCORES_CATCH_UP_MS),
             repo.followedTeams,
@@ -912,7 +999,9 @@ class SportsLiveViewModel internal constructor(
                     if (inputs.tab != SportsLiveTab.CHANNELS) boardCache.reusable(inputs)?.let { return@withContext it }
                     val startedAt = System.nanoTime()
                     // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
-                    buildBoard(knownMatches.fill(inputs)).reusingRows(boardCache.shownFor(inputs)).also {
+                    // live.26 settled screens: once Live now is settled, rows stay where the shown board had them.
+                    buildBoard(knownMatches.fill(inputs)).let { built -> if (inputs.settled) built.settledOn(settleBaseFor(inputs)) else built }
+                        .reusingRows(boardCache.shownFor(inputs)).also {
                         boardCache.putIfCurrent(generation, inputs, it)
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
@@ -931,6 +1020,9 @@ class SportsLiveViewModel internal constructor(
     /** Each board as it is published: the tab-open timing line, and Upcoming built ahead from Live now. */
     private fun onBoardShown(shown: SportsLiveBoard) {
         shownTab = shown.tab
+        lastShownBoard = shown
+        // #26: Report a problem says how many channels each source loaded and how many the countries list.
+        shown.channels?.let { SportsLiveReportTrail.onChannels(it.report) }
         val opening = tabOpening
         if (opening != null && opening.first == shown.tab) {
             tabOpening = null
@@ -939,6 +1031,16 @@ class SportsLiveViewModel internal constructor(
             }
         }
         if (shown.tab == SportsLiveTab.LIVE_NOW) prewarmUpcoming()
+    }
+
+    /**
+     * live.26 settled screens: the board a settled Live now board keeps its rows from: the last one built for [inputs]' view
+     * (profile-scoped, [SportsLiveBoardCache.scopeTo]), only while that view is the one on screen.
+     */
+    private fun settleBaseFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? {
+        val shown = lastShownBoard ?: return null
+        if (!shown.shows(inputs.tab, inputs.filter) || shown.moreLive) return null
+        return boardCache.shownFor(inputs)
     }
 
     /**
@@ -1005,8 +1107,14 @@ class SportsLiveViewModel internal constructor(
         fullLoadJob = launchFullLoad(force = false)
         // J1: Live now waits behind its loading rows for this visit's load, at most HOLD_MS.
         viewModelScope.launch {
-            delay(SportsLiveCalmOpen.HOLD_MS)
-            selectionState.update { it.copy(holdOver = true) }
+            // live.26 (amendment 2): a recent saved list shows after READY_MS; an older one waits up to HOLD_MS.
+            delay(SportsLiveCalmOpen.READY_MS)
+            // Only while Live now still waits: a state build costs 1-2 s on the onn.
+            if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(readyOver = true) }
+            delay(SportsLiveCalmOpen.HOLD_MS - SportsLiveCalmOpen.READY_MS)
+            // Read by every later build; a build of its own only while Live now still waits (gemini review #10).
+            holdPassed = true
+            if (uiState.value.tabs[SportsLiveTab.LIVE_NOW].isNullOrEmpty()) selectionState.update { it.copy(holdOver = true) }
         }
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
         viewModelScope.launch {
@@ -1090,6 +1198,8 @@ class SportsLiveViewModel internal constructor(
                 addSportShown = it.addSport != null && tab == SportsLiveTab.LIVE_NOW
             )
         }
+        // live.26: Upcoming kept from an older team directory while another tab showed is sorted again now.
+        resortUpcomingIfStale()
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()
@@ -1102,7 +1212,8 @@ class SportsLiveViewModel internal constructor(
         noteUpcomingFilter(selectionState.value.tab, value)
         selectionState.update {
             val remembered = if (value == null) it.filterByTab - it.tab else it.filterByTab + (it.tab to value)
-            it.copy(filter = value, filterByTab = remembered)
+            // My sports or My teams picked in My sports ▾ leaves More live's or All sports' view (gemini review #4).
+            it.copy(filter = value, filterByTab = remembered, moreLiveOpen = false, moreLiveAll = false)
         }
     }
 
@@ -1169,12 +1280,18 @@ class SportsLiveViewModel internal constructor(
 
     /** OK on Live now's "More live" row: its view, the games My sports leaves out by sport. */
     fun openMoreLive() {
-        selectionState.update { it.copy(moreLiveOpen = true, itemId = null) }
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = false, itemId = null, filter = null, filterByTab = it.filterByTab - it.tab) }
+    }
+
+    /** OK on "All sports" in My sports ▾ (live.26 decision): the same view, with EVERY live game by sport. */
+    fun openAllSports() {
+        // ★ My teams gives way (gemini review #4): the view lists every live game, never only the followed ones.
+        selectionState.update { it.copy(moreLiveOpen = true, moreLiveAll = true, itemId = null, filter = null, filterByTab = it.filterByTab - it.tab) }
     }
 
     /** Back from the "More live" view: Live now's own list again. */
     fun closeMoreLive() {
-        selectionState.update { it.copy(moreLiveOpen = false, itemId = null) }
+        selectionState.update { it.copy(moreLiveOpen = false, moreLiveAll = false, itemId = null) }
     }
 
     /** "N new" on Refresh (TV QA Q5): Live now as it is now, the waiting rows in their places; then frozen again. */
@@ -1223,26 +1340,32 @@ class SportsLiveViewModel internal constructor(
         val state = uiState.value
         // More live's games are zapped only among themselves, when one of them is played (user 2026-11-21).
         val moreLive = state.moreLive.flatMap { it.items }
-        // A More live game played: the next Live now offers adding its sport to My sports, once per sport.
-        if (moreLive.any { it.streamKey == item.streamKey }) {
+        // A More live game played: the next Live now offers adding its sport to My sports, once per sport (never for an
+        // Other stream, live.27: no game of any sport).
+        val streamKeys = state.moreLive.filter { it.key == SportsLiveMoreLive.OTHER_STREAMS }.flatMap { it.items }.mapTo(HashSet()) { it.streamKey }
+        if (item.streamKey !in streamKeys && moreLive.any { it.streamKey == item.streamKey }) {
             SportsLiveMoreLive.promptFor(item, lastMySports, addSportMemoryNow.notAsked)?.let { sport ->
                 selectionState.update { it.copy(addSport = sport, addSportShown = false) }
             }
         }
-        val playedFromMoreLive = moreLive.any { it.streamKey == item.streamKey }
+        // All sports' view (gemini final review #9): a game played there zaps through every game it lists, in its order.
+        val allSports = state.moreLiveViewGroups?.flatMap { it.items }
+            ?.takeIf { shown -> state.moreLiveOpen && state.moreLiveAll && shown.any { it.streamKey == item.streamKey } }
+        val playedFromMoreLive = allSports == null && moreLive.any { it.streamKey == item.streamKey }
         playerLaunchAtMs = nowMs()
-        val (items, tab) = if (playedFromMoreLive) {
-            moreLive to state.selectedTab
-        } else {
-            sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
+        val (items, tab) = when {
+            allSports != null -> allSports to state.selectedTab
+            playedFromMoreLive -> moreLive to state.selectedTab
+            else -> sportsLiveZapSource(state.selectedTab, item, state.zapItems, state.tabs[SportsLiveTab.LIVE_NOW].orEmpty())
         }
         // live.25 (#225): started from Live now's list, the panel, the guide and CH± follow it as shown (calm order kept).
-        val seed = if (!playedFromMoreLive && state.selectedTab == SportsLiveTab.LIVE_NOW) items.map { it.streamKey } else null
+        val seed = if (allSports == null && !playedFromMoreLive && state.selectedTab == SportsLiveTab.LIVE_NOW) items.map { it.streamKey } else null
         val session = SportsLiveZapSession.of(
             items = items,
             itemKey = item.streamKey,
             tab = tab,
-            filter = state.selectedFilter.takeIf { tab == state.selectedTab },
+            // The All sports and More live views walk their own games (TV F4): the panel's list does not replace them.
+            filter = if (allSports != null || playedFromMoreLive) SportsLiveUiState.ALL_SPORTS_FILTER else state.selectedFilter.takeIf { tab == state.selectedTab },
             returnToHomeOnBack = false
         )?.copy(seed = seed)
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
@@ -1279,6 +1402,7 @@ class SportsLiveViewModel internal constructor(
         // Leaving the screen ends browsing (TV QA BUG7): Live now is as built when it comes back.
         if (!visible) {
             liveNowShown = false
+            liveNowShownAtMs = null
             setBrowsing(false)
             leaveAddSportCard()
         } else {
@@ -1451,6 +1575,8 @@ class SportsLiveViewModel internal constructor(
             return null
         }
         if (last.selection.copy(itemId = null) != selection.copy(itemId = null)) return null
+        // Report #25: Upcoming's started row kept for focus leaves once focus moves off it.
+        if (upcomingHeldId != null && selection.itemId != upcomingHeldId) return null
         val built = last.builtLiveNow
         if (built != null) {
             val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
@@ -1547,19 +1673,30 @@ class SportsLiveViewModel internal constructor(
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         var otherEvents = emptyList<SportsLiveItem>()
+        var otherStreams = emptyList<SportsLiveItem>()
+        var liveNowSettled = false
         // J1 (live.23): Live now shows its loading rows, not the saved list of an earlier visit, until this visit's load
         // (most addons answered) lands or HOLD_MS passed; then the whole list at once.
         // O (live.25, review M1): back after a long absence, the same way the list the absence left waits for the newer load,
         // at most HOLD_MS from the return; then that load's board shows once, as built.
         val freshHolding = selection.freshHold && freshAfterAbsence && bucketed.listAtMs == absentListAtMs
-        val holdLiveNow = (!bucketed.fromLoad && !selection.holdOver) || freshHolding
+        val holdLiveNow = SportsLiveCalmOpen.holdsLiveNow(
+            hasVisitLoad = bucketed.fromLoad,
+            readyOver = selection.readyOver,
+            holdOver = selection.holdOver || holdPassed,
+            savedAgeMs = bucketed.listAtMs?.let { now - it }
+        ) || freshHolding
         val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
             if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
                 emptyList<SportsLiveItem>()
             } else if (tab == SportsLiveTab.LIVE_NOW) {
+                // live.27: "A vs B" listings that are no game in progress (team channels, replays, passes) leave the list,
+                // its counts and the strip for Other streams at its end, whatever My sports holds (SportsLiveOtherStreams).
+                val (listedGames, streams) = SportsLiveOtherStreams.split(allItems, now)
+                otherStreams = SportsLiveHiddenTitles.filter(streams, hiddenNow)
                 // H (live.23): listings that are no game and no event of their own leave the list for More live's Other.
                 // With nothing picked in My sports there is no More live: they stay in the list, as before.
-                val (tabItems, others) = if (mySports.isDefault) allItems to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(allItems)
+                val (tabItems, others) = if (mySports.isDefault) listedGames to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(listedGames)
                 otherEvents = SportsLiveHiddenTitles.filter(others, hiddenNow)
                 val scores = inputs.scores
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
@@ -1633,6 +1770,9 @@ class SportsLiveViewModel internal constructor(
                 lastListAtMs = bucketed.listAtMs
                 val thawed = selection.thaw != thawApplied || reranked || fresh
                 thawApplied = selection.thaw
+                if (thawed) liveNowEpoch++
+                // live.26 settled screens: kept as shown (not thawed, shown this visit) and past its landing window.
+                liveNowSettled = !thawed && liveNowShown && SportsLiveSettledRows.settles(liveNowShownAtMs, now)
                 // O: the games ESPN confirms over leave at once, even focused (kept, a dropped one would read as live); and a
                 // fresh open after a long absence keeps no card of the list the absence left.
                 val overIds = endedGames.confirmedEndedKeys(tabItems, scores, now)
@@ -1646,7 +1786,21 @@ class SportsLiveViewModel internal constructor(
                 SportsLiveHiddenTitles.filter(kept, hiddenNow).also {
                     shownLiveNow = it
                     // J1: shown once this visit, Live now keeps its rows in place from now on; new ones wait for "N new".
-                    if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) liveNowShown = true
+                    if (selection.tab == SportsLiveTab.LIVE_NOW && it.isNotEmpty()) {
+                        if (liveNowShownAtMs == null) liveNowShownAtMs = now
+                        liveNowShown = true
+                    }
+                }
+            } else if (tab == SportsLiveTab.UPCOMING) {
+                // Report #25: a started game leaves at every build (each clock tick too), not only at the next sorting.
+                val scores = inputs.scores
+                val liveNowEvents = bucketed.tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+                    .mapNotNullTo(HashSet()) { ScoreChips.matchedEvent(it, scores[it.streamKey])?.eventId }
+                val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.UPCOMING }
+                sportsLiveUpcomingShown(shownUpcoming, allItems, scores, now, focusedId, liveNowEvents).let {
+                    shownUpcoming = it.items
+                    upcomingHeldId = it.heldId
+                    it.items
                 }
             } else {
                 allItems
@@ -1694,16 +1848,29 @@ class SportsLiveViewModel internal constructor(
             .let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
             .let { shown -> if ((mySportsScoped || allSports) && !onLiveNow) withAllSports(shown) else shown }
         // More live (user 2026-11-21): under My sports, Live now ends with one row holding the live games it leaves out
-        // (other sports, J3's unplaced games) and the listings that are no game (H), by sport; OK opens them.
-        val moreLiveGroups = if (onLiveNow && filter == null && !mySports.isDefault) {
+        // (other sports, J3's unplaced games) and the listings that are no game (H), by sport; OK opens them. live.27: Other
+        // streams join it last, with nothing picked too (the row then holds them alone).
+        val hiddenLiveGroups = if (onLiveNow && (!mySports.isDefault || otherStreams.isNotEmpty())) {
             val scopedKeys = scopedItems.mapTo(HashSet()) { it.streamKey }
-            SportsLiveMoreLive.groups(counted(fullItems).filter { it.streamKey !in scopedKeys }, otherEvents)
+            SportsLiveMoreLive.groups(counted(fullItems).filter { it.streamKey !in scopedKeys }, otherEvents, streams = otherStreams)
         } else {
             emptyList()
         }
+        // The row itself only under My sports with no filter picked.
+        val moreLiveGroups = if (filter == null) hiddenLiveGroups else emptyList()
+        // All sports (live.26 decision): every live game by sport, so its counts match the games listed; offered while
+        // My sports hides something, whatever the filter (gemini final review #5: also from ★ My teams).
+        val allSportsGroups = if (hiddenLiveGroups.isEmpty() || mySports.isDefault) {
+            emptyList()
+        } else {
+            val live = counted(fullItems)
+            val liveKeys = live.mapTo(HashSet()) { it.streamKey }
+            SportsLiveMoreLive.groups(live, otherEvents.filter { it.streamKey !in liveKeys }, streams = otherStreams.filter { it.streamKey !in liveKeys })
+        }
         val moreLiveOpen = selection.moreLiveOpen && moreLiveGroups.isNotEmpty()
+        val moreLiveViewGroups = if (selection.moreLiveAll) allSportsGroups else moreLiveGroups
         val visible = when (filter) {
-            null, SportsLiveUiState.ALL_SPORTS_FILTER -> if (moreLiveOpen) moreLiveGroups.flatMap { it.items } else tabItems
+            null, SportsLiveUiState.ALL_SPORTS_FILTER -> if (moreLiveOpen) moreLiveViewGroups.flatMap { it.items } else tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
             else -> tabItems.filter { filterOf(it) == filter }
         }
@@ -1755,13 +1922,19 @@ class SportsLiveViewModel internal constructor(
             newLiveRows = newRows,
             newLiveFollowedTeam = newFollowedTeam,
             moreLive = moreLiveGroups,
+            allSports = allSportsGroups,
+            moreLiveViewGroups = moreLiveViewGroups,
             moreLiveOpen = moreLiveOpen,
-            moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },
+            moreLiveAll = moreLiveOpen && selection.moreLiveAll,
+            // Other streams (live.27) never say LIVE either: no ESPN game is theirs.
+            moreLiveOther = (otherEvents + otherStreams).mapTo(HashSet()) { it.streamKey },
             // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
             addSportPrompt = selection.addSport?.takeIf {
                 selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
             },
-            upcomingPendingDates = bucketed.upcomingPending
+            upcomingPendingDates = bucketed.upcomingPending,
+            liveNowSettled = liveNowSettled,
+            liveNowEpoch = liveNowEpoch
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

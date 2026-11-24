@@ -160,6 +160,55 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `a saved list under one refresh old shows after the ready second, not the whole hold (live26)`() = runTest {
+        val saved = SportsLiveListSnapshot(NOW - MINUTE, mapOf(SportsLiveTab.LIVE_NOW to listOf(item("a", isLive = true).copy(addonBaseUrl = ""))))
+        loadGate = CompletableDeferred()
+        val viewModel = newViewModel(MemoryCache(saved))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.visibleItems.isEmpty())
+
+        advanceTimeBy(SportsLiveCalmOpen.READY_MS + 1)
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        // The fresh load that follows keeps the shown row; its new one waits behind "N new".
+        loadGate!!.complete(load(listOf(item("b", isLive = true), item("a", isLive = true))))
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+    }
+
+    @Test
+    fun `Live now settles a second after its first frame and N new lays it out afresh once (live26)`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true)))
+        val viewModel = newViewModel(MemoryCache())
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+        // The landing: the first frame and what lands within the second lay out as built.
+        assertFalse(viewModel.uiState.value.liveNowSettled)
+
+        advanceTimeBy(SportsLiveSettledRows.READY_MS + 1)
+        latestFlow.value = load(listOf(item("b", isLive = true), item("a", isLive = true)))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.liveNowSettled)
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+
+        // "N new" is the user's own: that build is as built, the next one settled again.
+        val epochBefore = viewModel.uiState.value.liveNowEpoch
+        viewModel.showNewRows()
+        runCurrent()
+        assertFalse(viewModel.uiState.value.liveNowSettled)
+        // Gemini review #7: a new epoch, so a later settled build never settles on a board from before the thaw.
+        val thawEpoch = viewModel.uiState.value.liveNowEpoch
+        assertTrue(thawEpoch > epochBefore)
+        latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = true)))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.liveNowSettled)
+        assertEquals(thawEpoch, viewModel.uiState.value.liveNowEpoch)
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+    }
+
+    @Test
     fun `back on Live now from another tab its rows keep their place and new ones wait for N new`() = runTest {
         // J1 + #143 (l23-rc): the tab's kept board shows at once on return, so the fresh build must not reshuffle it.
         loadGate = CompletableDeferred()
@@ -293,13 +342,100 @@ class SportsLiveOpenSpeedTest {
         assertEquals(sorted, shared.upcomingSorted)
         assertEquals(builds, viewModel.stateBuilds)
 
-        // A change it has not read sorts again.
+        // A change it has not read sorts again (live.26: Upcoming at once while it is the tab shown).
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(sorted, shared.upcomingSorted)
         stamp = 1L
         directoryChanges.emit(Unit)
         advanceTimeBy(3_000)
         runCurrent()
         assertTrue(shared.upcomingSorted > sorted)
         assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+    }
+
+    @Test
+    fun `a directory change while Live now shows keeps Upcoming's sorting until Upcoming is opened`() = runTest {
+        // live.26: on the TV each directory change after the open sorted Upcoming again (3-7 s, 3 times per open) while
+        // nobody was on it; Live now and the other tabs are still sorted again for it.
+        latestFlow.value = load(listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR)))
+        val shared = SportsLiveSharedBuckets()
+        val directoryChanges = MutableSharedFlow<Unit>()
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            directoryChanges = directoryChanges,
+            directoryStamp = { stamp },
+            sharedBuckets = shared,
+            computeDispatcher = compute,
+            upcomingWindowDays = 3,
+            zone = ZoneOffset.UTC
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceTimeBy(SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
+        val sorted = shared.upcomingSorted
+        assertTrue(sorted > 0)
+        val builds = viewModel.stateBuilds
+
+        // Two changes on Live now: the load is sorted again (the state follows), Upcoming is not; its rows stay.
+        repeat(2) { index ->
+            stamp = index + 1L
+            directoryChanges.emit(Unit)
+            advanceTimeBy(3_000)
+            runCurrent()
+        }
+        assertEquals(sorted, shared.upcomingSorted)
+        assertTrue(viewModel.stateBuilds > builds)
+        assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertEquals(listOf("live"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        // Opened: sorted again at once, with the directory as it is now, and only once.
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        val resorted = shared.upcomingSorted
+        assertTrue(resorted > sorted)
+        assertEquals(listOf("next"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(resorted, shared.upcomingSorted)
+    }
+
+    @Test
+    fun `a new load is sorted in full, Upcoming included, while Live now shows`() = runTest {
+        // live.26: only a directory change keeps Upcoming's sorting; new games are never left out of it.
+        latestFlow.value = load(listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR)))
+        val shared = SportsLiveSharedBuckets()
+        val directoryChanges = MutableSharedFlow<Unit>()
+        var stamp = 0L
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            directoryChanges = directoryChanges,
+            directoryStamp = { stamp },
+            sharedBuckets = shared,
+            computeDispatcher = compute,
+            upcomingWindowDays = 3,
+            zone = ZoneOffset.UTC
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceTimeBy(SportsLiveCalmOpen.HOLD_MS + 1)
+        runCurrent()
+        stamp = 1L
+        directoryChanges.emit(Unit)
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        latestFlow.value = load(
+            listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR), item("later", isLive = false, startMs = NOW + 2 * HOUR))
+        )
+        runCurrent()
+        assertEquals(setOf("next", "later"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id }.toSet())
     }
 
     @Test
@@ -439,6 +575,23 @@ class SportsLiveOpenSpeedTest {
         cache.put(inputs(SportsLiveTab.CHANNELS), board(SportsLiveTab.CHANNELS))
         assertTrue(cache.has(SportsLiveTab.UPCOMING, null))
         assertFalse(cache.has(SportsLiveTab.LIVE_NOW, null))
+    }
+
+    @Test
+    fun `More live and All sports are views of their own, never sharing a kept board`() {
+        // Gemini review #4: All sports opened after More live was served More live's board, which leaves My sports out.
+        val cache = SportsLiveBoardCache()
+        fun inputs(all: Boolean) = SportsLiveBoardInputs(
+            tab = SportsLiveTab.LIVE_NOW, filter = null, items = listOf(item("a", isLive = true, startMs = NOW)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = NOW, logoRevision = 0, moreLive = mapOf("a|x" to "CRICKET"), moreLiveAll = all
+        )
+        val moreLive = SportsLiveBoard(SportsLiveTab.LIVE_NOW, null, emptyList(), emptyList(), emptyMap(), moreLive = true)
+        cache.put(inputs(all = false), moreLive)
+        assertNull(cache.shownFor(inputs(all = true)))
+        assertSame(moreLive, cache.shownFor(inputs(all = false)))
+        assertTrue(SportsLiveBoard.build(inputs(all = true)).moreLiveAll)
+        assertFalse(SportsLiveBoard.build(inputs(all = false)).moreLiveAll)
     }
 
     @Test

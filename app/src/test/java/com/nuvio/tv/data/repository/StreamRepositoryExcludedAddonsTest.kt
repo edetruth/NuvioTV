@@ -7,6 +7,9 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.plugin.PluginManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tmdb.TmdbService
+import com.nuvio.tv.core.usenet.BuiltInUsenetService
+import com.nuvio.tv.core.usenet.UsenetSourceConfiguration
+import com.nuvio.tv.core.usenet.UsenetSourceSettings
 import com.nuvio.tv.data.local.DebridSettingsDataStore
 import com.nuvio.tv.data.remote.api.AddonApi
 import com.nuvio.tv.data.remote.dto.StreamDto
@@ -86,6 +89,10 @@ class StreamRepositoryExcludedAddonsTest {
             tmdbService = mockk<TmdbService>(relaxed = true),
             debridStreamPresentation = presentation,
             localDebridAvailabilityService = availability,
+            usenetSourceSettings = mockk<UsenetSourceSettings> {
+                every { read(any()) } returns UsenetSourceConfiguration()
+            },
+            builtInUsenetService = mockk<BuiltInUsenetService>(relaxed = true),
             serverStreams = mockk {
                 every { isNativeRequest(any()) } returns false
                 every { revision } returns 0

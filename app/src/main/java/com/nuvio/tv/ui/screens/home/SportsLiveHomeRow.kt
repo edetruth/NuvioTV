@@ -9,6 +9,9 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerContext
+import com.nuvio.tv.core.sportslive.scores.SpoilerPolicy
+import com.nuvio.tv.core.sportslive.scores.SpoilerSurface
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -100,6 +103,10 @@ object SportsLiveHomeRow {
         supportsSkip = false
     )
 
+    /** Home shows scores ([SpoilerPolicy]): under Show only, as Home has no reveal. */
+    fun showsScores(mode: ScoresMode?): Boolean =
+        SpoilerPolicy.visibility(mode, revealed = false, SpoilerContext(SpoilerSurface.HOME_HERO)).showsScore
+
     /**
      * The Live now cards' score labels, by item streamKey (two addons may share an item id): the status line
      * ("● 4:12 · Q3 · IND 80–88 PHI"), with [liveFormat] ("● %1$s") marking a live one. Only under Show: Home
@@ -111,7 +118,7 @@ object SportsLiveHomeRow {
         mode: ScoresMode?,
         strings: ScoreChipStrings,
         liveFormat: String
-    ): Map<String, String> = if (mode != ScoresMode.SHOW) emptyMap() else items.mapNotNull { item ->
+    ): Map<String, String> = if (!showsScores(mode)) emptyMap() else items.mapNotNull { item ->
         val snapshot = scores[item.streamKey]
         val chip = ScoreChips.of(item, snapshot, mode, revealed = false) ?: return@mapNotNull null
         // l24 polish P1: the hero reads "… · Live now" over this line, so a final never gives one (the card leaves the row).

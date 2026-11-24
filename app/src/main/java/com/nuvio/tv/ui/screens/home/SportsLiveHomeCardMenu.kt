@@ -19,7 +19,6 @@ import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
-import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -32,7 +31,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
-import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerRows
+import com.nuvio.tv.ui.screens.sportslive.dual.rememberDualPickerBoards
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualAvailable
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveGameHomeFirst
 import com.nuvio.tv.ui.screens.sportslive.toggleFollowTarget
@@ -106,18 +105,24 @@ internal fun SportsLiveHomeCardMenu(
     val homeFirst = game?.let { sportsLiveGameHomeFirst(item, it) } ?: false
     val targets = remember(item, game) { FollowTargets.of(item, game, homeFirst) }
     val pick = remember(item, all, ended) { SportsLiveDualPick(item, all, filter = null, tab = SportsLiveTab.LIVE_NOW, endedKeys = ended) }
-    val entries = homeCardMenuEntries(item, game, targets.size, pick.candidates.size)
+    // live.26 (#222): only live games count as partners; the entry is hidden with none.
+    val entries = homeCardMenuEntries(item, game, targets.size, pick.candidates.count { !it.isChannel })
     var picking by remember(item) { mutableStateOf(false) }
     if (picking) {
+        // The same rows and spoiler gate as Live Now's picker: Hide until focused reveals a focused row (#117).
+        val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
-            rows = remember(pick, scores, mode) { dualPickerRows(pick.candidates, scores, mode, emptySet(), System.currentTimeMillis()) },
+            boards = rememberDualPickerBoards(pick.candidates, scores, mode, revealed, System.currentTimeMillis()),
             onPick = { second ->
                 onDismiss()
                 SportsLiveDualSessions.start(pick.session(second))
                 nav.onOpenSportsLiveDual()
             },
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            onFocus = scoresViewModel::onCardFocus,
+            anchor = item,
+            scores = scores
         )
         return
     }
@@ -134,7 +139,7 @@ internal fun SportsLiveHomeCardMenu(
             {
                 onDismiss()
                 SportsLiveGameRequests.open(
-                    SportsLiveGameRequest(event, revealed = mode == ScoresMode.SHOW, homeFirst = homeFirst, card = item)
+                    SportsLiveGameRequest(event, revealed = SportsLiveHomeRow.showsScores(mode), homeFirst = homeFirst, card = item)
                 )
                 nav.onOpenSportsLiveGame()
             }

@@ -11,6 +11,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.scores.LiveScoreTracking
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -150,7 +151,9 @@ internal fun rememberSportsLiveClockMs(stepMs: Long = 30_000L): State<Long> =
  * The section's cards to track for scores: Live now's whole tab (every filter) and the strip's later-today games
  * ([laterToday], J4); while More live's view is open, its games too (live.23 review M2: they are outside Live now's My
  * sports list, so they never got a score, and a final never moved them out of LIVE). They are live games outside My
- * sports, so they take the feed budget after My sports' own. Upcoming tracks what it shows; other tabs nothing.
+ * sports, so they take the feed budget after My sports' own. live.27: Other streams too (More live's last group), as when
+ * they were Live now's rows: ESPN is asked again for them, so one ESPN gets a game for comes back. Upcoming tracks what
+ * it shows; other tabs nothing.
  */
 internal fun sectionTrackedCards(state: SportsLiveUiState, laterToday: List<SportsLiveItem>): List<SportsLiveItem> =
     when (state.selectedTab) {
@@ -162,7 +165,10 @@ internal fun sectionTrackedCards(state: SportsLiveUiState, laterToday: List<Spor
             } else {
                 emptyList()
             }
-            listed + moreLive + laterToday
+            val listedKeys = (listed + moreLive).mapTo(HashSet()) { it.streamKey }
+            val streams = state.moreLive.filter { it.key == SportsLiveMoreLive.OTHER_STREAMS }.flatMap { it.items }
+                .filter { it.streamKey !in listedKeys }
+            listed + moreLive + laterToday + streams
         }
         SportsLiveTab.UPCOMING -> state.visibleItems
         else -> emptyList()

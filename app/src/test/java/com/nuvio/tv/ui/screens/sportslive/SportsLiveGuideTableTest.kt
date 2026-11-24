@@ -390,6 +390,54 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
+    fun `a held Down speeds up to every repeat after its first steps, and a new press starts at the steady pace again`() {
+        val fast = SportsLiveGuideKeys(longPressMs = 500L, repeatGateMs = 100L, fastGateMs = 40L, fastAfterMoves = 2)
+        fun down(repeat: Int, atMs: Long) = fast.onKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN, repeat, atMs)
+        assertEquals(SportsLiveGuideKey.DOWN, down(0, 0L))
+        // The steady pace first: a repeat 50 ms on is held back.
+        assertEquals(SportsLiveGuideKey.CONSUMED, down(1, 50L))
+        assertEquals(SportsLiveGuideKey.DOWN, down(2, 500L))
+        assertEquals(SportsLiveGuideKey.DOWN, down(3, 600L))
+        // Two steps made: every 50 ms repeat moves now.
+        assertEquals(SportsLiveGuideKey.DOWN, down(4, 650L))
+        assertEquals(SportsLiveGuideKey.DOWN, down(5, 700L))
+        assertEquals(SportsLiveGuideKey.CONSUMED, fast.onKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_UP, 0, 720L))
+        // A new press: one row, then the steady pace again.
+        assertEquals(SportsLiveGuideKey.DOWN, down(0, 1_000L))
+        assertEquals(SportsLiveGuideKey.CONSUMED, down(1, 1_050L))
+    }
+
+    @Test
+    fun `only zap keys pressed before the table closed are held back, OK and Back never`() {
+        val guard = SportsLiveHeldKeyGuard()
+        // Nothing closed yet: nothing is held back.
+        assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_DOWN, 0L))
+        guard.onClosed(1_000L)
+        assertTrue(guard.swallows(KeyEvent.KEYCODE_DPAD_DOWN, 900L))
+        assertTrue(guard.swallows(KeyEvent.KEYCODE_DPAD_UP, 1_000L))
+        assertTrue(guard.swallows(KeyEvent.KEYCODE_CHANNEL_UP, 900L))
+        assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_DOWN, 1_001L))
+        assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_CENTER, 900L))
+        assertFalse(guard.swallows(KeyEvent.KEYCODE_BACK, 900L))
+        // Gemini review #9: an event with no down time (some remotes and injected keys) is never held back.
+        assertFalse(guard.swallows(KeyEvent.KEYCODE_DPAD_DOWN, 0L))
+    }
+
+    @Test
+    fun `the footer shows the table's place among its games only once they fill more than one page`() {
+        val games = List(56) { true }
+        assertEquals(GuidePosition(1, 5, 56), guidePosition(games, start = 0))
+        assertEquals(GuidePosition(6, 10, 56), guidePosition(games, start = 5))
+        // The More live line at the end is no game: never counted.
+        val withMoreLive = games + false
+        assertEquals(GuidePosition(53, 56, 56), guidePosition(withMoreLive, start = 52))
+        // Five games or fewer fit one page: no position, More live line or not.
+        assertNull(guidePosition(List(5) { true } + false, start = 0))
+        assertNull(guidePosition(List(3) { true }, start = 0))
+        assertNull(guidePosition(emptyList(), start = 0))
+    }
+
+    @Test
     fun `with the guide closed and no menu offered OK opens it on its press, the rest of that press is taken, and other keys are left alone`() {
         val ok = SportsLivePlayerOkKey()
         val center = KeyEvent.KEYCODE_DPAD_CENTER
