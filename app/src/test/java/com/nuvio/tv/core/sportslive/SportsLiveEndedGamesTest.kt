@@ -523,6 +523,18 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `F4 - what live counts leave out - Just ended, dropped and finals in their grace`() {
+        val games = SportsLiveEndedGames()
+        val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)
+        val strip = item(name = "Team C vs Team D", sport = "Soccer", id = "strip", startMs = START - 4 * HOUR)
+        val on = item(id = "on", startMs = START - HOUR)
+        val all = listOf(old, strip, on)
+        val split = games.split(all, emptyMap(), START) { false }.with(games.moreEnds(all, emptyMap(), START, emptySet()) { false })
+        assertEquals(setOf(old.streamKey, strip.streamKey), split.overKeys(all))
+        assertEquals(listOf(on), split.live)
+    }
+
+    @Test
     fun `#354 - an overdue card past its drop time is moved out but shown nowhere`() {
         val games = SportsLiveEndedGames()
         val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)

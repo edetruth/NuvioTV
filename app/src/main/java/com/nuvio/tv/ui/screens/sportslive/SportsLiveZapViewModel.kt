@@ -527,7 +527,8 @@ class SportsLiveZapViewModel internal constructor(
             val split = splitOf(list)
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
             val allSplit = if (list === panelList.all) split else splitOf(panelList.all)
-            val splitFinished = allSplit.ended.keys + allSplit.finals.keys
+            // F4: a dropped game (past its drop time) is in no group either: it counts as finished too.
+            val splitFinished = allSplit.overKeys(panelList.all)
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             // Spoiler protection (#151): a kept Just ended final is stamped too, as on Live Now's board.
             val protection = liveScores.protection.value

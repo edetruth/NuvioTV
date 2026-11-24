@@ -66,6 +66,16 @@ data class LiveNowSplit(
      * [scores] plus, for an ESPN-final card ([finals] or [ended]) with no snapshot now, the final it was
      * found on: a surface grouping by the event then never takes a finished game for a live one.
      */
+    /**
+     * F4: the card keys of [items] (what this split was made from) that are not live now: Just ended, dropped (an ESPN
+     * final past its half hour, an estimate or overdue game past its drop) or an ESPN final in its grace. What live counts
+     * leave out.
+     */
+    fun overKeys(items: List<SportsLiveItem>): Set<String> {
+        val liveKeys = live.mapTo(HashSet()) { it.streamKey }
+        return items.mapNotNullTo(HashSet()) { it.streamKey.takeIf { key -> key !in liveKeys } } + finals.keys
+    }
+
     /** This split with [more]'s cards ([SportsLiveEndedGames.moreEnds], #354) out of [live]: in the strip after its own, or gone. */
     fun with(more: MoreEnds): LiveNowSplit {
         if (more.moved.isEmpty()) return this
