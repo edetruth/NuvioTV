@@ -403,6 +403,50 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `a final seen before a restart stands before any score comes in - a cold open never shows it live`() {
+        // #267: the visit's first list is built before the score feeds answer; a coverable card is not estimated meanwhile.
+        val card = item()
+        val saved = ArrayList<Map<String, SportsLiveEndedGames.FinalTime>>()
+        val before = SportsLiveEndedGames()
+        before.install(emptyMap(), START) { saved += it }
+        before.verdict(card, live(pacersFinal), START + 2 * HOUR)
+        val endedAt = START + 2 * HOUR + 5 * MINUTE
+        before.verdict(card, pacersFinal, endedAt)
+
+        val after = SportsLiveEndedGames()
+        after.install(saved.last(), endedAt + 12 * MINUTE) { }
+        val verdict = after.verdict(card, null, endedAt + 12 * MINUTE, canEstimate = false)!!
+        assertEquals(EndedSignal.FINAL, verdict.signal)
+        assertEquals(endedAt, verdict.endedAtMs)
+        // No score to show: nothing to spoil.
+        assertNull(verdict.event)
+        val split = after.split(listOf(card), emptyMap(), endedAt + 12 * MINUTE) { false }
+        assertTrue(split.live.isEmpty())
+        assertEquals(listOf(card), split.justEnded)
+        // Home leaves it out too, in its grace already.
+        assertEquals(setOf(card.streamKey), after.finalKeys(listOf(card), emptyMap(), endedAt + 2 * MINUTE))
+    }
+
+    @Test
+    fun `a final remembered from a restart never ends a later game under the same card key, and ESPN in play clears it`() {
+        val endedAt = START + 2 * HOUR
+        val stored = mapOf(item().streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId))
+        // An addon reusing its id for a game that starts after that final: not this final.
+        val reused = SportsLiveEndedGames()
+        reused.install(stored, endedAt + HOUR) { }
+        assertNull(reused.verdict(item(startMs = endedAt + 30 * MINUTE), null, endedAt + HOUR, canEstimate = false))
+        // ESPN shows the card's game in play: the remembered final goes for good.
+        val games = SportsLiveEndedGames()
+        games.install(stored, endedAt + 10 * MINUTE) { }
+        assertNull(games.verdict(item(), live(pacersFinal), endedAt + 10 * MINUTE))
+        assertNull(games.verdict(item(), null, endedAt + 11 * MINUTE, canEstimate = false))
+        // Older than 6 h: forgotten.
+        val late = SportsLiveEndedGames()
+        late.install(stored, endedAt) { }
+        assertNull(late.verdict(item(), null, endedAt + SportsLiveEndedGames.FORGET_AFTER_MS + MINUTE, canEstimate = false))
+    }
+
+    @Test
     fun `a stored time is reused only for the same ESPN event and while younger than 6 h`() {
         val card = item()
         val endedAt = START + 2 * HOUR

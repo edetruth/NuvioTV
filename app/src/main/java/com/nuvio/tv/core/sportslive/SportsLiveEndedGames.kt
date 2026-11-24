@@ -147,6 +147,8 @@ class SportsLiveEndedGames {
             }
         }
         finals[key]?.let { return it.toEnded() }
+        // #267: a final seen before a restart stands until a snapshot says otherwise (a cold open, ESPN not answered yet).
+        remembered(item, key, nowMs)?.let { return it }
         // ESPN saw it in play: only ESPN may end it, even once it is no longer tracked.
         if (key in seenUnfinished || !canEstimate) return null
         return estimate(item, nowMs)
@@ -162,7 +164,7 @@ class SportsLiveEndedGames {
     fun linkCheckEnd(item: SportsLiveItem, snapshot: ScoreSnapshot?, nowMs: Long): Long? {
         if (item.isChannel) return null
         val key = item.streamKey
-        if (key in seenUnfinished || key in finals) return null
+        if (key in seenUnfinished || key in finals || remembered(item, key, nowMs) != null) return null
         if (ScoreChips.matchedEvent(item, snapshot) != null) return null
         return estimate(item, nowMs)?.endedAtMs
     }
@@ -273,6 +275,19 @@ class SportsLiveEndedGames {
             .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
 
     private fun SeenFinal.toEnded() = EndedGame(EndedSignal.FINAL, atMs, event, graced)
+
+    /**
+     * #267: [item]'s final as remembered from an earlier run ([install]) when no snapshot is in hand: the score feeds have
+     * not answered since the restart, so the list would otherwise call a game already seen over LIVE. With no ESPN game in
+     * hand it carries no event (no score to show). Never for a card whose timed start is after that final (an addon
+     * reusing its id for a later game), nor past [FORGET_AFTER_MS]; a snapshot in play or scheduled clears it ([forget]).
+     */
+    private fun remembered(item: SportsLiveItem, key: String, nowMs: Long): EndedGame? {
+        val time = times[key]?.takeIf { nowMs - it.atMs in 0..FORGET_AFTER_MS } ?: return null
+        val start = timedStart(item)
+        if (start != null && start > time.atMs) return null
+        return EndedGame(EndedSignal.FINAL, time.atMs, event = null, graced = time.graced)
+    }
 
     /**
      * When a final first seen at [nowMs] ended. Seen in play before: now. Else its start plus its sport's
