@@ -131,6 +131,9 @@ data class GameSummary(
 ) {
     val isLive: Boolean get() = state == ScoreState.IN
 
+    /** This summary while the score is hidden: the Preview keeps no other games' results (live.28 H5). */
+    fun withPreviewResultsHidden(): GameSummary = copy(preview = preview?.withoutResults())
+
     /** Both sides have periods: the linescore table shows. */
     val hasLinescore: Boolean get() = away.linescores.isNotEmpty() && home.linescores.isNotEmpty()
 

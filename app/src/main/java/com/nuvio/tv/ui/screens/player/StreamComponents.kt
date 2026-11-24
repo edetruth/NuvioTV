@@ -91,11 +91,13 @@ internal fun StreamItem(
     linkMarkNowMs: Long = 0L,
     /** Sports & Live (live.20): a game's link, drawn as the V2 row (same keys and focus). */
     sportsLive: Boolean = false,
+    /** Sports & Live (live.28 H2): the source's name shows on a [sportsLive] row only to tell identical links apart. */
+    showSource: Boolean = false,
     onClick: () -> Unit,
     onFocusChanged: ((Boolean) -> Unit)? = null,
     onUpKey: (() -> Unit)? = null
 ) {
-    if (sportsLive) return com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceRow(stream, focusRequester, requestInitialFocus, isCurrentStream, nowPlayingAnimates, linkMark, linkMarkNowMs, onClick, onFocusChanged, onUpKey)
+    if (sportsLive) return com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceRow(stream, focusRequester, requestInitialFocus, isCurrentStream, nowPlayingAnimates, linkMark, linkMarkNowMs, onClick, onFocusChanged, onUpKey, showSource = showSource)
     val context = LocalContext.current
     var isFocused by remember { mutableStateOf(false) }
     // A link that failed for this game is dimmed, except while focused (#156).

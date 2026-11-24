@@ -100,7 +100,7 @@ internal fun GameBody(
     /** A college league's AP ranks by team id, for every Standings row (BUG18). */
     standingRanks: Map<String, Int> = emptyMap()
 ) {
-    val summary = state.summary
+    val summary = state.shownSummary
     when {
         // The Scores setting and spoiler protection not read yet (a frame or two): neither the hidden card nor stats.
         !state.settled -> Unit

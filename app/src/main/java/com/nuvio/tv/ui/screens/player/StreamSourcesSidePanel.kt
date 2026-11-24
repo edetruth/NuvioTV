@@ -150,6 +150,10 @@ internal fun StreamSourcesSidePanel(
     val shownStreams = remember(orderedStreams, playingIndex) { pinPlayingFirst(orderedStreams, playingIndex) }
     val currentStreamIndex = if (playingIndex >= 0) 0 else -1
     val noticeIndices = remember(shownStreams) { shownStreams.indices.filter { isNotice(shownStreams[it]) }.toSet() }
+    val unknownLink = androidx.compose.ui.res.stringResource(com.nuvio.tv.R.string.stream_unknown)
+    val sourceTagged = remember(shownStreams, linkMarks != null, unknownLink) {
+        if (linkMarks != null) com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceTaggedIndexes(shownStreams, unknownLink, isNotice) else emptySet()
+    }
     // Sports & Live (#156, live.20): a header over each group's first row (Now playing, Links, Didn't work, notices).
     val sportsGroups = remember(shownStreams, linkMarks, currentStreamIndex, noticeIndices) {
         linkMarks?.let { marks ->
@@ -551,6 +555,7 @@ internal fun StreamSourcesSidePanel(
                                     linkMark = linkMarks?.markOf(stream),
                                     linkMarkNowMs = linkMarks?.nowMs ?: 0L,
                                     sportsLive = linkMarks != null,
+                                    showSource = index in sourceTagged,
                                     onClick = { onStreamSelected(stream) },
                                     onFocusChanged = { focused ->
                                         if (focused) {

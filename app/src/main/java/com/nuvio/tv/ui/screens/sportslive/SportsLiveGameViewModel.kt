@@ -141,12 +141,16 @@ data class SportsLiveGameUiState(
             mode.takeIf { settled }, revealed, SpoilerContext(SpoilerSurface.GAME, spoilerSafe = spoilerSafe, spoilerProtected = spoilerProtected)
         ).showsScore
 
+    /** The summary as the page may show it: while the score is hidden the Preview has no form or head-to-head results (H5). */
+    val shownSummary: GameSummary?
+        get() = if (showsScore) summary else summary?.withPreviewResultsHidden()
+
     /**
-     * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), which is
-     * spoiler-neutral; the rest wait for Reveal.
+     * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), without
+     * form and head-to-head results; the rest wait for Reveal.
      */
     val sections: List<GameSection>
-        get() = if (showsScore) summary?.sections.orEmpty() else summary?.sections.orEmpty().filter { it == GameSection.PREVIEW }
+        get() = if (showsScore) summary?.sections.orEmpty() else shownSummary?.sections.orEmpty().filter { it == GameSection.PREVIEW }
 
     val section: GameSection? get() = selected?.takeIf { it in sections } ?: sections.firstOrNull()
 }

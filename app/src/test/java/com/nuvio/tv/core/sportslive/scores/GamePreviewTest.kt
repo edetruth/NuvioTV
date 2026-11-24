@@ -155,4 +155,31 @@ class GamePreviewTest {
         const val NBA_PREVIEW = "espn_summary_nba_preview_401910019.json"
         const val EPL_PREVIEW = "espn_summary_eng1_preview_401879233.json"
     }
+
+    @Test
+    fun `without results the Preview drops the form and the head-to-head and keeps the rest`() {
+        val hidden = nba.preview!!.withoutResults()
+        assertEquals(
+            listOf(PreviewBlock.HEADER, PreviewBlock.LEADERS, PreviewBlock.INJURIES, PreviewBlock.WIN_CHANCE),
+            hidden.blocks
+        )
+        assertTrue(hidden.hasContent)
+    }
+
+    @Test
+    fun `a summary with its preview results hidden keeps its Preview section while other blocks remain`() {
+        val shown = nba.withPreviewResultsHidden()
+        assertEquals(GameSection.PREVIEW, shown.sections.first())
+        assertFalse(shown.preview!!.blocks.contains(PreviewBlock.FORM))
+        assertFalse(shown.preview!!.blocks.contains(PreviewBlock.HEAD_TO_HEAD))
+        // The original is untouched: Show and a Reveal keep the full Preview.
+        assertTrue(nba.preview!!.blocks.contains(PreviewBlock.FORM))
+    }
+
+    @Test
+    fun `a Preview with only form and head-to-head has no content once its results are hidden`() {
+        val bare = nba.preview!!.copy(leaders = emptyList(), injuries = emptyList(), winChance = null).withoutResults()
+        assertFalse(bare.hasContent)
+        assertFalse(nba.copy(preview = bare).sections.contains(GameSection.PREVIEW))
+    }
 }

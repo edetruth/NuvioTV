@@ -49,6 +49,8 @@ internal fun SportsLiveStreamPickerDialog(
             isFailed = { grouped.didntWorkFrom >= 0 && it >= grouped.didntWorkFrom }
         )
     }
+    val unknownLink = stringResource(R.string.stream_unknown)
+    val tagged = remember(ordered, notices, unknownLink) { sportsLiveSourceTaggedIndexes(ordered, unknownLink) { it in notices } }
     val heading = rememberMoreHeading(item, null)
     val title = remember(heading.title) { sportsLiveLocalStamps(context, heading.title) ?: heading.title }
     val (links, sources) = remember(streams, notices) { sportsLivePickerCounts(streams) { it in notices } }
@@ -83,7 +85,8 @@ internal fun SportsLiveStreamPickerDialog(
                 onClick = { onPick(stream) },
                 onFocusChanged = null,
                 onUpKey = null,
-                modifier = first()
+                modifier = first(),
+                showSource = index in tagged
             )
         }
     }

@@ -51,6 +51,12 @@ data class GamePreview(
             if (winChance != null) add(PreviewBlock.WIN_CHANCE)
         }
 
+    /**
+     * Without other games' results: the form chips (W / L) and the head-to-head meetings give away how a series
+     * stands, so they hide under Hide until I reveal and spoiler protection until revealed (live.28 H5).
+     */
+    fun withoutResults(): GamePreview = copy(form = emptyList(), headToHead = null)
+
     /** True when the Preview tab has anything beyond the header (a header alone is the page's own hero). */
     val hasContent: Boolean get() = blocks.any { it != PreviewBlock.HEADER }
 }

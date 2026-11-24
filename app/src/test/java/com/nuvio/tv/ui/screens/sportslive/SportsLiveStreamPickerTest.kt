@@ -32,4 +32,41 @@ class SportsLiveStreamPickerTest {
         assertEquals(3 to 2, sportsLivePickerCounts(streams) { it === note })
         assertEquals(0 to 0, sportsLivePickerCounts(listOf(note)) { true })
     }
+
+    private fun streamWithTitle(name: String, title: String?, addon: String) = stream(name, addon).copy(title = title)
+
+    @Test
+    fun `a source name shows only on links that read the same as another source's link`() {
+        val streams = listOf(
+            stream("Main feed", "Source A"), stream("Main feed", "Source B"), stream("Backup", "Source A"), stream("Backup", "Source A")
+        )
+        // Two sources share "Main feed": both are tagged. "Backup" twice from one source is not told apart by its name.
+        assertEquals(setOf(0, 1), sportsLiveSourceTaggedIndexes(streams, "Unknown"))
+    }
+
+    @Test
+    fun `no link shows a source name when every link reads differently`() {
+        val streams = listOf(stream("One", "Source A"), stream("Two", "Source B"))
+        assertEquals(emptySet<Int>(), sportsLiveSourceTaggedIndexes(streams, "Unknown"))
+    }
+
+    @Test
+    fun `a source's messages are never tagged`() {
+        val note = stream("Main feed", "Source C")
+        val streams = listOf(stream("Main feed", "Source A"), note)
+        assertEquals(emptySet<Int>(), sportsLiveSourceTaggedIndexes(streams, "Unknown") { it === note })
+    }
+
+    @Test
+    fun `a link label masks a score in its name and second line`() {
+        val (name, details) = sportsLiveLinkLabel(streamWithTitle("Team A 2-1 Team B", "Live 3-1 HD", "Source A"), "Unknown")
+        assertEquals("Team A – Team B", name)
+        assertEquals("Live – HD", details)
+    }
+
+    @Test
+    fun `two links differing only by a masked score read the same and get their source names`() {
+        val streams = listOf(stream("Team A 1-0 Team B", "Source A"), stream("Team A 2-0 Team B", "Source B"))
+        assertEquals(setOf(0, 1), sportsLiveSourceTaggedIndexes(streams, "Unknown"))
+    }
 }

@@ -96,6 +96,29 @@ internal fun sportsLivePlainSourceName(raw: String): String {
     return plain.ifEmpty { raw.trim() }
 }
 
+/**
+ * A link's name and second line in words, with any score in them masked (live.28 H2): a live game's link can carry
+ * the running score, and the Sources panel must not give it away. [unknown] names a link with no name.
+ */
+internal fun sportsLiveLinkLabel(stream: Stream, unknown: String): Pair<String, String?> {
+    val name = stream.getDisplayNameOrNull()?.let(::sportsLivePlainSourceName)
+        ?.let { spoilerSafeLinkText(it) }?.takeIf { it.isNotBlank() } ?: unknown
+    val details = stream.getDisplayDescription()?.let(::sportsLivePlainSourceName)
+        ?.let { spoilerSafeLinkText(it) }?.takeIf { it.isNotBlank() && it != name }
+    return name to details
+}
+
+/**
+ * The indexes of [streams] whose row shows its source's name (live.28 H2, design principle 9): only links that read
+ * the same as a link of another source, so the name is what tells them apart. [isNotice] rows are never links.
+ */
+internal fun sportsLiveSourceTaggedIndexes(streams: List<Stream>, unknown: String, isNotice: (Stream) -> Boolean = { false }): Set<Int> {
+    val byLabel = streams.withIndex().filterNot { isNotice(it.value) }.groupBy { sportsLiveLinkLabel(it.value, unknown) }
+    return byLabel.values
+        .filter { group -> group.map { it.value.addonName }.distinct().size > 1 }
+        .flatMapTo(HashSet()) { group -> group.map { it.index } }
+}
+
 /** A group's header: the V2 section header (caps, spaced), "Now playing" in the live text colour. */
 @Composable
 internal fun SportsLiveSourceGroupHeader(group: SportsLiveSourceGroup, modifier: Modifier = Modifier) {
@@ -139,19 +162,14 @@ internal fun SportsLiveSourceRow(
     onClick: () -> Unit,
     onFocusChanged: ((Boolean) -> Unit)?,
     onUpKey: (() -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The source's name shows only to tell links that read the same apart ([sportsLiveSourceTaggedIndexes]). */
+    showSource: Boolean = false
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val dimmed = linkMark is SportsLiveLinkMark.Failed && !isFocused
     val unknown = stringResource(R.string.stream_unknown)
-    val name = remember(stream, unknown) {
-        stream.getDisplayNameOrNull()?.let(::sportsLivePlainSourceName)?.takeIf { it.isNotBlank() } ?: unknown
-    }
-    val details = remember(stream, name) {
-        stream.getDisplayDescription()
-            ?.let(::sportsLivePlainSourceName)
-            ?.takeIf { it.isNotBlank() && it != name }
-    }
+    val (name, details) = remember(stream, unknown) { sportsLiveLinkLabel(stream, unknown) }
     val source = remember(stream.addonName) { sportsLivePlainSourceName(stream.addonName) }
     val shape = SportsLiveTokens.Radius.RowShape
     Card(
@@ -224,7 +242,7 @@ internal fun SportsLiveSourceRow(
                     )
                 }
             }
-            Text(
+            if (showSource) Text(
                 text = source,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
                 color = Colors.TextMuted,
