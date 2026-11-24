@@ -169,6 +169,7 @@ object SportsLiveExtraSources {
             sportsPlaybackIds.add(contentId)
             while (sportsPlaybackIds.size > MAX_ENTRIES) sportsPlaybackIds.remove(sportsPlaybackIds.first())
         }
+        saveMasks()
         if (item != null) {
             synchronized(sourceNames) {
                 sourceNames.remove(contentId)
@@ -277,6 +278,32 @@ object SportsLiveExtraSources {
                 spoilerSafeVideos.remove(oldest)
             }
         }
+        saveMasks()
+    }
+
+    // Where the masks are kept across process death (#458); null: memory only (tests, before app start).
+    @Volatile
+    private var maskStore: SportsLiveMaskStore? = null
+
+    /**
+     * App start (#458, #362): the masks saved by the last process, under a day old, are read back before any restored
+     * Detail page, Stream screen or player reads them, and every change is saved to [store] from now on.
+     */
+    fun installMaskStore(store: SportsLiveMaskStore) {
+        maskStore = store
+        val masks = SportsLiveMasks.decode(store.read(), nowMs()) ?: return
+        synchronized(spoilerSafeIds) {
+            spoilerSafeIds.addAll(masks.spoilerSafe)
+            masks.videos.forEach { (folder, ids) -> if (folder in spoilerSafeIds) spoilerSafeVideos[folder] = ids }
+        }
+        synchronized(sportsPlaybackIds) { sportsPlaybackIds.addAll(masks.sportsPlayback) }
+    }
+
+    private fun saveMasks() {
+        val store = maskStore ?: return
+        val (safe, videos) = synchronized(spoilerSafeIds) { spoilerSafeIds.toList() to spoilerSafeVideos.toMap() }
+        val playback = synchronized(sportsPlaybackIds) { sportsPlaybackIds.toList() }
+        store.write(SportsLiveMasks(nowMs(), safe, videos, playback).encode())
     }
 
     /**
@@ -293,6 +320,7 @@ object SportsLiveExtraSources {
                 ?: return
             spoilerSafeVideos[folder] = spoilerSafeVideos[folder].orEmpty() + videoIds.filter { it.isNotBlank() }
         }
+        saveMasks()
     }
 
     /** Whether [contentId] (a replay, or a video of a spoiler-safe team folder) lists and plays its links score-masked. */
@@ -462,6 +490,7 @@ object SportsLiveExtraSources {
         synchronized(streamSources) { streamSources.clear() }
         synchronized(seeds) { seeds.clear() }
         nowMs = { System.currentTimeMillis() }
+        maskStore = null
         fetcher = null
         resolveInvalidator = null
     }

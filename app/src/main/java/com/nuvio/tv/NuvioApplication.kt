@@ -114,6 +114,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         androidTvChannelSyncService.start()
         serverUserStateProjection.start()
         SportsLiveExtraSources.install { card, source -> sportsLiveZapResolver.get().resolveAlternate(card, source) }
+        SportsLiveExtraSources.installMaskStore(com.nuvio.tv.ui.screens.sportslive.SportsLiveMaskPrefs(this)) // Fork #458: masks survive process death
         SportsLiveExtraSources.installResolveInvalidator { contentId ->
             sportsLiveZapResolver.get().invalidateByContentId(contentId)
         }
