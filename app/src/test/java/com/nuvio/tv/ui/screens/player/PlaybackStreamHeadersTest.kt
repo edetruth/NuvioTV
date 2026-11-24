@@ -79,4 +79,28 @@ class PlaybackStreamHeadersTest {
         val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerPlaybackNetworking.kt").readText()
         assertTrue(source.contains("trustAllPlaybackHttpClient.newCall(PlaybackStreamHeaders.forUncheckedRetry(request))"))
     }
+
+    @Test
+    fun `the unchecked retry to a home server keeps the stream's headers (#435)`() {
+        listOf(
+            "https://10.0.0.5:8443/movie.mp4", "https://172.16.1.2/a.mkv", "https://172.31.255.1/a.mkv",
+            "https://192.168.1.20:8920/a.mkv", "https://127.0.0.1:8096/a.mkv", "https://[::1]:8096/a.mkv",
+            "https://[fd12:3456::1]/a.mkv", "https://[fe80::1]/a.mkv", "https://nas.local/a.mkv", "https://jellyfin:8920/a.mkv"
+        ).forEach { url ->
+            val retry = PlaybackStreamHeaders.forUncheckedRetry(request(url))
+            assertEquals(url, "Bearer t", retry.header("Authorization"))
+            assertEquals(url, "AddonAgent", retry.header("User-Agent"))
+        }
+    }
+
+    @Test
+    fun `public and look-alike hosts are not home servers`() {
+        listOf(
+            "8.8.8.8", "172.32.0.1", "172.15.0.1", "192.169.1.1", "11.0.0.1", "cdn.invalid", "local.example.invalid",
+            "10.0.0.5.example.invalid", "2001:db8::1"
+        ).forEach { assertFalse(it, PlaybackStreamHeaders.isLocalHost(it)) }
+        listOf("10.1.2.3", "127.0.0.1", "::1", "fc00::1", "fe80::abcd", "nas.local", "NAS.LOCAL", "jellyfin")
+            .forEach { assertTrue(it, PlaybackStreamHeaders.isLocalHost(it)) }
+    }
+
 }

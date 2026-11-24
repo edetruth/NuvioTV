@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicReference
  * Fork (#434, #435): where a stream's request headers may go in the player.
  * - Login and cookie headers ([isCredential]) go only to the host the addon's link names (and not down from https
  *   to http); every other header (Referer, Origin, User-Agent, ...) still goes along, as content servers need them.
- * - The unchecked TLS retry ([forUncheckedRetry]) sends no stream header at all: only transport headers and the
- *   app's own User-Agent.
+ * - The unchecked TLS retry ([forUncheckedRetry]) sends no stream header to a public host: only transport headers
+ *   and the app's own User-Agent. A home server ([isLocalHost], self-signed certificates are common there) keeps them.
  */
 internal object PlaybackStreamHeaders {
 
@@ -42,8 +42,12 @@ internal object PlaybackStreamHeaders {
         }
     }
 
-    /** [request] for the retry without certificate checks: transport headers and the app's User-Agent only. */
+    /**
+     * [request] for the retry without certificate checks: to a home server as it is; to any other host with
+     * transport headers and the app's User-Agent only.
+     */
     fun forUncheckedRetry(request: Request): Request {
+        if (isLocalHost(request.url.host)) return request
         val builder = request.newBuilder()
         request.headers.names()
             .filter { it.lowercase() !in TRANSPORT_NAMES }
@@ -51,4 +55,25 @@ internal object PlaybackStreamHeaders {
         builder.header("User-Agent", PlayerMediaSourceFactory.DEFAULT_USER_AGENT)
         return builder.build()
     }
+
+    /**
+     * A private or local address, read from the name alone (no lookup): 10/8, 172.16/12, 192.168/16, 127/8, ::1,
+     * fc00::/7, fe80::/10, a `.local` name or a single-label name.
+     */
+    fun isLocalHost(host: String): Boolean {
+        val name = host.trim().trimStart('[').trimEnd(']').lowercase()
+        if (name.isEmpty()) return false
+        if (':' in name) {
+            if (name == "::1") return true
+            val first = name.substringBefore(':').ifEmpty { "0" }.toIntOrNull(16) ?: return false
+            return (first and 0xfe00) == 0xfc00 || (first and 0xffc0) == 0xfe80
+        }
+        val octets = name.split('.')
+        if (octets.size == 4 && octets.all { it.isNotEmpty() && it.length <= 3 && it.all(Char::isDigit) }) {
+            val (a, b) = octets.map { it.toInt() }
+            return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b in 16..31)
+        }
+        return name.endsWith(".local") || '.' !in name.trimEnd('.')
+    }
+
 }
