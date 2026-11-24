@@ -82,6 +82,36 @@ class SportsLiveHoldOkTest {
     }
 
     @Test
+    fun `a hold in a sports replay's player opens the sheet at the first repeat, though the player takes every OK`() {
+        // #254: the replay's player takes OK and each repeat of it (play/pause), and has no hold of its own: before, its
+        // first repeat counted as a hold the player answered, so the sheet waited for a grace time the TV never reached.
+        val run = Run(SportsLiveHoldOkKey(graceMs = 500, playerHasOwnHold = { false }), Screens(consumeRepeats = true))
+        hold(run, at = 1_000, releaseAt = 2_000, route = { "player" })
+        assertEquals(listOf<String?>("player"), run.opened)
+        // The press reached the player (its pause, as a short OK); the repeats and the release did not.
+        assertEquals(listOf("down0"), run.screens.seen)
+    }
+
+    @Test
+    fun `a long press sent as one repeat and a release opens the sheet in a sports replay's player`() {
+        // adb's --longpress (and some remotes over CEC): the press, one repeat at the long-press time, the release.
+        val run = Run(SportsLiveHoldOkKey(graceMs = 500, playerHasOwnHold = { false }), Screens(consumeRepeats = true))
+        run.event(down, 0, 1_000, 1_000, "player")
+        run.event(down, 1, 1_000, 1_500, "player")
+        run.event(up, 0, 1_000, 1_510, "player")
+        assertEquals(listOf<String?>("player"), run.opened)
+        assertFalse("the release must not reach the player", "up" in run.screens.seen)
+    }
+
+    @Test
+    fun `a short OK in a sports replay's player stays the player's`() {
+        val run = Run(SportsLiveHoldOkKey(graceMs = 500, playerHasOwnHold = { false }), Screens(consumeRepeats = true))
+        hold(run, at = 1_000, releaseAt = 1_200, route = { "player" })
+        assertTrue(run.opened.isEmpty())
+        assertEquals(listOf("down0", "up"), run.screens.seen)
+    }
+
+    @Test
     fun `a release before the long-press time is a normal click`() {
         val run = Run(SportsLiveHoldOkKey(), Screens(consumeRepeats = true))
         hold(run, at = 1_000, releaseAt = 1_200)

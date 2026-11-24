@@ -24,7 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
  *   (tv-material buttons and cards: most of Settings). The sheet opens only when the press is still held here, on the
  *   same screen with the window focused, [graceMs] after that first repeat.
  * - Never in the full player or dual screen ([EXCLUDED]): they have their own Hold OK. A sports replay's player has
- *   none (no zap session), so the sheet opens there too (live.26, G-C10).
+ *   none (no zap session), so the sheet opens there too (live.26, G-C10): at the first repeat, never offered to the
+ *   player, which takes every OK and its repeats as play/pause (#254: the press stays its pause, as a short OK).
  * A release before the first repeat is a normal click: nothing here changes it. Once the sheet opened, the press's
  * remaining repeats and its release are eaten, so the focused element never takes the release for a click.
  */
@@ -38,6 +39,9 @@ internal class SportsLiveHoldOkKey(
     private var mine = false
     private var skip = false
     private var takenAt = NO_PRESS
+
+    /** The press began in a sports replay's player: its hold is the sheet's, never the player's (#254). */
+    private var replayPlayer = false
 
     /**
      * One key event, before the screens see it. [screens] hands it to them (true when they consumed it); [open] opens
@@ -61,7 +65,8 @@ internal class SportsLiveHoldOkKey(
             mine = false
             takenAt = NO_PRESS
             val screen = holdOkScreen(route)
-            skip = screen in EXCLUDED && !(screen == PLAYER && !playerHasOwnHold())
+            replayPlayer = screen == PLAYER && !playerHasOwnHold()
+            skip = screen in EXCLUDED && !replayPlayer
             return screens()
         }
         // A repeat or a release of a press this never saw (another hook took its press): not ours.
@@ -82,8 +87,8 @@ internal class SportsLiveHoldOkKey(
             return screens()
         }
         if (takenAt == NO_PRESS) {
-            // The first repeat: the screens' own hold goes first.
-            if (screens()) {
+            // The first repeat: the screens' own hold goes first (a replay's player has none: the sheet's at once).
+            if (!replayPlayer && screens()) {
                 takenAt = eventTime
                 return true
             }
