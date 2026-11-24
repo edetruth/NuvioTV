@@ -4,12 +4,16 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents
+import com.nuvio.tv.core.sportslive.SportsLiveNoEspnGames
+import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
+import com.nuvio.tv.core.sportslive.scores.NoEspnGame
 import com.nuvio.tv.core.sportslive.scores.EspnScoreboardDto
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreCard
@@ -93,7 +97,9 @@ internal class NightlyAccuracy(
         val espn: ScoreSnapshot? = null,
         val appCatches: Boolean = false,
         val leagues: List<EspnLeague> = emptyList(),
-        val aliases: List<Alias> = emptyList()
+        val aliases: List<Alias> = emptyList(),
+        /** Matched by surname on the tennis feeds: never an Other stream (as the score repository). */
+        val tennis: Boolean = false
     )
 
     /** Runs once and writes everything; returns the short summary. */
@@ -114,7 +120,61 @@ internal class NightlyAccuracy(
             sources = sources.map { NightlyWriter.SourceInfo(it.label, it.catalogs, it.failedCatalogs) },
             skippedFiles = skippedFiles, boardRequests = boardRequests, boardFailures = boardFailures,
             directoryLists = directoryLists
-        ).write(checks, dupes, nearMisses)
+        ).write(checks, dupes, nearMisses, appLive(checks, mergedLive, sources.size))
+    }
+
+    // ---- What the app shows as LIVE ----
+
+    /**
+     * Live now as the app builds it from [mergedLive] (live.28): games the ESPN check or a title rule moves to Other streams
+     * ([SportsLiveOtherStreams], the app's own classifier, fed this run's ESPN matches and no-game verdicts) and games the app
+     * itself corrects (a final to Just ended, a later start to Upcoming) are not LIVE. Channels are counted apart.
+     */
+    private fun appLive(checks: List<Check>, mergedLive: List<SportsLiveItem>, addons: Int): NightlyText.AppLive {
+        val liveChecks = checks.filter { it.live }
+        val matched = SportsLiveMatchedEvents()
+        val noGames = SportsLiveNoEspnGames()
+        for (check in liveChecks) {
+            val keys = (listOf(check.row) + check.row.alternates).map { it.streamKey }
+            val event = check.espn
+            if (event != null && check.verdict in MATCHED) {
+                matched.record(keys, event, nowMs)
+            } else if (check.verdict == Verdict.NOT_FOUND && !check.tennis && hasNoEspnGame(check)) {
+                ScoreCard.from(check.row)?.let { noGames.record(keys, it.teams, nowMs) }
+            }
+        }
+        val (listed, otherStreams) = SportsLiveOtherStreams.split(mergedLive, nowMs, noGames, matched)
+        val byKey = liveChecks.groupBy { it.row.streamKey }
+        fun checksOf(item: SportsLiveItem) = (listOf(item) + item.alternates).filter { !it.isChannel }.flatMap { byKey[it.streamKey].orEmpty() }
+        val games = listed.filter { !it.isChannel }
+        val shown = games.filter { item -> checksOf(item).none { it.appCatches } }
+        return NightlyText.AppLive(
+            games = shown.size,
+            channels = listed.size - games.size,
+            otherStreams = otherStreams.size,
+            corrected = games.size - shown.size,
+            espnKnows = shown.count { item -> checksOf(item).any { it.verdict.verified } },
+            unscored = shown.count { item -> checksOf(item).let { it.isNotEmpty() && it.all { check -> NightlyText.isUnscored(check.verdict) } } },
+            raw = liveChecks.size,
+            addons = addons
+        )
+    }
+
+    /**
+     * ESPN has no game for this live row ([NoEspnGame], the score repository's rule) on every scoreboard of its feeds for
+     * its own days and ESPN's yesterday, today and tomorrow; one that did not load fails open, as the app.
+     */
+    private fun hasNoEspnGame(check: Check): Boolean {
+        val card = ScoreCard.from(SportsLiveUnidentified.placed(check.row)) ?: return false
+        val soccerOnly = check.leagues.isNotEmpty() && check.leagues.all { it.sport == "soccer" }
+        val feeds = (check.leagues + if (soccerOnly) listOf(EspnLeagueMap.SOCCER_ALL) else emptyList()).distinct()
+        if (feeds.isEmpty()) return false
+        val today = Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate()
+        val dates = (datesFor(card) + listOf(today.minusDays(1), today, today.plusDays(1))).distinct()
+        val boards = feeds.flatMap { league -> dates.map { scoreboard(league, it) } }
+        if (boards.any { it == null }) return false
+        val events = boards.flatMap { it.orEmpty() }.distinctBy { it.eventId }
+        return NoEspnGame.hasNone(card, feeds, { league -> scoreboard(league, today) != null }, TeamDirectory.shared, events, matcher)
     }
 
     // ---- Addons ----
@@ -290,7 +350,7 @@ internal class NightlyAccuracy(
                 ?: return Check(label, row, live, if (SportsLiveUnidentified.isUntagged(row)) Verdict.UNPLACED else Verdict.NO_FEED)
             val match = TennisMatcher.match(card, eventsOf(tennis, dates))
             val verdict = if (live) NightlyText.liveVerdict(match, null, nowMs) else NightlyText.upcomingVerdict(match)
-            return Check(label, row, live, verdict, match, NightlyText.appCatches(verdict, match, null, false, nowMs), tennis)
+            return Check(label, row, live, verdict, match, NightlyText.appCatches(verdict, match, null, false, nowMs), tennis, tennis = true)
         }
         val (copy, leagues) = routed
         var events = eventsOf(leagues, dates)
@@ -380,6 +440,7 @@ internal class NightlyAccuracy(
         private const val ESPN_LIMIT = 1000
         private const val MAX_DIRECTORY_LISTS = 40
         private const val MAX_ALIASES = 4
+        private val MATCHED = setOf(Verdict.IN_PLAY, Verdict.STARTS_SOON, Verdict.FINAL, Verdict.OFF)
         private const val PAUSE_MS = 250L
         private const val HOUR_MS = 60 * 60_000L
         private const val WINDOW_MS = 3 * HOUR_MS

@@ -26,6 +26,13 @@ class NightlyTextTest {
     )
 
     @Test
+    fun `the app-level line keeps the shape the tripwire reads`() {
+        val line = NightlyText.appLiveLine(NightlyText.AppLive(games = 1, channels = 1, otherStreams = 150, corrected = 39, espnKnows = 1, unscored = 0, raw = 343, addons = 5))
+        assertTrue(line.startsWith("App-level live: 1 games shown LIVE, ESPN knows 1, unscored 0 ("))
+        assertTrue(line.contains("Other streams 150") && line.contains("raw 343 listed live from 5 addons"))
+    }
+
+    @Test
     fun `a live listing reads ESPN's state`() {
         assertEquals(Verdict.IN_PLAY, NightlyText.liveVerdict(event(ScoreState.IN, now - 30 * minute), null, now))
         assertEquals(Verdict.FINAL, NightlyText.liveVerdict(event(ScoreState.POST, now - 180 * minute), null, now))
