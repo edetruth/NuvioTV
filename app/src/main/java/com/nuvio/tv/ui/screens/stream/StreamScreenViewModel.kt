@@ -194,6 +194,7 @@ class StreamScreenViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         StreamScreenUiState(
             videoId = videoId,
+            contentId = contentId ?: videoId.substringBefore(":"),
             contentType = contentType,
             title = title,
             poster = poster,
@@ -1289,7 +1290,7 @@ class StreamScreenViewModel @Inject constructor(
 
             if (result !is NetworkResult.Success) return@launch
 
-            val meta = sportsLiveStreamScreenMeta(videoId, result.data)
+            val meta = sportsLiveStreamScreenMeta(videoId, result.data, contentId)
             playbackMetaVideos = meta.videos
             if (!requiresMetadataLookup) return@launch
             val metaGenres = meta.genres.takeIf { it.isNotEmpty() }

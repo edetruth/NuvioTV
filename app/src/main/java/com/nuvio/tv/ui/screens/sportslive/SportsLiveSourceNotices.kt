@@ -47,9 +47,13 @@ internal fun <T> sportsLiveNoticesLast(streams: List<T>, isNotice: (T) -> Boolea
  * links score-masked, an episode of a hidden replay folder opened from its Detail page too (#240); any other title's
  * list as is.
  */
-internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>): List<Stream> =
-    if (!SportsLiveExtraSources.isSportsPlayback(videoId)) SportsLiveExtraSources.spoilerSafeStreams(videoId, streams)
-    else sportsLiveNoticesLast(SportsLiveExtraSources.spoilerSafeStreams(videoId, streams), SportsLiveZapResolver::isNoticeEntry)
+internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>, contentId: String? = null): List<Stream> {
+    // By the video or its content (H-F1: an episode of a hidden folder not registered yet).
+    val id = listOf(videoId, contentId).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: videoId
+    val shown = SportsLiveExtraSources.spoilerSafeStreams(id, streams)
+    val sports = SportsLiveExtraSources.isSportsPlayback(videoId) || SportsLiveExtraSources.isSportsPlayback(contentId)
+    return if (!sports) shown else sportsLiveNoticesLast(shown, SportsLiveZapResolver::isNoticeEntry)
+}
 
 /**
  * [info], a link the Stream screen hands the player (picked there, auto-picked or the last link reused), as the player

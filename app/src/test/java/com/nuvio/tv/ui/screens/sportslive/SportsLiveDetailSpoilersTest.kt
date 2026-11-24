@@ -299,6 +299,26 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `the Stream screen of an episode not registered yet lists and heads it masked by its content`() {
+        // H-F1: the list before (or without) the meta read, and an addon whose meta id is not the folder's.
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        assertEquals(listOf("Team A – Team B"), sportsLiveStreamScreenOrder("folder:ep9", listOf(scored), contentId = "folder").map { it.name })
+        assertNull(sportsLiveStreamScreenMeta("folder:ep9", folder.copy(id = "canonical:folder"), contentId = "folder").poster)
+        // The video the Stream screen opened on is registered with the folder by that read.
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe("folder:ep9"))
+        // Another title's list stays as it is.
+        assertEquals(listOf(scored), sportsLiveStreamScreenOrder("movie:1", listOf(scored), contentId = "movie"))
+    }
+
+    @Test
+    fun `a hidden folder's default video is masked like its listed ones`() {
+        // H-F1: Play on the Detail page opens behaviorHints.defaultVideoId, which may not be in its videos.
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        sportsLiveDetailMeta("folder", folder.copy(behaviorHints = MetaBehaviorHints(defaultVideoId = "folder:latest")))
+        assertTrue(SportsLiveExtraSources.isSpoilerSafe("folder:latest"))
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)

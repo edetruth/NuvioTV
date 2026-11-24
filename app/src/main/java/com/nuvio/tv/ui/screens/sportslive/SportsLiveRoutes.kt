@@ -47,10 +47,12 @@ internal fun sportsLiveLocalStamps(context: Context, text: String?): String? {
  * [meta], the addon's meta the Stream screen fills its missing artwork and year from and hands the player its next
  * videos from, as it may use it for [videoId]: a spoiler-safe replay's (#223), the video or its content ([meta]'s id, a
  * folder opened straight on its Stream screen: S4), masked as its Detail page shows it ([sportsLiveDetailMeta]: its
- * videos registered and masked too); any other title's as is.
+ * videos registered and masked too); [contentId], the Stream screen's content, counts too (H-F1); any other title's as is.
  */
-internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta {
-    val id = listOf(videoId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
+internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta, contentId: String? = null): Meta {
+    val id = listOf(videoId, contentId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
+    // The video the Stream screen opened on joins its folder too, listed in the meta or not (H-F1).
+    SportsLiveExtraSources.markSpoilerSafeVideos(id, listOfNotNull(videoId))
     return sportsLiveDetailMeta(id, meta)
 }
 
@@ -81,7 +83,8 @@ internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
     }
     val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
     // The page plays under meta.id, which an addon may give differently from the catalog's id (F8).
-    SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id } + meta.id)
+    // Play opens its default video, which may not be listed (H-F1).
+    SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id } + listOfNotNull(meta.id, meta.behaviorHints?.defaultVideoId))
     return spoilerMaskedMeta(meta)
 }
 
