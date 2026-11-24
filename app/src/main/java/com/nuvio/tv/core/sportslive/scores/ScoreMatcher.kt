@@ -46,7 +46,8 @@ data class ScoreCard(
  *   (normalised, diacritics stripped, folded through [SportsLiveTeams.canonicalise]; the abbreviation
  *   is only lowercased), or WEAK (2) by equality with its location alone or by the
  *   [SportsLiveTeams.matches] suffix rule ("Raiders" ↔ "Las Vegas Raiders"). The total must be at least
- *   5, so one side must match STRONG.
+ *   5, so one side must match STRONG. A card side's "Sport: League:" heading is no part of its name, and a full name
+ *   with one stray inner word ("Minnesota Lynx Timberwolves") still matches STRONG (nightly 2026-11-23).
  * - A (W)/Women or U21-style qualifier must agree: the card's against the competitor's names or, when
  *   they carry none, the event's league slug (`eng.w.1`, `fifa.friendly_u21`).
  * - Time: within ±3 h of a timed card's start; with no game there at all, the pair's one meeting within ±14 h when
@@ -234,7 +235,14 @@ class ScoreMatcher(
      * [collegeKeys] ([collegeAlternates]: "Georgetown University" as "georgetown"), compared with a
      * team's own names only, never its city (N9).
      */
-    private class Side(val base: String, val keys: Set<String>, val qualifier: String?, val collegeKeys: Set<String> = emptySet())
+    private class Side(
+        val base: String,
+        val keys: Set<String>,
+        val qualifier: String?,
+        val collegeKeys: Set<String> = emptySet(),
+        /** [innerWordDropped]: the name with one inner word fewer ("Minnesota Lynx Timberwolves" as "minnesota timberwolves"). */
+        val looseKeys: Set<String> = emptySet()
+    )
 
     private fun side(name: String): Side = sideOf(name)
 
@@ -325,6 +333,8 @@ class ScoreMatcher(
             (if (womenFeed && side.qualifier == "w") null else side.qualifier) != (if (womenFeed && qualifier == "w") null else qualifier) -> 0
             side.keys.any { it in strongKeys } -> STRONG
             side.collegeKeys.any { it in strongKeys } -> STRONG
+            // Only a full name of two words or more (a variant has at least two), never an abbreviation or a city.
+            side.looseKeys.any { it in strongKeys } -> STRONG
             side.keys.any { it in locationKeys } -> if (college) STRONG else WEAK
             fullNames.any { SportsLiveTeams.matches(side.base, it) } -> WEAK
             else -> 0
@@ -391,8 +401,41 @@ class ScoreMatcher(
 
         private fun sideOfUncached(name: String): Side {
             val (base, qualifier) = splitQualifier(fold(name))
-            val keys = setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - ""
-            return Side(base, keys, qualifier, collegeAlternates(SportsLiveTeams.normalise(base)) - keys)
+            val team = withoutHeading(base)
+            val keys = setOf(
+                SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base),
+                SportsLiveTeams.normalise(team), SportsLiveTeams.canonicalise(team)
+            ) - ""
+            return Side(
+                base, keys, qualifier, collegeAlternates(SportsLiveTeams.normalise(base)) - keys,
+                innerWordDropped(SportsLiveTeams.normalise(team)) - keys
+            )
+        }
+
+        /**
+         * [base] without a heading written before the team, "Sport: League:" (nightly 2026-11-23: "Košarka: NBA: Minnesota
+         * Timberwolves" is "Minnesota Timberwolves"): the part after the last ": ". [base] itself when it has none, or when
+         * nothing with a letter follows it. The heading only adds keys: the whole name still matches as it did.
+         */
+        internal fun withoutHeading(base: String): String {
+            val cut = base.lastIndexOf(": ")
+            if (cut < 0) return base
+            val team = base.substring(cut + 2).trim()
+            return if (team.any(Char::isLetter)) team else base
+        }
+
+        /**
+         * A [normalised] name of three words or more with one inner word fewer (nightly 2026-11-23: an addon's "Minnesota
+         * Lynx Timberwolves" is "minnesota timberwolves"). The first and last words always stay, so a reserve, youth or
+         * women's side told apart by its first or last word ("Jong Ajax", "Real Madrid Castilla", "Bayern Munich II")
+         * never loses it, and every variant keeps two words or more (never a bare city or nickname).
+         */
+        internal fun innerWordDropped(normalised: String): Set<String> {
+            val words = normalised.split(' ').filter { it.isNotEmpty() }
+            if (words.size < 3) return emptySet()
+            return (1 until words.lastIndex).mapTo(HashSet()) { skip ->
+                words.filterIndexed { index, _ -> index != skip }.joinToString(" ")
+            }
         }
 
         // A bare name that is another school than "‹name› University": Miami University is Miami (OH),
