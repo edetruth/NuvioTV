@@ -2224,6 +2224,28 @@ class SportsLiveViewModelTest {
     } }
 
     @Test
+    fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
+        // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
+        // estimate with no stream yet stays live, dimmed (#145).
+        nextLoad = load(listOf(pastEstimate, stillOn))
+        endedFlow.value = setOf(pastEstimate.streamKey, stillOn.streamKey)
+        val viewModel = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("on", "g"), state.visibleItems.map { it.id })
+        assertEquals(setOf(pastEstimate.streamKey), state.justEnded.keys)
+        assertEquals(EndedSignal.ESTIMATE, state.endedOf(state.visibleItems.last())?.signal)
+        assertNull(state.endedOf(state.visibleItems.first()))
+
+        // A later lookup finds streams: live again.
+        endedFlow.value = emptySet()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.justEnded.isEmpty())
+        assertEquals(2, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+    }
+
+    @Test
     fun `a Probably ended card whose links come back returns to live, and leaves the strip only while its verdict stands`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(pastEstimate, stillOn))
         var reply: ManifestResponse? = ManifestResponse(404, null)

@@ -1720,8 +1720,15 @@ class SportsLiveViewModel internal constructor(
                 // Checks go on under Scores Off: they make no ESPN request, only the stream host's.
                 val linkEnded = ArrayList<SportsLiveItem>()
                 val toCheck = ArrayList<LinkCheckRequest>()
+                // #275: one whose every lookup found no stream at all has no link to check: "Probably ended" at its
+                // estimated end, the same way; a lookup finding streams again brings it back.
+                val noLinksEnded = ArrayList<Pair<SportsLiveItem, EndedGame>>()
                 val live = notOverdue.filter { item ->
-                    if (endedGames.linkCheckEnd(item, scores[item.streamKey], now) == null) return@filter true
+                    val estimatedEnd = endedGames.linkCheckEnd(item, scores[item.streamKey], now) ?: return@filter true
+                    if (item.streamKey in noStreams) {
+                        EndedGame(EndedSignal.ESTIMATE, estimatedEnd).takeIf { now < it.dropsAtMs }?.let { noLinksEnded += item to it }
+                        return@filter false
+                    }
                     val request = linkCheckOf(item)
                     val superseded = request != null && linkChecker?.clearIfSuperseded(request) == true
                     if (item.streamKey in linkDead && !superseded) {
@@ -1736,6 +1743,7 @@ class SportsLiveViewModel internal constructor(
                     linkChecker?.offer(toCheck, viewModelScope)
                 }
                 justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended } +
+                    noLinksEnded.associate { (item, ended) -> item.streamKey to ended } +
                     linkEnded.associate { it.streamKey to SportsLiveEndedGames.linkDead(linkDead.getValue(it.streamKey).atMs) }
                 // The excitement badge (#43, V2): shown with the scores only, and it never re-orders the list.
                 if (mode == ScoresMode.SHOW) {
@@ -1753,7 +1761,7 @@ class SportsLiveViewModel internal constructor(
                 // Here, before the calm step (J1), not on the board: a match landing later never moves a shown row; the
                 // order is applied on the first build, a thaw ("N new") and a re-rank.
                 val ranked = SportsLiveLineup.order(live, mySports, scores, mode)
-                val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                val built = ranked + split.justEnded + overdueEnded.map { it.first } + noLinksEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
                 lastBuiltLiveCount = ranked.size
                 // The focused card is never taken from under the user: kept in place until focus moves on. While Live now
