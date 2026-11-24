@@ -241,7 +241,7 @@ internal fun softwareVideoCodecSelector(base: MediaCodecSelector): MediaCodecSel
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun debugFailingHardwareVideoSelector(base: MediaCodecSelector): MediaCodecSelector {
-    if (!BuildConfig.DEBUG || debugSystemProperty("debug.nuvio.fail_hw_video") != "1") return base
+    if (!BuildConfig.IS_DEBUG_BUILD || debugSystemProperty("debug.nuvio.fail_hw_video") != "1") return base
     Log.w(PlayerRuntimeController.TAG, "VIDEO_DECODER: debug.nuvio.fail_hw_video is set, hardware video fails")
     return MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
         val all = base.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)

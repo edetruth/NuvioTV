@@ -101,7 +101,7 @@ class ScoreMatcher(
         }
         val best = pick?.event?.takeUnless { doubleHeader(home, away, it, events) }
         if (best == null) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "no match: ${card.teams.home} / ${card.teams.away}")
+            if (BuildConfig.IS_DEBUG_BUILD) Log.d(TAG, "no match: ${card.teams.home} / ${card.teams.away}")
             return null
         }
         if (cache.size >= MAX_CACHED) cache.clear()
@@ -132,7 +132,7 @@ class ScoreMatcher(
             onToday.singleOrNull { it.state == ScoreState.PRE }
                 ?: onToday.singleOrNull()?.takeIf { it.state == ScoreState.POST }
         }
-        if (pick == null && BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${candidates.size} meetings for ${home.base} / ${away.base}")
+        if (pick == null && BuildConfig.IS_DEBUG_BUILD) Log.d(TAG, "ambiguous: ${candidates.size} meetings for ${home.base} / ${away.base}")
         return pick?.takeUnless { doubleHeader(home, away, it, events) }
     }
 
@@ -151,7 +151,7 @@ class ScoreMatcher(
         if (abs(only.startMs!! - start) > OFFSET_WINDOW_MS) return null
         if (isWomenFeed(only) && home.qualifier != "w" && away.qualifier != "w") return null
         if ((score(home, away, only) ?: 0) < BOTH_STRONG) return null
-        if (BuildConfig.DEBUG) Log.d(TAG, "time-off match: ${home.base} / ${away.base}")
+        if (BuildConfig.IS_DEBUG_BUILD) Log.d(TAG, "time-off match: ${home.base} / ${away.base}")
         return Pick(only)
     }
 
@@ -230,7 +230,7 @@ class ScoreMatcher(
         val tied = ranked.drop(1).any { it.second == top.second && it.first.eventId != top.first.eventId }
         if (tied) {
             if (byStart) startTieBreak(ranked.filter { it.second == top.second }.map { it.first }, reference)?.let { return Pick(it) }
-            if (BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${ranked.size} candidates for ${home.base} / ${away.base}")
+            if (BuildConfig.IS_DEBUG_BUILD) Log.d(TAG, "ambiguous: ${ranked.size} candidates for ${home.base} / ${away.base}")
             return Pick(null)
         }
         return Pick(top.first)
