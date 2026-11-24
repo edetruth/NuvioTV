@@ -564,6 +564,8 @@ fun SportsLiveAlertsHost(
                 Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = place.start, bottom = place.bottom)
+                    // Intended (#478, reviewed 2026-11-24): an unshown card is not laid out, so it claims nothing; while
+                    // it fades out (150 ms) it keeps the corner on purpose, so a toast doesn't drop onto the fading card.
                     .claimsBottomLeft(stacked = true, enabled = place.holdsCorner)
             }
             val kickoff = alert as? SportsLiveAlert.Kickoff
