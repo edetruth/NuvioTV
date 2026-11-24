@@ -351,15 +351,16 @@ object SportsLiveExtraSources {
 
     private val FILE_EXTENSION = Regex("""\.[A-Za-z0-9]{2,4}$""")
 
-    /** [text] with its %XX escapes decoded as UTF-8 ("+" stays: "HDR10+"); as it is when it is not valid encoding. */
+    /** [text] with its %XX escapes decoded as UTF-8 ("+" stays: "HDR10+"); a "%" that starts none stays as it is (#471). */
     private fun percentDecoded(text: String): String {
         if ('%' !in text) return text
         val bytes = java.io.ByteArrayOutputStream()
         var i = 0
         while (i < text.length) {
             val c = text[i]
-            if (c == '%' && i + 2 <= text.lastIndex) {
-                val byte = text.substring(i + 1, i + 3).toIntOrNull(16) ?: return text
+            val hex = if (c == '%' && i + 2 <= text.lastIndex) text.substring(i + 1, i + 3) else null
+            val byte = hex?.takeIf { pair -> pair.all { it in '0'..'9' || it.lowercaseChar() in 'a'..'f' } }?.toInt(16)
+            if (byte != null) {
                 bytes.write(byte)
                 i += 3
             } else {

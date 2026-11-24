@@ -303,6 +303,8 @@ class SportsLiveDetailSpoilersTest {
         // Nothing to mask: the file name as it is, HDR10+ and all.
         assertEquals("Match.Day.HDR10+.2160p.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Match.Day.HDR10+.2160p.mkv"))
         assertEquals("Bad%ZZname.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "Bad%ZZname.mkv"))
+        // #471: a literal % elsewhere does not stop the valid escapes from decoding.
+        assertEquals("50% Match – TeamB.mkv", SportsLiveExtraSources.spoilerSafeText("folder", "50%_Match%2010-2%20TeamB.mkv"))
     }
 
     @Test
