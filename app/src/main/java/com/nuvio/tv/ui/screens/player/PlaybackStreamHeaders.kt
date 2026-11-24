@@ -121,14 +121,24 @@ internal object PlaybackStreamHeaders {
         override fun intercept(chain: Interceptor.Chain): Response {
             val first = chain.call().request().url
             val hop = chain.request()
-            return chain.proceed(if (StreamOrigin.same(first, hop.url)) forUncheckedRetry(hop) else transportOnly(hop))
+            val stream = chain.call().request().headers
+            return chain.proceed(if (StreamOrigin.same(first, hop.url)) forUncheckedRetry(hop) else transportOnly(hop, stream))
         }
     }
 
-    private fun transportOnly(request: Request): Request {
+    /**
+     * [request] without the stream's headers ([stream]: the headers the caller set) and without login headers; the
+     * headers OkHttp adds itself (Host, Connection, ...) and the transport ones stay (#457: a request with no Host
+     * is answered 400). The User-Agent becomes the app's own.
+     */
+    private fun transportOnly(request: Request, stream: Headers = request.headers): Request {
         val builder = request.newBuilder()
+        val streamNames = stream.names().map { it.lowercase() }.toSet()
         request.headers.names()
-            .filter { it.lowercase() !in TRANSPORT_NAMES }
+            .filter { name ->
+                val lower = name.lowercase()
+                lower !in TRANSPORT_NAMES && (lower in streamNames || isCredential(name))
+            }
             .forEach { builder.removeHeader(it) }
         builder.header("User-Agent", PlayerMediaSourceFactory.DEFAULT_USER_AGENT)
         return builder.build()

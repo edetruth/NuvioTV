@@ -96,6 +96,9 @@ class PlaybackHeaderRedirectTest {
         assertNull(hop.getHeader("Referer"))
         assertNull(hop.getHeader("X-Custom"))
         assertEquals(PlayerMediaSourceFactory.DEFAULT_USER_AGENT, hop.getHeader("User-Agent"))
+        // #457: OkHttp's own headers stay; a request without Host is answered 400 by real servers.
+        assertEquals("127.0.0.1:${other.port}", hop.getHeader("Host"))
+        assertEquals("Keep-Alive", hop.getHeader("Connection"))
     }
 
     /** A client the way the parallel connections path builds it: headers set on the request, a cookie jar. */
