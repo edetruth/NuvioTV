@@ -15,6 +15,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertOkPress
 import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.core.sportslive.alerts.sportsLivePausedNow
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualAvailable
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit
@@ -193,9 +194,10 @@ internal interface AlertKeyHandler {
 /**
  * Registers [surface] while this composable is shown. [paused]: the full player's video is paused (not buffering, not
  * ended, no error); it is told to the alerts once it stayed paused [PAUSE_SETTLE_MS], so a seek's blip is not a pause (#91).
+ * The pause ends when the video [playing] again, not on a seek's buffering while paused (review R1).
  */
 @Composable
-internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, paused: Boolean = false) {
+internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, paused: Boolean = false, playing: Boolean = false) {
     DisposableEffect(surface) {
         SportsLiveAlertSurfaces.register(surface)
         onDispose {
@@ -203,9 +205,9 @@ internal fun RegisterSportsLiveAlertSurface(surface: SportsLiveAlertSurface, pau
             SportsLiveAlertSurfaces.setPlayerPaused(false)
         }
     }
-    LaunchedEffect(paused) {
+    LaunchedEffect(paused, playing) {
         if (paused) delay(PAUSE_SETTLE_MS)
-        SportsLiveAlertSurfaces.setPlayerPaused(paused)
+        SportsLiveAlertSurfaces.setPlayerPaused(sportsLivePausedNow(paused, playing, SportsLiveAlertSurfaces.playerPaused.value))
     }
 }
 

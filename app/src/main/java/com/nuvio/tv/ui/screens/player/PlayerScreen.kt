@@ -2454,7 +2454,8 @@ fun PlayerScreen(
         }
         RegisterSportsLiveAlertSurface(
             alertSurface,
-            paused = !uiState.isPlaying && !uiState.isBuffering && !uiState.playbackEnded && uiState.error == null
+            paused = !uiState.isPlaying && !uiState.isBuffering && !uiState.playbackEnded && uiState.error == null,
+            playing = uiState.isPlaying
         )
         // Toasts over the player take its bottom left corner, above its Sports & Live cards (live.19 QA F8) and its controls.
         com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsOverVideo(controlsUp = playerControlsVisible || seekOverlayVisible)

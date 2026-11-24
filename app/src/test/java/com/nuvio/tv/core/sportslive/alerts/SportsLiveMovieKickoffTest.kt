@@ -12,6 +12,7 @@ import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -187,6 +188,59 @@ class SportsLiveMovieKickoffTest {
         engine.answered(game)
         engine.deferOffer(game)
         assertEquals(emptyList<SportsLiveAlert>(), engine.look(START + 10 * MINUTE, live(4, 2), paused))
+    }
+
+    // R1 (review): the movie plays again while the asking card is up
+
+    @Test
+    fun `resuming the movie closes the asking card - it was the one offer, so it is answered`() {
+        val alerts = newAlerts()
+        alerts.setWatching(playing)
+        alerts.engine.look(START + MINUTE, live(0, 0), playing)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        alerts.setWatching(paused)
+        val asking = alerts.current.value!!.alert as SportsLiveAlert.Kickoff
+        assertFalse(asking.passive)
+        assertTrue(asking.deferred)
+
+        alerts.setWatching(playing)
+        assertNull(alerts.current.value)
+        assertEquals(emptyList<SportsLiveAlert>(), alerts.engine.look(START + 30 * MINUTE, live(10, 8), paused))
+    }
+
+    @Test
+    fun `a first kickoff asked over a paused movie that plays again closes and keeps its one offer`() {
+        val alerts = newAlerts()
+        alerts.setWatching(paused)
+        alerts.engine.look(START + MINUTE, live(0, 0), paused)
+        alerts.enqueue(listOf(kickoff()), System.currentTimeMillis())
+        assertFalse((alerts.current.value!!.alert as SportsLiveAlert.Kickoff).passive)
+
+        alerts.setWatching(playing)
+        assertNull(alerts.current.value)
+        assertEquals(emptyList<SportsLiveAlert>(), alerts.engine.look(START + 20 * MINUTE, live(10, 8), playing))
+        val offer = alerts.engine.look(START + 30 * MINUTE, live(10, 8), paused)
+        assertEquals(1, offer.size)
+        assertTrue((offer.single() as SportsLiveAlert.Kickoff).deferred)
+    }
+
+    @Test
+    fun `a deferred offer that comes up while the movie plays again waits for the next pause`() {
+        val alerts = newAlerts()
+        alerts.setWatching(playing)
+        alerts.enqueue(listOf(kickoff(deferred = true)), System.currentTimeMillis())
+        assertNull(alerts.current.value)
+        assertEquals(emptyList<SportsLiveAlert>(), alerts.engine.look(START + 20 * MINUTE, live(10, 8), playing))
+        assertEquals(1, alerts.engine.look(START + 30 * MINUTE, live(10, 8), paused).size)
+    }
+
+    @Test
+    fun `a seek while paused is not a resume - the player's pause holds until it plays`() {
+        // Paused, then buffering for a seek (neither paused nor playing): still paused.
+        assertTrue(sportsLivePausedNow(paused = false, playing = false, wasPaused = true))
+        assertFalse(sportsLivePausedNow(paused = false, playing = true, wasPaused = true))
+        // Buffering while it plays is never a pause.
+        assertFalse(sportsLivePausedNow(paused = false, playing = false, wasPaused = false))
     }
 
     @Test

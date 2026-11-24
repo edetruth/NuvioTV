@@ -172,12 +172,23 @@ class SportsLiveAlerts @Inject constructor(
 
     fun setWatching(now: SportsLiveWatching) {
         watching.value = now
-        // The passive kickoff card over a movie (#91): the viewer paused or left it, so the card asks now, as a new card.
         synchronized(lock) {
             val card = currentFlow.value ?: return@synchronized
             val alert = card.alert as? SportsLiveAlert.Kickoff ?: return@synchronized
-            if (alert.passive && SportsLiveAlertEngine.viewerFree(now)) {
-                currentFlow.value = AlertCard(++cardCount, alert.copy(passive = false), System.currentTimeMillis())
+            if (alert.noStreamYet) return@synchronized
+            val nowMs = System.currentTimeMillis()
+            when {
+                // The passive kickoff card over a movie (#91): the viewer paused or left it, so the card asks now, as a new
+                // card. It is the game's one deferred offer.
+                alert.passive && SportsLiveAlertEngine.viewerFree(now) ->
+                    currentFlow.value = AlertCard(++cardCount, alert.copy(passive = false, deferred = true), nowMs)
+                // The movie plays again while the card asks (review R1): OK is the movie's again, so the card goes. The
+                // deferred offer was the one offer (answered); a first kickoff keeps its one offer for the next pause.
+                !alert.passive && SportsLiveAlertEngine.moviePlays(now) -> {
+                    if (alert.deferred) engine.answered(alert.item) else engine.deferOffer(alert.item)
+                    currentFlow.value = null
+                    showNextLocked(nowMs)
+                }
             }
         }
     }
@@ -506,6 +517,11 @@ class SportsLiveAlerts @Inject constructor(
         if (SportsLiveAlertEngine.isPlaying(next.item, watching.value, SportsLiveAlertEngine.snapshotOf(next))) {
             // A reminder for a game on screen is satisfied: it never fires later either.
             if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
+            return null
+        }
+        // The deferred offer never shows over a movie that plays (review R1): it waits for the next pause.
+        if (next is SportsLiveAlert.Kickoff && next.deferred && SportsLiveAlertEngine.moviePlays(watching.value)) {
+            engine.deferOffer(next.item)
             return null
         }
         if (!SportsLiveAlertEngine.claimToShow(next)) return null

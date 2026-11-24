@@ -398,7 +398,10 @@ class SportsLiveAlertEngine {
          * the deferred offer, nor the no-stream note; not over a paused movie, a Sports & Live stream or any other screen.
          */
         fun kickoffPassive(alert: SportsLiveAlert.Kickoff, watching: SportsLiveWatching): Boolean =
-            !alert.deferred && !alert.noStreamYet && overMovie(watching) && !watching.moviePaused
+            !alert.deferred && !alert.noStreamYet && moviePlays(watching)
+
+        /** A movie or show plays in the full player, not paused: OK is the viewer's pause key (#91). */
+        fun moviePlays(watching: SportsLiveWatching): Boolean = overMovie(watching) && !watching.moviePaused
 
         /** The viewer is free to be asked about a game: they left the movie, or paused it (#91). */
         fun viewerFree(watching: SportsLiveWatching): Boolean = !overMovie(watching) || watching.moviePaused
@@ -471,3 +474,10 @@ class SportsLiveAlertEngine {
         }
     }
 }
+
+/**
+ * The full player's pause as the alerts hear it (#91, review R1): [paused] (and stayed so a moment) is a pause; it ends only
+ * when the video plays again ([playing]). A seek's buffering while paused is neither, so the pause holds through it and an
+ * asking kickoff card is not closed by it.
+ */
+internal fun sportsLivePausedNow(paused: Boolean, playing: Boolean, wasPaused: Boolean): Boolean = paused || (wasPaused && !playing)
