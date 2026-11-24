@@ -165,6 +165,19 @@ class ScoreMatcher(
     }
 
     /**
+     * True when either of [card]'s sides names a team of any of [events], even WEAK and whatever its women's or youth
+     * qualifier (live.27): a card neither of whose teams plays on a scoreboard is no game of that scoreboard. Read only to
+     * keep a card live (a name that may be one of these teams counts), never to match one.
+     */
+    fun touches(card: ScoreCard, events: List<ScoreSnapshot>): Boolean {
+        val sides = listOf(side(card.teams.home), side(card.teams.away))
+        return events.any { event ->
+            val college = isCollegeFeed(event)
+            listOf(competitor(event.home, null, college), competitor(event.away, null, college)).any { team -> sides.any(team::names) }
+        }
+    }
+
+    /**
      * The pair's meeting ESPN has not started yet and has scheduled more than [LATER_LEAD_MS] after [nowMs] (live.20: an
      * addon listed tomorrow's game live). Read for its start only, never as the card's score: it must be the pair's only
      * meeting among [events] (a series or a home-and-home gives none), within [LATER_MAX_MS], both sides STRONG, and a
@@ -318,6 +331,11 @@ class ScoreMatcher(
         // A city alone ("Dallas", "Los Angeles") names more than one team.
         private val locationKeys: Set<String> = team.location?.let { splitQualifier(fold(it)).first }
             ?.let { setOf(SportsLiveTeams.normalise(it), SportsLiveTeams.canonicalise(it)) - "" }.orEmpty()
+
+        /** True when [side] names this team at all (any of [score]'s ways), its qualifier aside ([touches]). */
+        fun names(side: Side): Boolean =
+            side.keys.any { it in strongKeys || it in locationKeys } || side.collegeKeys.any { it in strongKeys } ||
+                fullNames.any { SportsLiveTeams.matches(side.base, it) }
 
         /** [womenFeed]: the event is on a women's feed, where a card's women's marker is what the feed already says. */
         fun score(side: Side, womenFeed: Boolean = false): Int = when {
