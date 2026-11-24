@@ -35,7 +35,8 @@ class SportsLiveSettledRowsTest {
     @Test
     fun `a score landing late never moves a row to another group`() {
         val (a, b, c) = listOf("a", "b", "c").map(::item)
-        val shown = listOf(row(a), row(b), row(c))
+        // c was in play on ESPN when shown (#484: only such a game ends in its place).
+        val shown = listOf(row(a), row(b), row(c, status = GameStatus.Live(inPlay("c"))))
         // b turns out not started yet (ESPN), c is over: as built they would leave the Live rows.
         val built = listOf(
             row(a),
@@ -53,7 +54,7 @@ class SportsLiveSettledRowsTest {
     @Test
     fun `a game that ends in its place reads ended there, and the Live header stops counting it`() {
         val (a, b) = listOf("a", "b").map(::item)
-        val shown = listOf(row(a), row(b))
+        val shown = listOf(row(a, status = GameStatus.Live(inPlay("a"))), row(b))
         val built = listOf(row(b), row(a, ScoreboardGroup.JUST_ENDED, status = GameStatus.Final(final("a"))))
         val settled = SportsLiveSettledRows.settle(shown, built)
         assertEquals(listOf("a", "b"), settled.map { it.item.id })
@@ -62,6 +63,24 @@ class SportsLiveSettledRowsTest {
         // As built, in the Just ended strip, it is no in-place end.
         assertFalse(built[1].endedInPlace)
         assertEquals(mapOf(ScoreboardGroup.LIVE to 1), sportsLiveGroupCounts(settled))
+    }
+
+    @Test
+    fun `#484 - a final shown LIVE before its score landed goes to Just ended, never stays among the live games`() {
+        val (a, b, c) = listOf("a", "b", "c").map(::item)
+        // The first board: scores not there yet, every game LIVE on its addon's word.
+        val shown = listOf(row(b), row(a), row(c))
+        // The scores land: b is a final ESPN had long before; a and c are in play.
+        val built = listOf(
+            row(a, status = GameStatus.Live(inPlay("a"))),
+            row(c, status = GameStatus.Live(inPlay("c"))),
+            row(b, ScoreboardGroup.JUST_ENDED, status = GameStatus.Final(final("b")))
+        )
+        val settled = SportsLiveSettledRows.settle(shown, built)
+        assertEquals(listOf("a", "c", "b"), settled.map { it.item.id })
+        assertEquals(ScoreboardGroup.JUST_ENDED, settled.last().group)
+        assertFalse(settled.last().endedInPlace)
+        assertEquals(mapOf(ScoreboardGroup.LIVE to 2, ScoreboardGroup.JUST_ENDED to 1), sportsLiveGroupCounts(settled))
     }
 
     @Test
@@ -124,7 +143,7 @@ class SportsLiveSettledRowsTest {
     @Test
     fun `a board settles only on the same tab and filter, never on More live or another view`() {
         val (a, b) = listOf("a", "b").map(::item)
-        val shown = board(listOf(row(a), row(b)))
+        val shown = board(listOf(row(a, status = GameStatus.Live(inPlay("a"))), row(b)))
         val built = board(listOf(row(b), row(a, ScoreboardGroup.JUST_ENDED, status = GameStatus.Final(final("a")))))
         val settled = built.settledOn(shown)
         assertEquals(listOf("a", "b"), settled.rows!!.map { it.item.id })
@@ -177,6 +196,8 @@ class SportsLiveSettledRowsTest {
         item = item, group = group, chip = null, art = null,
         firstFollowed = false, secondFollowed = false, probablyEnded = false, status = status, twoSided = twoSided
     )
+
+    private fun inPlay(id: String) = final(id).copy(state = ScoreState.IN, isFinal = false, clockText = "Q2 5:00")
 
     private fun final(id: String) = ScoreSnapshot(
         eventId = id, league = EspnLeague("basketball", "nba"), startMs = NOW - 3 * HOUR, state = ScoreState.POST,
