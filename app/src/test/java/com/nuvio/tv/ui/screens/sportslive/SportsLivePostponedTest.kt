@@ -62,4 +62,19 @@ class SportsLivePostponedTest {
         val postponed = row.copy(status = GameStatus.Postponed("Postponed", mayResume = false))
         assertEquals(null, sportsLiveGroupCounts(listOf(postponed))[ScoreboardGroup.LIVE])
     }
+
+    @Test
+    fun `L9 - a postponed row in the Just ended strip reads Postponed, never Final, with no chip too`() {
+        val postponed = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Postponed", mayResume = false)
+        val row = scoreboardRows(listOf(card), SportsLiveTab.LIVE_NOW, mapOf(card.streamKey to postponed), ScoresMode.SHOW, emptySet(), 0L)
+            .single().copy(chip = null)
+        assertEquals(ScoreboardGroup.JUST_ENDED, row.group)
+        val strings = com.nuvio.tv.core.sportslive.GameStatusStrings(
+            liveClock = "● %1\$s", live = "LIVE", clockPeriod = "%1\$s · %2\$s", timeCountdown = "%1\$s · %2\$s",
+            inHoursMinutes = "in %1\$d h %2\$d m", inHours = "in %1\$d h", inMinutes = "in %1\$d min",
+            final = "Final", fullTime = "FT", probablyEnded = "Probably ended", postponed = "Postponed",
+            chip = com.nuvio.tv.core.sportslive.scores.ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
+        )
+        assertEquals(ScoreboardStatusLines("Postponed"), scoreboardStatusLines(row, strings, kickoff = null))
+    }
 }

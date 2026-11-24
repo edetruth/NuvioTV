@@ -292,6 +292,8 @@ class SportsLiveItemBucketerTest {
         val items = describeAll(
             listOf(
                 meta("past", "Past date game", releaseInfo = "2026-11-13"),
+                // Yesterday: its date ended everywhere at 12:00 UTC today (36 h), before now (14:30).
+                meta("yesterday", "Yesterday game", releaseInfo = "2026-11-14"),
                 meta("today", "Today game", releaseInfo = "2026-11-15"),
                 meta("later", "Later game", releaseInfo = "2026-11-17")
             ),

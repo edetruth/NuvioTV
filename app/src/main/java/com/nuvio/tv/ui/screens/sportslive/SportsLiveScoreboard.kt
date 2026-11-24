@@ -435,6 +435,8 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
             ScoreChips.finalWords(chip.note, GameStatusText.finalWord(sport, strings), strings.fullTime, GameStatusText.endsAtFullTime(sport))
         )
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
+        // L9: a postponed game in the Just ended strip reads Postponed, never Final (with no chip too).
+        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
         // live.28: an ESPN-covered game whose feed has not answered yet: its start time, never LIVE before ESPN says so.
         // F6: with no start to show, a quiet "Checking score…", never a blank status.
@@ -442,7 +444,6 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
             // The game grammar's one scoreless form (live.24, audit A6): LIVE with its dot, then the muted "No score yet".
             if (row.listedOnly) ScoreboardStatusLines(strings.live, strings.listedLive, live = true, listed = true) else ScoreboardStatusLines(strings.live, live = true)
-        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.CHANNELS -> ScoreboardStatusLines(null)
         else -> {
             val countdown = row.startsIn?.let { GameStatusText.countdown(it, strings) }
