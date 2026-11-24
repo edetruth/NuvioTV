@@ -129,6 +129,14 @@ class SportsLiveGameEndTest {
         watch.note(other.id, live(50, 50))
         watch.watch(other)
         assertEquals(live(50, 50), watch.snapshot(other.id))
+        // L1: re-watched with a newer listing, its item follows; replaced by another addon's game, the event count moves.
+        val relisted = other.copy(startMs = START + MINUTE)
+        watch.watch(relisted)
+        assertEquals(relisted, watch.item(other.id))
+        assertEquals(live(50, 50), watch.snapshot(other.id))
+        val ids = watch.eventIds.value
+        watch.watch(first)
+        assertEquals(ids + 1, watch.eventIds.value)
     }
 
     // #162: "Waiting for the stream to start…"

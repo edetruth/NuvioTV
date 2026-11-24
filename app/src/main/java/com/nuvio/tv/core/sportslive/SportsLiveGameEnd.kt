@@ -219,7 +219,14 @@ class SportsLiveGameWatch(
         val entry = games[item.id]
         // #278 (C1): another addon's game under the same raw id is another game: it never inherits this one's ESPN
         // snapshot (its score, its final). The same source watched again keeps its entry.
-        if (entry == null || entry.item.streamKey != item.streamKey) games[item.id] = Entry(item, null)
+        if (entry == null || entry.item.streamKey != item.streamKey) {
+            games[item.id] = Entry(item, null)
+            // L1: the old game's ESPN event leaves with it: the alerts read the games on screen again.
+            if (entry?.snapshot?.eventId != null) _eventIds.value += 1
+        } else if (entry.item != item) {
+            // L1: the same source watched again with a newer listing (start, alternates): its item is the new one.
+            games[item.id] = Entry(item, entry.snapshot)
+        }
         lastWatched = item.id
         while (games.size > MAX_GAMES) games.remove(games.keys.first())
     }
