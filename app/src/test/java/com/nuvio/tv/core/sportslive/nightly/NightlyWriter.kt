@@ -259,10 +259,8 @@ internal class NightlyWriter(
     private val certaintyFile = File(outDir, "certainty.csv")
 
     private fun appendCertainty(certainty: NightlyText.Certainty) {
-        if (!certaintyFile.exists()) certaintyFile.writeText(NightlyText.csv(NightlyText.CERTAINTY_COLUMNS) + "
-")
-        certaintyFile.appendText(NightlyText.certaintyCsvRow(runId, certainty) + "
-")
+        if (!certaintyFile.exists()) certaintyFile.writeText(NightlyText.csv(NightlyText.CERTAINTY_COLUMNS) + "\n")
+        certaintyFile.appendText(NightlyText.certaintyCsvRow(runId, certainty) + "\n")
     }
 
     private fun previousKeys(): Set<String> =
