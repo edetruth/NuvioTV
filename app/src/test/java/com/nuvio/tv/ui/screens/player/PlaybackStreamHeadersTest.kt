@@ -63,4 +63,20 @@ class PlaybackStreamHeadersTest {
         scope.apply(request(link))
         assertNull(scope.apply(request("http://cdn.invalid/live/seg1.ts")).header("Authorization"))
     }
+
+    @Test
+    fun `the unchecked TLS retry sends no stream header at all (#435)`() {
+        val retry = PlaybackStreamHeaders.forUncheckedRetry(request(link).newBuilder().header("Icy-MetaData", "1").build())
+        assertEquals(link, retry.url.toString())
+        assertEquals("bytes=0-", retry.header("Range"))
+        assertEquals("1", retry.header("Icy-MetaData"))
+        assertEquals(PlayerMediaSourceFactory.DEFAULT_USER_AGENT, retry.header("User-Agent"))
+        assertEquals(setOf("range", "icy-metadata", "user-agent"), retry.headers.names().map { it.lowercase() }.toSet())
+    }
+
+    @Test
+    fun `the playback client's TLS fallback retries through the header-free request`() {
+        val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerPlaybackNetworking.kt").readText()
+        assertTrue(source.contains("trustAllPlaybackHttpClient.newCall(PlaybackStreamHeaders.forUncheckedRetry(request))"))
+    }
 }

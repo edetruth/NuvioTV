@@ -98,7 +98,8 @@ internal object PlayerPlaybackNetworking {
                     chain.proceed(request)
                 } catch (e: SSLException) {
                     // Fallback to trust-all client if standard system SSL fails (e.g. self-signed local server)
-                    trustAllPlaybackHttpClient.newCall(request).execute()
+                    // Fork #435: unchecked, so no stream header or token goes with it.
+                    trustAllPlaybackHttpClient.newCall(PlaybackStreamHeaders.forUncheckedRetry(request)).execute()
                 }
             }
             .build()
