@@ -279,12 +279,13 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         }
         mediaMetadata?.let(mediaItemBuilder::setMediaMetadata)
         // A DRM licence server the addon named for this link (#166): licensed playback through Media3's
-        // DefaultDrmSessionManager, with the stream's request headers on every licence request too.
+        // DefaultDrmSessionManager, with the stream's request headers on every licence request too. Fork #464 (user
+        // decision): the licence url the addon named is that factory's link; a host its redirects lead to gets no login headers.
         val licence = SportsLiveStreamLicences.forUrl(url)
         val drmProvider = licence?.let {
             mediaItemBuilder.setDrmConfiguration(sportsLiveDrmConfiguration(it, sanitizedHeaders))
             DefaultDrmSessionManagerProvider().apply {
-                setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders))
+                setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, linkUrl = it.licenseUrl))
             }
         }
 

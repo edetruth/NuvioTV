@@ -70,10 +70,26 @@ class PlaybackHeaderRedirectTest {
     }
 
     @Test
-    fun `the main player's data sources are scoped to the addon's link, the DRM licence factory is left as it is (#464)`() {
+    fun `the main player's data sources are scoped to the addon's link, the DRM licence factory to its licence url (#464)`() {
         val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerMediaSourceFactory.kt").readText()
         assertEquals(4, Regex("""linkUrl = url""").findAll(source).count())
-        assertTrue(source.contains("setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders))"))
+        assertTrue(source.contains("setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, linkUrl = it.licenseUrl))"))
+    }
+
+    @Test
+    fun `the licence server the addon named gets the stream's headers, a host it redirects to gets no login ones (#464)`() {
+        MockWebServer().use { beyond ->
+            // The licence server is another origin than the stream's link: the addon named it, so it gets them.
+            other.enqueue(MockResponse().setResponseCode(307).addHeader("Location", beyond.url("/licence").toString()))
+            beyond.enqueue(MockResponse().setBody("licence"))
+            val licenceUrl = other.url("/licence").toString()
+            val drm = PlayerPlaybackNetworking.createHttpClient(streamHeaders, linkUrl = licenceUrl)
+            drm.newCall(Request.Builder().url(licenceUrl).build()).execute().close()
+            assertEquals("Bearer t", take(other).getHeader("Authorization"))
+            val hop = beyond.takeRequest(5, TimeUnit.SECONDS)!!
+            assertNoLogin(hop)
+            assertEquals("https://ref.invalid/", hop.getHeader("Referer"))
+        }
     }
 
     @Test
