@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.core.network.StreamOrigin
 import com.nuvio.tv.core.sportslive.ProbeVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
@@ -94,8 +95,8 @@ class SportsLiveLinkProber @Inject constructor() {
             val (answer, location) = call(request, readBody)
             if (answer.failed != null || location == null) return answer
             val hop = SportsLiveManifestFetcher.nextHop(url, location) ?: return null
-            if (!hop.keepHeaders) sent = emptyMap()
-            url = hop.url
+            sent = StreamOrigin.headersFor(target, hop, headers)
+            url = hop
         }
         return null
     }

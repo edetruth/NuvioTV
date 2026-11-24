@@ -5,7 +5,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,14 +25,25 @@ class SportsLiveManifestFetcherTest {
     }
 
     @Test
-    fun `the stream's headers go on to the same host only`() {
-        val same = SportsLiveManifestFetcher.nextHop(from, "/live/other.m3u8")!!
-        assertEquals("https://cdn.invalid/live/other.m3u8", same.url.toString())
-        assertTrue(same.keepHeaders)
-        val elsewhere = SportsLiveManifestFetcher.nextHop(from, "https://edge.invalid/live/index.m3u8")!!
-        assertFalse(elsewhere.keepHeaders)
-        // Another port is another service (P4).
-        assertFalse(SportsLiveManifestFetcher.nextHop(from, "https://cdn.invalid:9000/live/index.m3u8")!!.keepHeaders)
+    fun `a relative redirect resolves against where it came from`() {
+        assertEquals("https://cdn.invalid/live/other.m3u8", SportsLiveManifestFetcher.nextHop(from, "/live/other.m3u8").toString())
+    }
+
+    @Test
+    fun `a redirect to another origin carries the stream's headers but no login ones (#463)`() = runBlocking {
+        MockWebServer().use { other ->
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", other.url("/edge.m3u8").toString()))
+                other.enqueue(MockResponse().setBody("#EXTM3U\n"))
+                val headers = mapOf("Authorization" to "Bearer t", "Referer" to "https://ref.invalid/", "User-Agent" to "AddonAgent")
+                assertEquals(200, SportsLiveManifestFetcher().fetch(server.url("/master.m3u8").toString(), headers)!!.code)
+                assertEquals("Bearer t", server.takeRequest().getHeader("Authorization"))
+                val hop = other.takeRequest()
+                assertNull(hop.getHeader("Authorization"))
+                assertEquals("https://ref.invalid/", hop.getHeader("Referer"))
+                assertEquals("AddonAgent", hop.getHeader("User-Agent"))
+            }
+        }
     }
 
     @Test

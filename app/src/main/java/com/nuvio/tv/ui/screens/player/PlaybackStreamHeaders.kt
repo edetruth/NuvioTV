@@ -21,22 +21,10 @@ import java.util.concurrent.atomic.AtomicReference
  */
 internal object PlaybackStreamHeaders {
 
-    private val CREDENTIAL_NAMES = setOf("authorization", "proxy-authorization", "cookie", "cookie2")
-    private val CREDENTIAL_WORDS = listOf(
-        "auth", "token", "key", "session", "secret", "pass", "sig", "jwt", "cred", "ticket", "login", "account"
-    )
-
-    /** Not credentials themselves, but they can carry a private link: never sent down from https to http. */
-    private val DOWNGRADE_NAMES = setOf("referer", "origin")
-
     /** Transport headers the player itself sets; the only ones kept on the unchecked retry. */
     private val TRANSPORT_NAMES = setOf("range", "if-range", "if-none-match", "if-modified-since", "accept-encoding", "icy-metadata")
 
-    fun isCredential(name: String): Boolean {
-        val lower = name.trim().lowercase()
-        if (lower in CREDENTIAL_NAMES || CREDENTIAL_WORDS.any { it in lower }) return true
-        return "user" in lower && lower != "user-agent"
-    }
+    fun isCredential(name: String): Boolean = StreamOrigin.isCredential(name)
 
     /**
      * One player client's header scope: the first request it sends is the addon's link, and its origin is the
@@ -53,9 +41,8 @@ internal object PlaybackStreamHeaders {
         fun apply(request: Request, streamHeaders: Headers? = null): Request {
             if (inOrigin(request.url)) return request
             val scope = link.get() ?: return request
-            val downgrade = StreamOrigin.isDowngrade(scope, request.url)
             val names = request.headers.names().filter { name ->
-                (isCredential(name) || (downgrade && name.lowercase() in DOWNGRADE_NAMES)) &&
+                StreamOrigin.drops(scope, request.url, name) &&
                     (streamHeaders == null || request.header(name) in streamHeaders.values(name))
             }
             if (names.isEmpty()) return request
