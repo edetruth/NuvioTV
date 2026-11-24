@@ -327,17 +327,23 @@ class SportsLiveSettingsViewModelTest {
         val viewModel = newViewModel()
         backgroundScope.launch { viewModel.alertSettings.collect {} }
         advanceUntilIdle()
-        assertEquals(SportsLiveAlertSettings(remindMyTeams = true, scoreAlerts = true, fullTimeAlerts = true), viewModel.alertSettings.value)
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = true, scoreAlertLevel = com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.BIG_MOMENTS, fullTimeAlerts = true), viewModel.alertSettings.value)
 
         viewModel.setRemindMyTeams(false)
-        viewModel.setScoreAlerts(false)
+        viewModel.setScoreAlertLevel(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.OFF)
         advanceUntilIdle()
-        assertEquals(SportsLiveAlertSettings(remindMyTeams = false, scoreAlerts = false, fullTimeAlerts = true), viewModel.alertSettings.value)
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = false, scoreAlertLevel = com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.OFF, fullTimeAlerts = true), viewModel.alertSettings.value)
 
         viewModel.setFullTimeAlerts(false)
         viewModel.setRemindMyTeams(true)
         advanceUntilIdle()
-        assertEquals(SportsLiveAlertSettings(remindMyTeams = true, scoreAlerts = false, fullTimeAlerts = false), prefs.alertSettings.first())
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = true, scoreAlertLevel = com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.OFF, fullTimeAlerts = false), prefs.alertSettings.first())
+        // Every score is stored as its own level; the old switch reads on for older builds.
+        viewModel.setScoreAlertLevel(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.EVERY_SCORE)
+        advanceUntilIdle()
+        assertEquals(com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel.EVERY_SCORE, prefs.alertSettings.first().scoreAlertLevel)
+        assertEquals("EVERY_SCORE", prefsStore.value[stringPreferencesKey("sports_live_score_alert_level")])
+        assertEquals(true, prefsStore.value[booleanPreferencesKey("sports_live_score_alerts")])
         // "Remind me for my teams" is what the reminders read.
         assertTrue(prefs.reminders.first().remindMyTeams)
     }
@@ -446,7 +452,6 @@ class SportsLiveSettingsViewModelTest {
             SportsLiveSetting.PICTURE_IN_PICTURE to "sports_live_pip_enabled",
             SportsLiveSetting.HIDE_UNPLAYABLE to "sports_live_hide_unplayable_links",
             SportsLiveSetting.REMIND_MY_TEAMS to "sports_live_remind_my_teams",
-            SportsLiveSetting.SCORE_ALERTS to "sports_live_score_alerts",
             SportsLiveSetting.FULL_TIME_ALERTS to "sports_live_full_time_alerts",
             SportsLiveSetting.CLOSE_GAME_ALERTS to "sports_live_close_game_alerts",
             SportsLiveSetting.MY_TEAMS_SPOILERS to "sports_live_my_teams_spoilers",

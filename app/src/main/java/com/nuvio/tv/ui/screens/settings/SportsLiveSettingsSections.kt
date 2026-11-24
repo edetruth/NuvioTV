@@ -49,6 +49,7 @@ internal enum class SportsLiveSetting(
     REMIND_MY_TEAMS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_remind_my_teams, R.string.sports_live_setting_remind_my_teams_subtitle),
     /** "At tip-off" (research Q17): Remind me (a toast) / Switch automatically (opt-in, 10 s countdown). */
     TIP_OFF(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_tip_off, R.string.sports_live_setting_tip_off_help),
+    /** Score alerts (live.28): a picker, Off / Big moments (default) / Every score, for every followed team. */
     SCORE_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_score_alerts, R.string.sports_live_setting_score_alerts_subtitle),
     FULL_TIME_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_full_time_alerts, R.string.sports_live_setting_full_time_alerts_subtitle),
     /** Crunch-time alerts (#137): close games late in My sports. */
@@ -109,7 +110,7 @@ internal enum class SportsLiveSetting(
 
     private companion object {
         val SWITCHES = setOf(
-            REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
+            REMIND_MY_TEAMS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
             CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS, MY_TEAMS_RESULTS, REAL_TIME_SCORES
         )
     }

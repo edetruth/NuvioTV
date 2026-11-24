@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.settings
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.SportsLiveOkOnLive
 import com.nuvio.tv.core.sportslive.SportsLiveTipOff
+import com.nuvio.tv.core.sportslive.alerts.ScoreAlertLevel
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -235,7 +236,6 @@ internal fun SportsLiveSettingsContent(
         if (setting.isSwitch) {
             val stored = when (setting) {
                 SportsLiveSetting.REMIND_MY_TEAMS -> alerts.remindMyTeams
-                SportsLiveSetting.SCORE_ALERTS -> alerts.scoreAlerts
                 SportsLiveSetting.FULL_TIME_ALERTS -> alerts.fullTimeAlerts
                 SportsLiveSetting.CLOSE_GAME_ALERTS -> alerts.closeGameAlerts
                 SportsLiveSetting.PICTURE_IN_PICTURE -> state.pipEnabled
@@ -270,6 +270,10 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.OK_ON_LIVE -> okOnLiveLabel(okOnLive) to { picker = ScorePicker.OK_ON_LIVE }
                 SportsLiveSetting.GUIDE_TABLE -> guideStyleLabel(guideStyle) to { picker = ScorePicker.GUIDE_STYLE }
                 SportsLiveSetting.TIP_OFF -> tipOffLabel(alerts.tipOff) to { picker = ScorePicker.TIP_OFF }
+                // Live.28: the level reads Off while Scores is not Show (the help line says why).
+                SportsLiveSetting.SCORE_ALERTS -> scoreAlertLevelLabel(if (enabled) alerts.scoreAlertLevel else ScoreAlertLevel.OFF) to {
+                    picker = ScorePicker.SCORE_ALERTS
+                }
                 SportsLiveSetting.REMINDED_TEAMS -> (summarise(remindedTeams.map { it.name })
                     ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.RemindedTeams, null) }
                 SportsLiveSetting.SCORES_STATUS -> scoresStatusText(scoresStatus) to { picker = ScorePicker.STATUS }
@@ -535,6 +539,17 @@ internal fun SportsLiveSettingsContent(
             },
             onDismiss = { picker = null }
         )
+        ScorePicker.SCORE_ALERTS -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_score_alerts),
+            subtitle = stringResource(R.string.sports_live_setting_score_alerts_subtitle),
+            options = ScoreAlertLevel.entries.map { SettingsPickerOption(it, scoreAlertLevelLabel(it)) },
+            selectedValue = alerts.scoreAlertLevel,
+            onOptionSelected = { value ->
+                picker = null
+                viewModel.setScoreAlertLevel(value)
+            },
+            onDismiss = { picker = null }
+        )
         ScorePicker.STATUS -> ScoresStatusDialog(
             status = scoresStatus,
             onRetry = viewModel::retryScores,
@@ -616,7 +631,7 @@ private const val LEAGUES_PREFIX = "leagues:"
 private val PageSaver = Saver<SportsLiveSettingsPage, String>(save = { it.token }, restore = ::sportsLiveSettingsPageOf)
 
 /** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
-private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, OK_ON_LIVE, GUIDE_STYLE, TIP_OFF, STATUS }
+private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, OK_ON_LIVE, GUIDE_STYLE, TIP_OFF, SCORE_ALERTS, STATUS }
 
 /** Asked for the first row of a page, once it has composed. */
 private const val FIRST_ROW = "\u0000first"
@@ -745,6 +760,15 @@ private fun okOnLiveLabel(value: SportsLiveOkOnLive): String = stringResource(
     when (value) {
         SportsLiveOkOnLive.SHOW_CONTROLS -> R.string.sports_live_ok_on_live_controls
         SportsLiveOkOnLive.PAUSE -> R.string.sports_live_ok_on_live_pause
+    }
+)
+
+@Composable
+private fun scoreAlertLevelLabel(value: ScoreAlertLevel): String = stringResource(
+    when (value) {
+        ScoreAlertLevel.OFF -> R.string.sports_live_score_alerts_off
+        ScoreAlertLevel.BIG_MOMENTS -> R.string.sports_live_score_alerts_big_moments
+        ScoreAlertLevel.EVERY_SCORE -> R.string.sports_live_score_alerts_every_score
     }
 )
 

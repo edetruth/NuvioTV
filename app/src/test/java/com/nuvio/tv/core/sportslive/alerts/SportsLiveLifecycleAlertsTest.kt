@@ -110,15 +110,15 @@ class SportsLiveLifecycleAlertsTest {
                 inPlayer = true, sportsPlayback = true, streamStartedAtMs = START - 60 * MINUTE
             )
             fun step(at: Long, snapshot: com.nuvio.tv.core.sportslive.scores.ScoreSnapshot) =
-                engine.update(at, listOf(AlertGame(listed, snapshot, reminded = false, followedSides = awaySide)), SportsLiveAlertSettings(), ScoresMode.SHOW, watching)
+                engine.update(at, listOf(AlertGame(listed, snapshot, reminded = false, followedSides = awaySide)), AlertFixtures.EVERY, ScoresMode.SHOW, watching)
             assertEquals(emptyList<SportsLiveAlert>(), step(START + 10 * MINUTE, live(10, 10)))
             assertEquals(emptyList<SportsLiveAlert>(), step(START + 20 * MINUTE, live(10, 13)))
             assertEquals(emptyList<SportsLiveAlert>(), step(START + 180 * MINUTE, AlertFixtures.final(99, 101)))
         }
         // The same game not on screen does alert: the rule is the screen, not the game.
         val engine = SportsLiveAlertEngine()
-        engine.update(START + 10 * MINUTE, listOf(AlertGame(listed, live(10, 10), false, awaySide)), SportsLiveAlertSettings(), ScoresMode.SHOW, SportsLiveWatching(inPlayer = true, sportsPlayback = true, playingIds = setOf("other"), streamStartedAtMs = START - 60 * MINUTE))
-        val alerts = engine.update(START + 20 * MINUTE, listOf(AlertGame(listed, live(10, 13), false, awaySide)), SportsLiveAlertSettings(), ScoresMode.SHOW, SportsLiveWatching(inPlayer = true, sportsPlayback = true, playingIds = setOf("other"), streamStartedAtMs = START - 60 * MINUTE))
+        engine.update(START + 10 * MINUTE, listOf(AlertGame(listed, live(10, 10), false, awaySide)), AlertFixtures.EVERY, ScoresMode.SHOW, SportsLiveWatching(inPlayer = true, sportsPlayback = true, playingIds = setOf("other"), streamStartedAtMs = START - 60 * MINUTE))
+        val alerts = engine.update(START + 20 * MINUTE, listOf(AlertGame(listed, live(10, 13), false, awaySide)), AlertFixtures.EVERY, ScoresMode.SHOW, SportsLiveWatching(inPlayer = true, sportsPlayback = true, playingIds = setOf("other"), streamStartedAtMs = START - 60 * MINUTE))
         assertEquals(1, alerts.count { it is SportsLiveAlert.ScoreChange })
     }
 

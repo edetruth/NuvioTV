@@ -517,7 +517,10 @@
     <string name="sports_live_setting_remind_my_teams">Remind me for my teams</string>
     <string name="sports_live_setting_remind_my_teams_subtitle">Ask \"Watch now?\" when a followed team\'s game kicks off. Cancel it for one game from its menu</string>
     <string name="sports_live_setting_score_alerts">Score alerts</string>
-    <string name="sports_live_setting_score_alerts_subtitle">A short note when a followed team\'s game changes score while you watch something else. Only when Scores is Show</string>
+    <string name="sports_live_setting_score_alerts_subtitle">A short note about a followed team\'s game while you watch something else. Big moments: goals, late lead changes, halftime and close finishes. Only when Scores is Show</string>
+    <string name="sports_live_score_alerts_off">Off</string>
+    <string name="sports_live_score_alerts_big_moments">Big moments</string>
+    <string name="sports_live_score_alerts_every_score">Every score</string>
     <string name="sports_live_setting_full_time_alerts">Full-time alerts</string>
     <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until I reveal</string>
     <string name="sports_live_setting_close_game_alerts">Close-game alerts</string>
@@ -642,6 +645,10 @@
     <string name="sports_live_alert_matchup">%1$s vs %2$s</string>
     <string name="sports_live_alert_scored">%1$s score</string>
     <string name="sports_live_alert_score_update">Score update</string>
+    <string name="sports_live_alert_lead_change">Lead change</string>
+    <string name="sports_live_alert_tied">Tied</string>
+    <string name="sports_live_alert_overtime">Overtime</string>
+    <string name="sports_live_alert_comeback">Comeback</string>
     <string name="sports_live_alert_score_line">%1$s %2$d–%3$d %4$s</string>
     <string name="sports_live_alert_full_time">FULL TIME</string>
     <string name="sports_live_alert_close_finish">CLOSE FINISH</string>

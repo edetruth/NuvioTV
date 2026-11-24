@@ -27,7 +27,8 @@ class SportsLiveAlertEngineTest {
         reminded: Boolean = true,
         // Kickoff tests look at a reminded game alone; score and full-time tests at a followed side's game.
         followed: Set<ScoreSide> = if (reminded) emptySet() else setOf(ScoreSide.AWAY),
-        settings: SportsLiveAlertSettings = SportsLiveAlertSettings(),
+        // Live.28: Every score, so these plumbing tests see each score; the levels have SportsLiveScoreCadenceTest.
+        settings: SportsLiveAlertSettings = AlertFixtures.EVERY,
         mode: ScoresMode = ScoresMode.SHOW,
         watching: SportsLiveWatching = watchingOther,
         game: SportsLiveItem = card
@@ -131,7 +132,7 @@ class SportsLiveAlertEngineTest {
     fun `a followed team's game scoring shows a toast naming the side that scored`() {
         step(START + 10 * MINUTE, live(10, 8), reminded = false)
         val alerts = step(START + 11 * MINUTE, live(10, 11), reminded = false)
-        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY, leadChange = true)), alerts)
+        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY, leadChange = true, moment = ScoreMoment.LEAD_CHANGE)), alerts)
     }
 
     @Test
@@ -154,7 +155,7 @@ class SportsLiveAlertEngineTest {
         step(START + 10 * MINUTE, live(10, 8), reminded = false)
         assertEquals(0, step(START + 11 * MINUTE, live(12, 8), reminded = false, mode = ScoresMode.HIDE_UNTIL_FOCUSED).size)
         assertEquals(0, step(START + 14 * MINUTE, live(14, 8), reminded = false, mode = ScoresMode.OFF).size)
-        assertEquals(0, step(START + 17 * MINUTE, live(16, 8), reminded = false, settings = SportsLiveAlertSettings(scoreAlerts = false)).size)
+        assertEquals(0, step(START + 17 * MINUTE, live(16, 8), reminded = false, settings = SportsLiveAlertSettings(scoreAlertLevel = ScoreAlertLevel.OFF)).size)
         assertEquals(1, step(START + 20 * MINUTE, live(18, 8), reminded = false).size)
     }
 
@@ -175,16 +176,16 @@ class SportsLiveAlertEngineTest {
         val fresh = SportsLiveAlertEngine()
         val game = { s: ScoreSnapshot -> listOf(AlertGame(card, s, false, setOf(ScoreSide.AWAY))) }
         // The delay withholds the score of a game first seen live; its arrival is not a change.
-        fresh.update(START + 10 * MINUTE, game(live(null, null)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingOther)
-        assertEquals(0, fresh.update(START + 11 * MINUTE, game(live(10, 8)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingOther).size)
+        fresh.update(START + 10 * MINUTE, game(live(null, null)), AlertFixtures.EVERY, ScoresMode.SHOW, watchingOther)
+        assertEquals(0, fresh.update(START + 11 * MINUTE, game(live(10, 8)), AlertFixtures.EVERY, ScoresMode.SHOW, watchingOther).size)
     }
 
     @Test
     fun `a score kept from before the app closed is never the score a toast measures from`() {
         val engine = SportsLiveAlertEngine()
         val game = { s: ScoreSnapshot -> listOf(AlertGame(card, s, false, setOf(ScoreSide.AWAY))) }
-        engine.update(START + 10 * MINUTE, game(live(10, 8).copy(kept = true)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingOther)
-        assertEquals(0, engine.update(START + 11 * MINUTE, game(live(10, 11)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingOther).size)
+        engine.update(START + 10 * MINUTE, game(live(10, 8).copy(kept = true)), AlertFixtures.EVERY, ScoresMode.SHOW, watchingOther)
+        assertEquals(0, engine.update(START + 11 * MINUTE, game(live(10, 11)), AlertFixtures.EVERY, ScoresMode.SHOW, watchingOther).size)
     }
 
     @Test
@@ -203,7 +204,7 @@ class SportsLiveAlertEngineTest {
         at += delayMs - 5_000
         assertEquals(0, step(at, shown(at, live(10, 11)), reminded = false).size)
         at += 5_000
-        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY, leadChange = true)), step(at, shown(at, live(10, 11)), reminded = false))
+        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY, leadChange = true, moment = ScoreMoment.LEAD_CHANGE)), step(at, shown(at, live(10, 11)), reminded = false))
     }
 
     // Full time
@@ -264,7 +265,7 @@ class SportsLiveAlertEngineTest {
         val on = SportsLiveAlertSettings()
         assertEquals(score, SportsLiveAlertEngine.stillShowable(score, ScoresMode.SHOW, on))
         assertEquals(null, SportsLiveAlertEngine.stillShowable(score, ScoresMode.HIDE_UNTIL_FOCUSED, on))
-        assertEquals(null, SportsLiveAlertEngine.stillShowable(score, ScoresMode.SHOW, SportsLiveAlertSettings(scoreAlerts = false)))
+        assertEquals(null, SportsLiveAlertEngine.stillShowable(score, ScoresMode.SHOW, SportsLiveAlertSettings(scoreAlertLevel = ScoreAlertLevel.OFF)))
         assertEquals(fullTime.copy(namesOnly = true), SportsLiveAlertEngine.stillShowable(fullTime, ScoresMode.HIDE_UNTIL_FOCUSED, on))
         assertEquals(null, SportsLiveAlertEngine.stillShowable(fullTime, ScoresMode.OFF, on))
         assertEquals(null, SportsLiveAlertEngine.stillShowable(fullTime, ScoresMode.SHOW, SportsLiveAlertSettings(fullTimeAlerts = false)))
