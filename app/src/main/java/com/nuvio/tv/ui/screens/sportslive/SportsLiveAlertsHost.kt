@@ -579,12 +579,13 @@ fun SportsLiveAlertsHost(
                 }
             }
             // The 2 dp time-left line, on cards that ask something only (#101).
-            val timeLeft by rememberTimeLeft(
+            // Read only when drawing (Gemini RC F6): the overlay never recomposes as the line shrinks.
+            val timeLeft = rememberTimeLeft(
                 state.clock,
                 durationOf(alert),
                 running = timeLeftTicks(actionable, counting = countdown != null, leaving = leaving, clock = state.clock)
             )
-            val timeLine: (() -> Float)? = if (actionable) ({ timeLeft }) else null
+            val timeLine: (() -> Float)? = remember(actionable, timeLeft) { if (actionable) ({ timeLeft.value }) else null }
             val enter = remember(current.id) { MutableTransitionState(false) }
             enter.targetState = !leaving && visible
             val streamReady = remember(readyMarks, alert) { SportsLiveGameReadiness.shared.of(alert.item) == SportsLiveReadyMark.READY }
