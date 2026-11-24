@@ -59,12 +59,14 @@ class SportsLiveUpcomingShownTest {
 
     @Test
     fun `#355 - a game ESPN still has as not started leaves once it is well past its start, ESPN being stale`() {
-        // ESPN's start 2 h ago, plus a minute: past the late-start grace.
-        val stale = espn(ScoreState.PRE, startMs = NOW - UPCOMING_LATE_START_GRACE_MS - MINUTE)
-        assertEquals(listOf("n"), shown(mapOf(game.streamKey to stale)).items.map { it.id })
-        // Within the grace it stays, a late start.
-        val late = espn(ScoreState.PRE, startMs = NOW - UPCOMING_LATE_START_GRACE_MS + MINUTE)
-        assertEquals(listOf("p", "n"), shown(mapOf(game.streamKey to late)).items.map { it.id })
+        // Its own start 3 h ago, ESPN's 2 h ago plus a minute: past the late-start grace.
+        val timedGame = item("p", "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 3 * HOUR)
+        fun shownTimed(espnStart: Long) = sportsLiveUpcomingShown(
+            emptyList(), listOf(timedGame, next), mapOf(timedGame.streamKey to espn(ScoreState.PRE, startMs = espnStart)), NOW, null, emptySet()
+        ).items.map { it.id }
+        assertEquals(listOf("n"), shownTimed(NOW - UPCOMING_LATE_START_GRACE_MS - MINUTE))
+        // Within the grace of ESPN's (later) start it stays, a late start.
+        assertEquals(listOf("p", "n"), shownTimed(NOW - UPCOMING_LATE_START_GRACE_MS + MINUTE))
         // No valid ESPN time: the game's own timed start decides.
         val timed = item("t", "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 5 * HOUR)
         val noTime = espn(ScoreState.PRE).copy(timeValid = false)
@@ -83,6 +85,17 @@ class SportsLiveUpcomingShownTest {
             mapOf(com.nuvio.tv.domain.model.SportsLiveTab.UPCOMING to listOf(yesterday, today)), NOW
         )
         assertEquals(listOf("t"), moved.getValue(com.nuvio.tv.domain.model.SportsLiveTab.UPCOMING).map { it.id })
+    }
+
+    @Test
+    fun `#460 - a game whose own start is ahead, or that has no time of its own, stays whatever ESPN's stale time says`() {
+        // ESPN still has it at 11:00 (a session's start, an old time); the addon lists it at 17:00, now is 13:01.
+        val ahead = item("a", "Indiana Pacers at Philadelphia 76ers", startMs = NOW + 4 * HOUR)
+        val stale = espn(ScoreState.PRE, startMs = NOW - UPCOMING_LATE_START_GRACE_MS - MINUTE)
+        val result = sportsLiveUpcomingShown(emptyList(), listOf(ahead, next), mapOf(ahead.streamKey to stale), NOW, null, emptySet())
+        assertEquals(listOf("a", "n"), result.items.map { it.id })
+        // Time TBA, placed at ESPN's time: stays.
+        assertEquals(listOf("p", "n"), shown(mapOf(game.streamKey to stale)).items.map { it.id })
     }
 
     @Test
