@@ -159,7 +159,9 @@ private data class CardUi(
     /** "At tip-off: Switch automatically" was looked at when the card first showed. */
     val autoTried: Boolean = false,
     /** A countdown's time left when the app left the foreground: it resumes from there. */
-    val pausedLeftMs: Long? = null
+    val pausedLeftMs: Long? = null,
+    /** Over a movie, the viewer moved onto the card's Watch (RC review decision): only then are OK and Back its. */
+    val focused: Boolean = false
 )
 
 /**
@@ -380,7 +382,9 @@ fun SportsLiveAlertsHost(
             shownAtMs = if (countdown != null) 0L else state.clock.shownAtMs,
             nowMs = System.currentTimeMillis(),
             expanded = countdown != null,
-            canBoth = canBoth()
+            canBoth = canBoth(),
+            needsFocus = SportsLiveAlertKeys.needsFocus(currentWatching),
+            focused = state.focused
         )
     }
     val keyHandler = remember {
@@ -394,6 +398,8 @@ fun SportsLiveAlertsHost(
                     AlertKeyAction.OK -> if (keyContext().cardOk) onOk(shown)
                     AlertKeyAction.DISMISS, AlertKeyAction.CANCEL -> alerts.close(shown, AlertAnswer.DISMISS)
                     AlertKeyAction.PRESS -> uiFor(shown).countdown?.let { act(shown, it.selected) }
+                    AlertKeyAction.FOCUS -> { ui = uiFor(shown).copy(focused = true) }
+                    AlertKeyAction.UNFOCUS -> { ui = uiFor(shown).copy(focused = false) }
                     AlertKeyAction.MOVE -> {
                         val state = uiFor(shown)
                         state.countdown?.let { ui = state.copy(countdown = it.move()) }
@@ -505,7 +511,9 @@ fun SportsLiveAlertsHost(
     val actionable = SportsLiveAlertCards.actionable(current.alert)
     // Back closes a card that shows "OK", or cancels the countdown (never the screen under it), by the back callback
     // as by the key.
-    TakeBack(!leaving && visible && (actionable || countdown != null)) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
+    // Over a movie only once the card has focus (RC review decision): Back is the movie's until then.
+    val backIsCards = countdown != null || (actionable && (state.focused || !SportsLiveAlertKeys.needsFocus(watching)))
+    TakeBack(!leaving && visible && backIsCards) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
     // Audit G34: nothing draws into the picture-in-picture window, a countdown card up when it opened included.
     val inPip by SportsLivePip.inPip.collectAsState()
     if (inPip) return
@@ -608,6 +616,8 @@ fun SportsLiveAlertsHost(
                                 .takeIf { sportsLiveKickoffShowsTime(alert.item.startMs, alert.item.startHasTimeOfDay, System.currentTimeMillis()) },
                             passive = kickoff.passive,
                             pausedMovie = SportsLiveAlertEngine.overMovie(watching) && watching.moviePaused,
+                            // Over a movie the Watch button takes focus with Up (RC review decision); null elsewhere.
+                            watchFocused = if (!kickoff.passive && SportsLiveAlertKeys.needsFocus(watching)) state.focused else null,
                             timeLeft = timeLine,
                             modifier = Modifier
                         )
@@ -722,6 +732,11 @@ private fun KickoffToast(
     passive: Boolean,
     /** Over a paused movie (#91): "OK Watch · Back Keep watching the movie". */
     pausedMovie: Boolean,
+    /**
+     * Over a movie (RC review decision): the card's button (Watch, or Remind me on the no-stream note) ringed when it has
+     * focus; until then the hint says Up moves to it. Null: no button, the card's keys as named.
+     */
+    watchFocused: Boolean?,
     timeLeft: (() -> Float)?,
     modifier: Modifier
 ) {
@@ -802,13 +817,20 @@ private fun KickoffToast(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        // Its keys, named (research 4): OK is the card's while it shows.
+        if (watchFocused != null) {
+            CountdownChoice(
+                stringResource(if (noStreamYet) R.string.sports_live_alert_choice_remind else R.string.sports_live_alert_choice_watch),
+                selected = watchFocused
+            )
+        }
+        // Its keys, named (research 4): OK is the card's while it shows; over a movie only once it has focus.
         Text(
             text = stringResource(
                 when {
                     passive -> R.string.sports_live_alert_hint_passive
+                    watchFocused == false -> R.string.sports_live_alert_hint_up_to_card
                     noStreamYet -> R.string.sports_live_alert_hint_ok_remind
-                    pausedMovie -> R.string.sports_live_alert_hint_ok_watch_movie
+                    pausedMovie || watchFocused == true -> R.string.sports_live_alert_hint_ok_watch_movie
                     else -> R.string.sports_live_alert_hint_ok_watch
                 }
             ),
