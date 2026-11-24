@@ -41,8 +41,8 @@ class SportsLiveLiveDurationTest {
 
     @Test
     fun `#358 - the limit follows the inferred sport - a bare Football or an untagged soccer game gets soccer's`() {
-        // Tagged "Football" (soccer, as the app reads a bare Football): soccer's 3 h 15, not the 3 h 30 default.
-        val football = game("f", 3 * HOUR + 20 * MINUTE, sport = "Football")
+        // Tagged "Football" with a soccer clue (its genre): soccer's 3 h 15, not the 3 h 30 default.
+        val football = game("f", 3 * HOUR + 20 * MINUTE, sport = "Football").let { it.copy(meta = it.meta.copy(genres = listOf("Soccer"))) }
         assertEquals(3 * HOUR + 15 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(football))
         assertTrue(SportsLiveLiveDuration.isOverdue(football, now))
         // No sport word, soccer only in its genres.
@@ -51,6 +51,20 @@ class SportsLiveLiveDurationTest {
         // American football named by its league keeps its own limit; nothing known keeps the default.
         assertEquals(4 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(game("n", HOUR, sport = "NFL")))
         assertEquals(3 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(game("x", HOUR)))
+    }
+
+    @Test
+    fun `L2 - a bare Football never cuts an American football game short - unsure means the longer limit`() {
+        // "NFL" in its title: American football's 4 h 30.
+        val nfl = game("n", 3 * HOUR + 20 * MINUTE, sport = "Football").let { it.copy(meta = it.meta.copy(name = "NFL: Chiefs vs Bills")) }
+        assertEquals(4 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(nfl))
+        assertFalse(SportsLiveLiveDuration.isOverdue(nfl, now))
+        // Nothing but a bare "Football": unsure, so the longer limit.
+        val bare = game("b", 3 * HOUR + 20 * MINUTE, sport = "Football")
+        assertEquals(4 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(bare))
+        // A bare "Football" with a soccer league named: soccer's.
+        val epl = bare.copy(catalogName = "Premier League")
+        assertEquals(3 * HOUR + 15 * MINUTE, SportsLiveLiveDuration.maxLiveMsOf(epl))
     }
 
     @Test

@@ -40,8 +40,26 @@ object SportsLiveLiveDuration {
      * kind is known.
      */
     fun maxLiveMsOf(item: SportsLiveItem, card: SportsLiveItem = item): Long {
-        val kind = SportsLiveMySportsScope.kindOf(item) ?: SportsLiveMySportsScope.kindOf(card)
+        val kind = (SportsLiveMySportsScope.kindOf(item) ?: SportsLiveMySportsScope.kindOf(card))?.let { kind ->
+            // L2: a bare "Football" is read as soccer, but a guess must never cut an American football game short: with
+            // nothing else saying soccer, the longer (American football) limit.
+            if (kind == SportsLiveSportKind.SOCCER && saysBareFootball(item, card) && !saysSoccer(item, card)) SportsLiveSportKind.FOOTBALL else kind
+        }
         return kind?.let(byKind::get) ?: maxLiveMs(item.sport ?: card.sport)
+    }
+
+    // "Football" itself is no soccer clue (it is the ambiguous word); "Football League" counts only by its other words.
+    private val FOOTBALL_WORD = Regex("(?i)football")
+
+    private fun isBareFootball(text: String?): Boolean = text?.trim()?.lowercase() == "football"
+
+    private fun saysBareFootball(item: SportsLiveItem, card: SportsLiveItem): Boolean =
+        listOf(item, card).any { source -> isBareFootball(source.sport) || source.meta.genres.any(::isBareFootball) }
+
+    /** Some text of [item] or [card], the word "football" aside, names soccer ("Soccer", "Premier League", "MLS"). */
+    private fun saysSoccer(item: SportsLiveItem, card: SportsLiveItem): Boolean = listOf(item, card).any { source ->
+        (listOf(source.sport, source.meta.name, source.meta.description, source.catalogName) + source.meta.genres)
+            .any { text -> text != null && SportsLiveSportKind.of(text.replace(FOOTBALL_WORD, " ")) == SportsLiveSportKind.SOCCER }
     }
 
     // #358: the same limits by inferred kind. Motorsport takes the longest of its series (MotoGP's six hours).
