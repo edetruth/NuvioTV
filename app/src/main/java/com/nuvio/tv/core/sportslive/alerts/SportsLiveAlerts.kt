@@ -122,6 +122,14 @@ class SportsLiveAlerts @Inject constructor(
      */
     val current: StateFlow<AlertCard?> = currentFlow.asStateFlow()
 
+    private val cutFlow = MutableStateFlow(-1L)
+
+    /**
+     * The id of the last card taken away for the Scores setting, spoiler protection or a profile switch (review R9): the
+     * host drops it at once, with no exit fade that would keep its score on screen.
+     */
+    val cut: StateFlow<Long> = cutFlow.asStateFlow()
+
     /** What plays now, as the host last said. */
     val watchingNow: StateFlow<SportsLiveWatching> = watching.asStateFlow()
 
@@ -458,6 +466,7 @@ class SportsLiveAlerts @Inject constructor(
             val next = underProtection(card.alert, lastProtection.copy(nowMs = nowMs), liveScoreShown::contains)
                 ?.let { SportsLiveAlertEngine.stillShowable(it, lastMode, lastSettings) }
             if (next == null) {
+                cutFlow.value = card.id
                 currentFlow.value = null
                 showNextLocked(nowMs)
             } else if (next != card.alert) {
@@ -476,6 +485,7 @@ class SportsLiveAlerts @Inject constructor(
             queue.clear()
             liveScoreShown.clear()
             // The card up belongs to the profile before too (live.24 RC3 review L1).
+            currentFlow.value?.let { cutFlow.value = it.id }
             currentFlow.value = null
         }
         lastProfile = profileId

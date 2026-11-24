@@ -480,8 +480,10 @@ fun SportsLiveAlertsHost(
         held.ui.countdown?.let { running -> held.countdown = running }
     }
     var goneId by remember { mutableLongStateOf(-1L) }
+    // A card taken away for the Scores setting or a profile switch goes at once: no fade keeps its score up (review R9).
+    val cutId by alerts.cut.collectAsState()
     val leaving = card == null
-    val current = card ?: held.card?.takeIf { it.id != goneId } ?: return
+    val current = card ?: held.card?.takeIf { it.id != goneId && it.id != cutId } ?: return
     LaunchedEffect(leaving, current.id) {
         if (leaving) {
             delay(SportsLiveTokens.Motion.EXIT_MS + 50L)
