@@ -409,10 +409,13 @@ object SportsLiveItemBucketer {
         val upcoming = tabs[SportsLiveTab.UPCOMING].orEmpty()
         val clockedLive = reclock(live, nowMs)
         val clockedUpcoming = reclock(upcoming, nowMs)
-        if (clockedLive === live && clockedUpcoming === upcoming) return tabs
+        if (clockedLive === live && clockedUpcoming === upcoming && upcoming.none { dateOnlyPast(it, nowMs) }) return tabs
         val started = clockedUpcoming.filter { it.isLive }
         val stillLive = clockedLive.filter { it.isLive || !it.liveByClock }
-        val stillUpcoming = clockedUpcoming.filter { !it.isLive && (!it.liveByClock || (it.startMs ?: Long.MAX_VALUE) > nowMs) }
+        // L7: a date-only row whose date has passed goes too (a restored list, an offline clock tick).
+        val stillUpcoming = clockedUpcoming.filter {
+            !it.isLive && (!it.liveByClock || (it.startMs ?: Long.MAX_VALUE) > nowMs) && !dateOnlyPast(it, nowMs)
+        }
         val liveKeys = stillLive.mapTo(HashSet()) { it.streamKey }
         val newLive = if (started.isEmpty()) stillLive else (stillLive + started.filter { it.streamKey !in liveKeys }).sortedWith(tabOrder)
         return tabs + mapOf(SportsLiveTab.LIVE_NOW to newLive, SportsLiveTab.UPCOMING to stillUpcoming)
@@ -1195,9 +1198,20 @@ object SportsLiveItemBucketer {
     // An upcoming-named catalog vouches only for items without a known time of day;
     // a timed start in the past never counts as upcoming. An events item with no start at
     // all is kept as "Time TBA" so a manually included catalog never disappears.
+    // #356: a date with no time (parsed as that date's UTC midnight) counts only until that date has ended everywhere
+    // ([DATE_ONLY_KEEP_MS]): yesterday's date-only row leaves Upcoming.
     private fun isUpcoming(item: SportsLiveItem, nowMs: Long): Boolean =
         (item.startMs != null && item.startMs > nowMs) ||
             (item.startMs == null && item.kind == SportsLiveKind.EVENTS) ||
-            (!item.startHasTimeOfDay &&
+            (!item.startHasTimeOfDay && (item.startMs == null || nowMs < item.startMs + DATE_ONLY_KEEP_MS) &&
                 SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING))
+
+    /** L7: [item] has a date and no time, and that date has ended everywhere ([DATE_ONLY_KEEP_MS]): no longer upcoming. */
+    fun dateOnlyPast(item: SportsLiveItem, nowMs: Long): Boolean {
+        val start = item.startMs ?: return false
+        return !item.startHasTimeOfDay && nowMs >= start + DATE_ONLY_KEEP_MS
+    }
+
+    /** #356: a date-only start (UTC midnight) is that date until it has ended in every zone (UTC-12): 36 h. */
+    internal const val DATE_ONLY_KEEP_MS = 36 * 60 * 60 * 1000L
 }

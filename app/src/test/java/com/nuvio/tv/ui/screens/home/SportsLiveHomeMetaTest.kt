@@ -62,6 +62,19 @@ class SportsLiveHomeMetaTest {
     }
 
     @Test
+    fun `#375 - a game waiting for ESPN reads its start, one Live Now calls Probably ended says so, never Live`() {
+        assertEquals(DrawnCardFooter(lead = "7:00 PM"), SportsLiveHomeMeta.cardFooter(null, ScoresMode.SHOW, strings, "Live", awaiting = "7:00 PM"))
+        assertEquals(
+            DrawnCardFooter(lead = "Probably ended"),
+            SportsLiveHomeMeta.cardFooter(null, ScoresMode.SHOW, strings, "Live", noScoreYet = "No score yet", probablyEnded = "Probably ended")
+        )
+        // ESPN's answer wins over the wait: a live chip reads live.
+        assertEquals(true, SportsLiveHomeMeta.cardFooter(ScoreChip.Live("Q4 4:12", ChipScore(91, 88)), ScoresMode.SHOW, strings, "Live", awaiting = "7:00 PM").live)
+        // Nothing waiting or ended: as before.
+        assertEquals(DrawnCardFooter(lead = "Live", live = true), SportsLiveHomeMeta.cardFooter(null, ScoresMode.OFF, strings, "Live"))
+    }
+
+    @Test
     fun `Hide until focused reads Score hidden on every game card`() {
         assertEquals(
             DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("Score hidden")),

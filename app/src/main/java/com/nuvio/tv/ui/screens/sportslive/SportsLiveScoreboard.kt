@@ -89,7 +89,9 @@ data class ScoreboardRow(
     /** A channel in the profile's favorites now (Channels phase 1): the gold ★, and Remove from favorites in its menu. */
     val favorite: Boolean = false,
     /** Listed live only (#215, [listedLiveOnly]): its addon says live, ESPN could not place it: "Listed live", no red dot. */
-    val listedOnly: Boolean = false
+    val listedOnly: Boolean = false,
+    /** Waiting for its ESPN feed's first answer (live.28, [withAwaitingScore]): its start time, no LIVE and no red dot. */
+    val awaitingScore: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -304,7 +306,8 @@ internal fun scoreboardTwoSided(art: GameArt?, matched: Boolean): Boolean =
 /**
  * The Scoreboard group of [item] with [status] on [tab]: a channel always sits under CHANNELS; on Live
  * now (whose games are all listed live) a game ESPN still has as later counts as starting soon and a
- * postponed one stays with the live games, as there is no LATER group there.
+ * suspended or delayed one stays with the live games (#357: a postponed or cancelled one goes to Just ended), as there is
+ * no LATER group there.
  */
 internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: SportsLiveTab = SportsLiveTab.LIVE_NOW): ScoreboardGroup {
     if (item.isChannel) return ScoreboardGroup.CHANNELS
@@ -314,7 +317,13 @@ internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: Sp
         is GameStatus.StartingSoon -> ScoreboardGroup.STARTING_SOON
         is GameStatus.Final, is GameStatus.JustEnded -> ScoreboardGroup.JUST_ENDED
         is GameStatus.Upcoming -> if (liveNow) ScoreboardGroup.STARTING_SOON else ScoreboardGroup.LATER
-        is GameStatus.Postponed -> if (liveNow) ScoreboardGroup.LIVE else ScoreboardGroup.LATER
+        // #357: on Live now a suspended or delayed game stays with the live ones (it may resume); a postponed or cancelled
+        // one leaves LIVE at once for the Just ended strip, reading "Postponed" there.
+        is GameStatus.Postponed -> when {
+            !liveNow -> ScoreboardGroup.LATER
+            status.mayResume -> ScoreboardGroup.LIVE
+            else -> ScoreboardGroup.JUST_ENDED
+        }
         GameStatus.Channel -> ScoreboardGroup.CHANNELS
     }
 }
@@ -391,6 +400,19 @@ internal fun withListedLive(rows: List<ScoreboardRow>, scoresOn: Boolean, unmatc
     }
 
 /**
+ * [rows] with [ScoreboardRow.awaitingScore] set on the live rows of [awaiting] (live.28, user decision): an ESPN-covered
+ * game whose feed has not answered reads its start time in place of LIVE; nothing moves (settled screens). Only a row
+ * live on its list's word ([GameStatus.Live] with no ESPN game): a game ESPN has is never waiting.
+ */
+internal fun withAwaitingScore(rows: List<ScoreboardRow>, awaiting: Set<String>): List<ScoreboardRow> =
+    if (awaiting.isEmpty()) rows else rows.map { row ->
+        val status = row.status
+        val waiting = row.item.streamKey in awaiting && row.group == ScoreboardGroup.LIVE && status is GameStatus.Live && status.event == null
+        // F6: no live progress bar either while it is not LIVE.
+        if (waiting == row.awaitingScore) row else row.copy(awaitingScore = waiting, progress = if (waiting) null else row.progress)
+    }
+
+/**
  * [row]'s status column in the one status format (#102). [kickoff] words its start ("8:30 PM",
  * "Tomorrow 6:30 PM"); null when it has none.
  */
@@ -413,11 +435,15 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
             ScoreChips.finalWords(chip.note, GameStatusText.finalWord(sport, strings), strings.fullTime, GameStatusText.endsAtFullTime(sport))
         )
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
+        // L9: a postponed game in the Just ended strip reads Postponed, never Final (with no chip too).
+        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
+        // live.28: an ESPN-covered game whose feed has not answered yet: its start time, never LIVE before ESPN says so.
+        // F6: with no start to show, a quiet "Checking score…", never a blank status.
+        row.awaitingScore && row.group == ScoreboardGroup.LIVE -> ScoreboardStatusLines(kickoff ?: strings.checkingScore)
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
             // The game grammar's one scoreless form (live.24, audit A6): LIVE with its dot, then the muted "No score yet".
             if (row.listedOnly) ScoreboardStatusLines(strings.live, strings.listedLive, live = true, listed = true) else ScoreboardStatusLines(strings.live, live = true)
-        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.CHANNELS -> ScoreboardStatusLines(null)
         else -> {
             val countdown = row.startsIn?.let { GameStatusText.countdown(it, strings) }

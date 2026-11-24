@@ -198,7 +198,12 @@ internal object YourTeams {
 
     /** The heading's counts: live games, replays and games later today. */
     fun summary(strip: List<YourTeamsEntry>): YourTeamsSummary = YourTeamsSummary(
-        live = strip.count { it is YourTeamsEntry.Live },
+        // F5: only games that read live: not one waiting for ESPN, nor one ended in its place.
+        live = strip.count {
+            it is YourTeamsEntry.Live && !it.row.awaitingScore && !it.row.endedInPlace &&
+                // L4: a game postponed or cancelled in its shown place is no live game.
+                !(it.row.status is com.nuvio.tv.core.sportslive.GameStatus.Postponed && !(it.row.status as com.nuvio.tv.core.sportslive.GameStatus.Postponed).mayResume)
+        },
         replays = strip.count { it is YourTeamsEntry.Replay },
         later = strip.count { it is YourTeamsEntry.LaterToday }
     )
@@ -340,6 +345,7 @@ internal fun SportsLiveYourTeamsStrip(
     val liveWord = stringResource(R.string.sports_live_team_live)
     val todayWord = stringResource(R.string.sports_live_agenda_today)
     val startedWord = stringResource(R.string.sports_live_your_teams_started)
+    val checkingWord = stringResource(R.string.sports_live_checking_score)
     val listState = rememberLazyListState()
     // Focus gone from the strip: back to its first card, so the tabs' Down (which lands on it) always finds it composed,
     // also after ▶ along the strip (user TV report, live.20).
@@ -380,13 +386,20 @@ internal fun SportsLiveYourTeamsStrip(
                         is YourTeamsEntry.Replay -> false
                     }
                     val face = when (entry) {
-                        is YourTeamsEntry.Live -> {
+                        // F5: a covered game still waiting for ESPN reads its start, as its list row does: no red dot.
+                        is YourTeamsEntry.Live -> if (entry.row.awaitingScore) {
+                            SlimFace(
+                                status = SlimStatus.Time(art.startMs?.let { agendaTimeText(it) } ?: checkingWord),
+                                corner = if (ready) SlimCorner.Ready else null
+                            )
+                        } else {
                             val footer = SportsLiveHomeMeta.cardFooter(
                                 entry.row.chip, scoresMode, strings, liveWord,
                                 halves = panelPlaysHalves((entry.row.status as? com.nuvio.tv.core.sportslive.GameStatus.Live)?.event?.league)
                             )
                             SlimFace(
-                                status = SlimStatus.Live(footer.lead),
+                                // L4: the red dot only for a game the footer reads live ("Suspended", "Postponed": no dot).
+                                status = if (footer.live) SlimStatus.Live(footer.lead) else SlimStatus.Time(footer.lead),
                                 corner = if (ready) SlimCorner.Ready else null,
                                 score = (footer.trailing as? DrawnCardTrailing.Score)?.text
                             )

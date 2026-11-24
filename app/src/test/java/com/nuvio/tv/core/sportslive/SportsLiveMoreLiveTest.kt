@@ -9,6 +9,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** More live (user decision 2026-11-21): the games My sports leaves out, by sport, behind one last row. */
@@ -52,6 +53,26 @@ class SportsLiveMoreLiveTest {
         assertEquals(SportsLiveMoreLive.OTHER, SportsLiveMoreLive.keyOf(volleyball, untagged = { true }))
         // The app's own rule: a game no source gives a sport is Other.
         assertEquals(SportsLiveMoreLive.OTHER, SportsLiveMoreLive.keyOf(game("Mystery A vs Mystery B", null)))
+    }
+
+    @Test
+    fun `a 24-7 channel goes in a Channels group of its own after the sports, never under its catalog's sport (#285)`() {
+        val news = game("Sky Sports News", "Soccer").copy(isChannel = true)
+        assertEquals(SportsLiveMoreLive.CHANNELS, SportsLiveMoreLive.keyOf(news, untagged = { false }))
+        val hidden = listOf(game("Al Hilal vs Al Ahli", "Soccer"), news, game("India vs Australia", "Cricket"), game("Pakistan vs England", "Cricket"))
+        val groups = SportsLiveMoreLive.groups(hidden, listOf(game("BKFC", null)), untagged = { it.sport == null })
+        assertEquals(listOf("CRICKET", "SOCCER", SportsLiveMoreLive.CHANNELS, SportsLiveMoreLive.OTHER), groups.map { it.key })
+        assertEquals(listOf("Al Hilal vs Al Ahli"), groups.first { it.key == "SOCCER" }.items.map { it.meta.name })
+        // The row names Channels like a sport, after the sports, Other last.
+        assertEquals(
+            listOf("CRICKET" to 2, "SOCCER" to 1, SportsLiveMoreLive.CHANNELS to 1, SportsLiveMoreLive.OTHER to 1),
+            SportsLiveMoreLive.summary(groups)
+        )
+        // Past four groups, Channels counts under Other like any group.
+        val many = listOf("Rugby", "Darts", "Snooker", "Cycling").mapIndexed { i, sport -> game("A$i vs B$i", sport) } + news
+        val summary = SportsLiveMoreLive.summary(SportsLiveMoreLive.groups(many, emptyList(), untagged = { false }))
+        assertEquals(SportsLiveMoreLive.OTHER to 1, summary.last())
+        assertTrue(summary.none { it.first == SportsLiveMoreLive.CHANNELS })
     }
 
     @Test

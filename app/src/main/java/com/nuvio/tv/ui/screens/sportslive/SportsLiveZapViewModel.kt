@@ -64,6 +64,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveScoreWait
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
@@ -111,6 +112,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -407,6 +409,33 @@ class SportsLiveZapViewModel internal constructor(
     private val panelChip = MutableStateFlow(SportsLiveZapSessions.activeFor(contentId)?.let(::openingChip))
 
     private val _panelOpen = MutableStateFlow(false)
+
+    // #375: the open panel's ESPN-covered games waiting for ESPN, as on Live Now; one lineup update at the wait's deadline.
+    private val panelWait = SportsLiveScoreWait()
+    private val panelWaitWakes = MutableStateFlow(0L)
+    private var panelWaitJob: Job? = null
+    private var panelWaitAt: Long? = null
+    // The latest deadline already woken for: never armed again, so a clock that has not moved past it never loops.
+    private var panelWaitFired = Long.MIN_VALUE
+
+    /** How many times the wait's one-shot update fired; tests read it (it must never loop). */
+    @androidx.annotation.VisibleForTesting
+    internal var panelWaitWakeCount = 0
+
+    @Synchronized
+    private fun schedulePanelWaitWake(deadline: Long?) {
+        if (deadline == panelWaitAt && panelWaitJob?.isActive == true) return
+        panelWaitJob?.cancel()
+        panelWaitAt = deadline
+        panelWaitJob = deadline?.takeIf { it > panelWaitFired }?.let { at ->
+            viewModelScope.launch {
+                delay((at - System.currentTimeMillis()).coerceAtLeast(0L) + 1)
+                synchronized(this@SportsLiveZapViewModel) { panelWaitFired = maxOf(panelWaitFired, at) }
+                panelWaitWakeCount++
+                panelWaitWakes.update { it + 1 }
+            }
+        }
+    }
     val panelOpen: StateFlow<Boolean> = _panelOpen.asStateFlow()
 
     // live.20: "OK switch · Hold OK more · Back close" under the panel, for the profile's first few openings only.
@@ -501,7 +530,9 @@ class SportsLiveZapViewModel internal constructor(
         }
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
-        val ticks = _panelOpen.flatMapLatest { open -> if (open) panelTicks() else flowOf(Unit) }
+        val ticks = _panelOpen.flatMapLatest { open ->
+            if (open) kotlinx.coroutines.flow.merge(panelTicks(), panelWaitWakes.drop(1).map { }) else flowOf(Unit)
+        }
         val storedPicks = channelPicks.catch { emit(SportsLiveChannelPicks.NONE) }
         val ticking = combine(items, ticks, logos.revision, liveScores.logosLoaded, storedPicks) { panelList, _, _, loaded, picks ->
             Triple(panelList, loaded, picks)
@@ -517,10 +548,24 @@ class SportsLiveZapViewModel internal constructor(
             val nowMs = System.currentTimeMillis()
             // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
             val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
-            val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
+            // #354: Live now's further end rules too (overdue, no stream at all past the estimate), so the panel never calls
+            // LIVE a game Live now shows as Probably ended. Dead-link checks stay Live now's.
+            // F8: no #275 rule here: the panel's list already leaves out every game whose lookups found no stream.
+            // The game playing here streams now: never "overdue" in its own panel, whatever its listed start (a long watch
+            // outlives the resolve cache that hasRecentLinks reads; an addon's start can be days old).
+            val playingKey = SportsLiveZapSessions.current()?.current?.streamKey
+            val streaming: (SportsLiveItem) -> Boolean = { item ->
+                item.streamKey == playingKey || item.alternates.any { it.streamKey == playingKey } || repo.hasRecentLinks(item)
+            }
+            fun splitOf(items: List<SportsLiveItem>) = SportsLiveEndedGames.shared.split(items, scores, nowMs, canEstimate).let { split ->
+                split.with(SportsLiveEndedGames.shared.moreEnds(split.live, scores, nowMs, emptySet(), streaming))
+            }
+            val split = splitOf(list)
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
-            val allSplit = if (list === panelList.all) split else SportsLiveEndedGames.shared.split(panelList.all, scores, nowMs, canEstimate)
-            val splitFinished = allSplit.ended.keys + allSplit.finals.keys
+            val allSplit = if (list === panelList.all) split else splitOf(panelList.all)
+            // F4: a dropped game (past its drop time) is in no group either: it counts as finished too.
+            // L5: a postponed or cancelled game is no live game either, under every chip.
+            val splitFinished = allSplit.overKeys(panelList.all) + SportsLiveEndedGames.postponedKeys(panelList.all, scores)
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             // Spoiler protection (#151): a kept Just ended final is stamped too, as on Live Now's board.
             val protection = liveScores.protection.value
@@ -560,7 +605,11 @@ class SportsLiveZapViewModel internal constructor(
             }
             // The rows CH± passes over count as finished too, so the chip's count is the banner's "of N".
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
-            PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished, favorites)
+            // #375: while open (its games tracked for scores then), covered games no feed has answered for yet wait, at
+            // most SportsLiveScoreWait.MAX_WAIT_MS; closed, nothing waits (the wait starts again when it opens).
+            val awaiting = panelWait.awaiting(if (open) split.live else emptyList(), scores, canEstimate, nowMs)
+            schedulePanelWaitWake(panelWait.deadline)
+            PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished, favorites, awaiting)
         }.flowOn(computeDispatcher)
             // An update that throws is retried, never the end of the lineup (TV report #14: `.catch { }` here ended it for the
             // player's life, and the guide's scores and clocks stood still). Until it recovers, the last lineup stays; a
@@ -615,6 +664,7 @@ class SportsLiveZapViewModel internal constructor(
                 ),
                 // #83: each row drawn as the Scoreboard draws it.
                 boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed, liveScores.unmatched.value, current.favorites)
+                    .let { boards -> withPanelAwaiting(boards, current.awaiting) }
                     .associateBy { it.board.item.streamKey },
                 boxScores = current.rows
                     .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }
@@ -1059,7 +1109,7 @@ class SportsLiveZapViewModel internal constructor(
     private fun overKeys(lineupItems: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long): Set<String> {
         val canEstimate = SportsLiveEndedGames.estimateGate(lineup.value?.mode == ScoresMode.OFF, liveScores.unmatched.value)
         return repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
-            SportsLiveEndedGames.shared.overSourceKeys(lineupItems, scores, nowMs, canEstimate)
+            SportsLiveEndedGames.shared.overSourceKeys(lineupItems, scores, nowMs, hasRecentLinks = repo::hasRecentLinks, canEstimate = canEstimate)
     }
 
     /** Game ids marked ⚠ no working stream (#147), and those of [lineupItems] whose every known link failed this session. */
@@ -1262,7 +1312,8 @@ class SportsLiveZapViewModel internal constructor(
 
     // The panel's Just ended games, with every source of each (M11): never offered for dual screen.
     private fun panelEndedKeys(): Set<String> =
-        panel.value?.rows.orEmpty().filter { it.group == ZapPanelGroup.JUST_ENDED }.flatMapTo(HashSet()) { it.item.sourceKeys() }
+        // L5: by the Scoreboard section, which files a postponed game under Just ended too (its panel group is Other).
+        panel.value?.rows.orEmpty().filter { it.section == ScoreboardGroup.JUST_ENDED }.flatMapTo(HashSet()) { it.item.sourceKeys() }
 
     private inline fun dualPick(
         items: (SportsLiveZapSession) -> List<SportsLiveItem>,
@@ -1542,7 +1593,9 @@ private data class PanelLineup(
     /** Finals and just ended games among every game listed (stream keys): not counted on the chips (#145). */
     val finished: Set<String> = emptySet(),
     /** The profile's favorite channels among the listed ones, by stream key (Channels phase 1). */
-    val favorites: Set<String> = emptySet()
+    val favorites: Set<String> = emptySet(),
+    /** #375: games waiting for ESPN's first answer ([SportsLiveScoreWait]): their start, not LIVE. */
+    val awaiting: Set<String> = emptySet()
 )
 
 /** The open panel's [state], built from [lineup] for [session]. */

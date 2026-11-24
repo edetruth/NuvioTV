@@ -65,6 +65,16 @@ class SportsLiveSettledRowsTest {
     }
 
     @Test
+    fun `F7 - a row settled under LIVE that ESPN has as not started is not counted as live`() {
+        val (a, b) = listOf("a", "b").map(::item)
+        val shown = listOf(row(a), row(b))
+        val built = listOf(row(a), row(b, ScoreboardGroup.STARTING_SOON, status = GameStatus.StartingSoon(NOW + HOUR, 1 to 0)))
+        val settled = SportsLiveSettledRows.settle(shown, built)
+        assertTrue(settled.all { it.group == ScoreboardGroup.LIVE })
+        assertEquals(mapOf(ScoreboardGroup.LIVE to 1), sportsLiveGroupCounts(settled))
+    }
+
+    @Test
     fun `an ended in place row says its final word, and under Hide its score stays hidden`() {
         val ended = row(item("a"), ScoreboardGroup.LIVE, status = GameStatus.JustEnded(EndedGame(EndedSignal.FINAL, NOW, final("a"))))
         assertEquals(ScoreboardStatusLines("Final"), scoreboardStatusLines(ended, STRINGS, kickoff = "8:00 PM"))

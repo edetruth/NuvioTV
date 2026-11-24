@@ -2224,6 +2224,134 @@ class SportsLiveViewModelTest {
     } }
 
     @Test
+    fun `an ESPN-covered game is not LIVE until its feed answers, an uncovered one is, and ESPN not answering falls back`() = runTest {
+        // live.28 (user decision). canEstimate false: covered, the feed has not answered; true: no feed covers it.
+        nextLoad = load(listOf(stillOn))
+        val covered = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+        assertEquals(setOf(stillOn.streamKey), covered.uiState.value.awaitingScore)
+        // Listed in place all the same: nothing hidden or held back.
+        assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+
+        val uncovered = newViewModel(canEstimate = { true })
+        advanceUntilIdle()
+        assertTrue(uncovered.uiState.value.awaitingScore.isEmpty())
+
+        // ESPN down: no answer within the wait, so the game shows as before at the next build.
+        covered.nowMs = { NOW + com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS }
+        endedFlow.value = setOf("x|y")
+        advanceUntilIdle()
+        assertTrue(covered.uiState.value.awaitingScore.isEmpty())
+        assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `a covered game's wait running out with no ESPN answer shows it LIVE at once, not at the next tick (#374)`() = runTest {
+        nextLoad = load(listOf(stillOn))
+        val viewModel = newViewModel(canEstimate = { false })
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        runCurrent()
+        assertEquals(setOf(stillOn.streamKey), viewModel.uiState.value.awaitingScore)
+        advanceTimeBy(com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS - 1_000L)
+        runCurrent()
+        assertEquals(setOf(stillOn.streamKey), viewModel.uiState.value.awaitingScore)
+        // Nothing else changes (the default clock never ticks): the one-shot wake alone builds again.
+        advanceTimeBy(2_000L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.awaitingScore.isEmpty())
+        assertEquals(listOf("on"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `F2 - the wait never runs out on another tab, where no feed is asked, and games My sports hides wait only once shown`() = runTest {
+        val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
+        val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
+        nextLoad = load(listOf(nba, cricket))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            endedInputs = flowOf(EndedInputs(emptyMap()) { false }),
+            endedGames = SportsLiveEndedGames(),
+            mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW + testScheduler.currentTime }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        // My sports' game waits; the cricket game (left to More live, not tracked) does not.
+        assertEquals(setOf(nba.streamKey), viewModel.uiState.value.awaitingScore)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.awaitingScore.isEmpty())
+        advanceTimeBy(com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS + 1_000L)
+        runCurrent()
+        // Back on Live now: the wait starts now, it did not run out meanwhile.
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        assertEquals(setOf(nba.streamKey), viewModel.uiState.value.awaitingScore)
+        // More live opened: its games are tracked, and wait from then.
+        viewModel.openMoreLive()
+        runCurrent()
+        assertEquals(setOf(nba.streamKey, cricket.streamKey), viewModel.uiState.value.awaitingScore)
+    }
+
+    @Test
+    fun `the wait's one-shot update never re-arms for the same deadline when the clock does not move (test hang)`() = runTest {
+        // The clock stays at NOW: the game keeps waiting, its deadline stays the same. Before the fix each wake built
+        // again, found that deadline and armed it again, so advanceUntilIdle never returned.
+        nextLoad = load(listOf(stillOn))
+        val viewModel = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+        val builds = viewModel.stateBuilds
+        advanceTimeBy(10 * com.nuvio.tv.core.sportslive.SportsLiveScoreWait.MAX_WAIT_MS)
+        runCurrent()
+        assertEquals(builds, viewModel.stateBuilds)
+        assertEquals(setOf(stillOn.streamKey), viewModel.uiState.value.awaitingScore)
+    }
+
+    @Test
+    fun `#357 - a game ESPN has postponed is not counted live, one suspended (may resume) still is`() = runTest {
+        val pacers = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val off = item("off", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - HOUR)
+        nextLoad = load(listOf(off, stillOn))
+        val postponed = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Postponed", mayResume = false)
+        val viewModel = newViewModel(scores = mapOf(off.streamKey to postponed))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.filterCounts[null])
+        // L5: Results' "N games live now", the tab count and Watch with another game agree.
+        assertEquals(1, viewModel.uiState.value.liveGameCount)
+        assertEquals(1, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+        assertEquals(setOf(off.streamKey), viewModel.uiState.value.postponed)
+
+        val suspended = postponed.copy(clockText = "Suspended", mayResume = true)
+        val resuming = newViewModel(scores = mapOf(off.streamKey to suspended))
+        advanceUntilIdle()
+        assertEquals(2, resuming.uiState.value.filterCounts[null])
+    }
+
+    @Test
+    fun `a game past its estimate whose lookup found no stream at all moves to Just ended as Probably ended`() = runTest {
+        // #275: nothing was resolved, so there is no link to check; the empty lookup says it. A game before its
+        // estimate with no stream yet stays live, dimmed (#145).
+        nextLoad = load(listOf(pastEstimate, stillOn))
+        endedFlow.value = setOf(pastEstimate.streamKey, stillOn.streamKey)
+        val viewModel = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("on", "g"), state.visibleItems.map { it.id })
+        assertEquals(setOf(pastEstimate.streamKey), state.justEnded.keys)
+        assertEquals(EndedSignal.ESTIMATE, state.endedOf(state.visibleItems.last())?.signal)
+        assertNull(state.endedOf(state.visibleItems.first()))
+
+        // A later lookup finds streams: live again.
+        endedFlow.value = emptySet()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.justEnded.isEmpty())
+        assertEquals(2, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+    }
+
+    @Test
     fun `a Probably ended card whose links come back returns to live, and leaves the strip only while its verdict stands`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(pastEstimate, stillOn))
         var reply: ManifestResponse? = ManifestResponse(404, null)

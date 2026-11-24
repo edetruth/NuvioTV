@@ -596,6 +596,15 @@ internal fun panelBoards(
 }
 
 /**
+ * #375: the panel's [boards] with the games of [awaiting] (ESPN-covered, no feed answered yet; [com.nuvio.tv.core.sportslive.SportsLiveScoreWait])
+ * read as Live Now reads them ([withAwaitingScore]): their start, not LIVE, no progress bar. Only a live row is touched.
+ */
+internal fun withPanelAwaiting(boards: List<ZapPanelBoard>, awaiting: Set<String>): List<ZapPanelBoard> =
+    if (awaiting.isEmpty()) boards else boards.map { board ->
+        if (board.board.item.streamKey in awaiting) board.copy(board = withAwaitingScore(listOf(board.board), awaiting).single()) else board
+    }
+
+/**
  * The live games panel's content: its [rows], grouped and ordered by [groupPanelRows]; [currentKey] is
  * the playing game's stream key, highlighted. [items] are the rows' games in that order. [chips] are
  * the filter chips over [allItems] (every game listed, whatever the chip), [chip] the selected one
@@ -650,7 +659,8 @@ internal enum class PanelRowOk { PLAY, BOX_SCORE }
  * the box score, as Game stats in its menu does; every other row (a Just ended game ESPN does not know too) plays.
  */
 internal fun panelRowOk(row: ZapPanelRow, game: ScoreSnapshot?): PanelRowOk =
-    if (row.section == ScoreboardGroup.JUST_ENDED && game != null) PanelRowOk.BOX_SCORE else PanelRowOk.PLAY
+    // L3: a postponed or cancelled game sits in Just ended too, but was never played: no box score, no postgame; it plays.
+    if (row.section == ScoreboardGroup.JUST_ENDED && row.status !is GameStatus.Postponed && game != null) PanelRowOk.BOX_SCORE else PanelRowOk.PLAY
 
 /**
  * What Hold OK on a panel row lists (#140), in order: **Watch both** first (the game playing beside the one

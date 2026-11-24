@@ -11,7 +11,6 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
-import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.LinkCheckRequest
 import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
@@ -19,7 +18,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
-import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
@@ -27,6 +25,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLineup
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
+import com.nuvio.tv.core.sportslive.SportsLiveScoreWait
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
 import com.nuvio.tv.core.sportslive.SportsLiveAddSportPrompt
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -781,6 +780,32 @@ class SportsLiveViewModel internal constructor(
         val state: SportsLiveUiState
     )
 
+    // live.28: Live now's ESPN-covered games waiting for their feed's first answer (read on the state build only).
+    private val scoreWait = SportsLiveScoreWait()
+
+    // #374: bumped when a covered game's wait runs out with no ESPN answer, so it shows as before then, not at the next tick.
+    private val waitWakes = MutableStateFlow(0L)
+    private var waitWakeJob: Job? = null
+    private var waitWakeAt: Long? = null
+    // The latest deadline already woken for: never armed again (a clock that has not moved past it, as in tests, would
+    // otherwise build, find the same deadline and re-arm forever).
+    private var waitWakeFired = Long.MIN_VALUE
+
+    /** One state build just after [deadline] (the score wait's), once per deadline; a later or no deadline replaces it. */
+    @Synchronized
+    private fun scheduleWaitWake(deadline: Long?) {
+        if (deadline == waitWakeAt && waitWakeJob?.isActive == true) return
+        waitWakeJob?.cancel()
+        waitWakeAt = deadline
+        waitWakeJob = deadline?.takeIf { it > waitWakeFired }?.let { at ->
+            viewModelScope.launch {
+                delay((at - nowMs()).coerceAtLeast(0L) + 1)
+                synchronized(this@SportsLiveViewModel) { waitWakeFired = maxOf(waitWakeFired, at) }
+                waitWakes.update { it + 1 }
+            }
+        }
+    }
+
     // Each clock tick counts, so a tick (with nothing else new) still builds again.
     private var clockTicks = 0L
     private var lastBuild: StateBuild? = null
@@ -798,7 +823,7 @@ class SportsLiveViewModel internal constructor(
             repo.endedKeys,
             combine(selectionState, scoresMode, mySports) { selection, mode, sports -> Triple(selection, mode, sports) },
             combine(endedInputs, linkChecker?.dead ?: flowOf(emptyMap())) { inputs, linkDead -> inputs to linkDead },
-            clock.map { ++clockTicks }
+            merge(clock, waitWakes.drop(1).map { }).map { ++clockTicks }
         ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), tick ->
             // A focus move alone (live.20): the last build with the new selection, unless it changes which rows Live now keeps.
             stateForFocus(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick)
@@ -1669,7 +1694,9 @@ class SportsLiveViewModel internal constructor(
         var justEnded = emptyMap<String, EndedGame>()
         var heldBack = emptyList<SportsLiveItem>()
         var noStreams = emptySet<String>()
+        var awaitingScore = emptySet<String>()
         var finals = emptySet<String>()
+        var postponed = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         var otherEvents = emptyList<SportsLiveItem>()
@@ -1702,17 +1729,15 @@ class SportsLiveViewModel internal constructor(
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
                 finals = split.finals.keys
+                // #357: a game ESPN has postponed or cancelled (not one that may resume) is no live game to count.
+                postponed = SportsLiveEndedGames.postponedKeys(split.live, scores)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
-                val (overdue, notOverdue) = split.live.partition {
-                    SportsLiveLiveDuration.isOverdue(it, now) && !repo.hasRecentLinks(it) &&
-                        ScoreChips.matchedEvent(it, scores[it.streamKey])?.state != ScoreState.IN
-                }
-                val overdueEnded = overdue.mapNotNull { item ->
-                    val start = SportsLiveEndedGames.timedStart(item) ?: return@mapNotNull null
-                    val ended = EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport))
-                    (item to ended).takeIf { now < ended.dropsAtMs }
-                }
+                // #275: one past its estimate whose every lookup found no stream has no link to check: "Probably ended" too.
+                // Shared with the player's panel (#354): SportsLiveEndedGames.moreEnds.
+                val more = endedGames.moreEnds(split.live, scores, now, noStreams, repo::hasRecentLinks)
+                val notOverdue = split.live.filter { it.streamKey !in more.moved }
+                val moreEnded = split.live.filter { it.streamKey in more.ended }
                 // #60 phase 2: a game past its estimated end that ESPN does not decide has its freshly resolved
                 // link looked at, while Live now is on screen; a dead link moves it to the strip as "Probably
                 // ended" (playable, never hidden). The verdict goes when fresh links come back (a later
@@ -1732,10 +1757,21 @@ class SportsLiveViewModel internal constructor(
                         true
                     }
                 }
+                // live.28 (user decision): an ESPN-covered game reads its start time, not LIVE, until its feed answers; at
+                // most SportsLiveScoreWait.MAX_WAIT_MS, then as before. The estimate gate is "answered or not covered".
+                // F2: only over the games the screen tracks for scores now (Live now shown: My sports' games, every game
+                // while More live / All sports is open), so a wait never runs out on a game no feed was asked for.
+                val tracked = when {
+                    selection.tab != SportsLiveTab.LIVE_NOW -> emptyList()
+                    mySports.isDefault || selection.moreLiveOpen -> live
+                    else -> SportsLiveMySportsScope.scope(live, mySports)
+                }
+                awaitingScore = scoreWait.awaiting(tracked, scores, inputs.canEstimate, now)
+                scheduleWaitWake(scoreWait.deadline)
                 if (toCheck.isNotEmpty() && screenVisible && selection.tab == SportsLiveTab.LIVE_NOW) {
                     linkChecker?.offer(toCheck, viewModelScope)
                 }
-                justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended } +
+                justEnded = split.ended + more.ended +
                     linkEnded.associate { it.streamKey to SportsLiveEndedGames.linkDead(linkDead.getValue(it.streamKey).atMs) }
                 // The excitement badge (#43, V2): shown with the scores only, and it never re-orders the list.
                 if (mode == ScoresMode.SHOW) {
@@ -1753,7 +1789,7 @@ class SportsLiveViewModel internal constructor(
                 // Here, before the calm step (J1), not on the board: a match landing later never moves a shown row; the
                 // order is applied on the first build, a thaw ("N new") and a re-rank.
                 val ranked = SportsLiveLineup.order(live, mySports, scores, mode)
-                val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                val built = ranked + split.justEnded + moreEnded + linkEnded
                 lastBuiltLiveNow = built
                 lastBuiltLiveCount = ranked.size
                 // The focused card is never taken from under the user: kept in place until focus moves on. While Live now
@@ -1834,7 +1870,7 @@ class SportsLiveViewModel internal constructor(
         // The chips' counts (#79): Live now counts live, zappable games (#145), as the player's panel and CH banner
         // do: its Just ended strip, finals in their grace and "no streams yet" games are left out.
         fun counted(items: List<SportsLiveItem>) = if (selection.tab == SportsLiveTab.LIVE_NOW) {
-            items.filter { it.streamKey !in justEnded && it.streamKey !in finals && it.streamKey !in noStreams }
+            items.filter { it.streamKey !in justEnded && it.streamKey !in finals && it.streamKey !in noStreams && it.streamKey !in postponed }
         } else {
             items
         }
@@ -1915,6 +1951,8 @@ class SportsLiveViewModel internal constructor(
             sources = selection.sources,
             justEnded = justEnded,
             noStreams = noStreams,
+            awaitingScore = awaitingScore,
+            postponed = postponed,
             nowMs = now,
             whyTags = whyTags,
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.

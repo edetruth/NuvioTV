@@ -21,6 +21,8 @@ enum class SportsLiveSportKind {
         private val sportOf = Memo(TEXT_CACHE_SIZE) { text: String -> ofUncached(text) }
         private val wrestlingShow = Memo(TEXT_CACHE_SIZE) { title: String -> WRESTLING_SHOW.containsMatchIn(fold(title)) }
         private val promotion = Memo(TEXT_CACHE_SIZE) { title: String -> PROMOTION.containsMatchIn(fold(title)) }
+        // L8: a catalog name's single sport, asked on every overdue check (Home reads it on its main thread).
+        private val singleOf = Memo(TEXT_CACHE_SIZE) { text: String -> singleUncached(text) }
 
         /** A filter value standing for a [SportsLiveSportKind] (never an addon's own text). */
         private const val FILTER_PREFIX = "\u0000sport:"
@@ -191,8 +193,10 @@ enum class SportsLiveSportKind {
          * The one sport [text] names (#146); null when it names none or several ("Live Sports (Soccer, Tennis,
          * F1)"). "American football" is football alone, not soccer as well.
          */
-        fun single(text: String?): SportsLiveSportKind? {
-            val folded = fold(text ?: return null).takeIf { it.isNotEmpty() } ?: return null
+        fun single(text: String?): SportsLiveSportKind? = text?.let(singleOf::invoke)
+
+        private fun singleUncached(text: String): SportsLiveSportKind? {
+            val folded = fold(text).takeIf { it.isNotEmpty() } ?: return null
             val kinds = RULES.filter { (_, regex) -> regex.containsMatchIn(folded) }.mapTo(LinkedHashSet()) { it.first }
             if (FOOTBALL in kinds) kinds -= SOCCER
             return kinds.singleOrNull()

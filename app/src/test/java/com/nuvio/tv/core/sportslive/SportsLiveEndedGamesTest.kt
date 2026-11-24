@@ -403,6 +403,184 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `a final seen before a restart stands before any score comes in - a cold open never shows it live`() {
+        // #267: the visit's first list is built before the score feeds answer; a coverable card is not estimated meanwhile.
+        val card = item()
+        val saved = ArrayList<Map<String, SportsLiveEndedGames.FinalTime>>()
+        val before = SportsLiveEndedGames()
+        before.install(emptyMap(), START) { saved += it }
+        before.verdict(card, live(pacersFinal), START + 2 * HOUR)
+        val endedAt = START + 2 * HOUR + 5 * MINUTE
+        before.verdict(card, pacersFinal, endedAt)
+
+        val after = SportsLiveEndedGames()
+        after.install(saved.last(), endedAt + 12 * MINUTE) { }
+        val verdict = after.verdict(card, null, endedAt + 12 * MINUTE, canEstimate = false)!!
+        assertEquals(EndedSignal.FINAL, verdict.signal)
+        assertEquals(endedAt, verdict.endedAtMs)
+        // No score to show: nothing to spoil.
+        assertNull(verdict.event)
+        val split = after.split(listOf(card), emptyMap(), endedAt + 12 * MINUTE) { false }
+        assertTrue(split.live.isEmpty())
+        assertEquals(listOf(card), split.justEnded)
+        // Home leaves it out too, in its grace already.
+        assertEquals(setOf(card.streamKey), after.finalKeys(listOf(card), emptyMap(), endedAt + 2 * MINUTE))
+    }
+
+    @Test
+    fun `F1 - a remembered final inside its grace goes straight to Just ended, never back to the live list`() {
+        val card = item()
+        val endedAt = START + 2 * HOUR
+        val after = SportsLiveEndedGames()
+        after.install(mapOf(card.streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt + 2 * MINUTE) { }
+        val split = after.split(listOf(card), emptyMap(), endedAt + 2 * MINUTE) { false }
+        assertTrue(split.live.isEmpty())
+        assertEquals(listOf(card), split.justEnded)
+        val status = GameStatus.of(card, null, split.ended[card.streamKey], endedAt + 2 * MINUTE)
+        assertTrue(status is GameStatus.JustEnded)
+        // Nothing to link-check: it is over.
+        assertNull(after.linkCheckEnd(card, null, endedAt + 4 * HOUR))
+    }
+
+    @Test
+    fun `F3 - a remembered final never applies to a card with no timed start, which it would hide untracked`() {
+        val endedAt = START + 2 * HOUR
+        val games = SportsLiveEndedGames()
+        games.install(mapOf(item().streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt + HOUR) { }
+        val untimed = item(startMs = null, timed = false)
+        assertNull(games.verdict(untimed, null, endedAt + HOUR, canEstimate = false))
+        val split = games.split(listOf(untimed), emptyMap(), endedAt + HOUR) { false }
+        assertEquals(listOf(untimed), split.live)
+        assertNull(games.verdict(item(timed = false), null, endedAt + HOUR, canEstimate = false))
+    }
+
+    @Test
+    fun `F1 - ESPN showing the game scheduled clears a remembered final too`() {
+        val card = item()
+        val endedAt = START + 2 * HOUR
+        val games = SportsLiveEndedGames()
+        games.install(mapOf(card.streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt) { }
+        assertNull(games.verdict(card, live(pacersFinal).copy(state = ScoreState.PRE), endedAt + MINUTE))
+        assertNull(games.verdict(card, null, endedAt + 2 * MINUTE, canEstimate = false))
+    }
+
+    @Test
+    fun `a final remembered from a restart never ends a later game under the same card key, and ESPN in play clears it`() {
+        val endedAt = START + 2 * HOUR
+        val stored = mapOf(item().streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId))
+        // An addon reusing its id for a game that starts after that final: not this final.
+        val reused = SportsLiveEndedGames()
+        reused.install(stored, endedAt + HOUR) { }
+        assertNull(reused.verdict(item(startMs = endedAt + 30 * MINUTE), null, endedAt + HOUR, canEstimate = false))
+        // ESPN shows the card's game in play: the remembered final goes for good.
+        val games = SportsLiveEndedGames()
+        games.install(stored, endedAt + 10 * MINUTE) { }
+        assertNull(games.verdict(item(), live(pacersFinal), endedAt + 10 * MINUTE))
+        assertNull(games.verdict(item(), null, endedAt + 11 * MINUTE, canEstimate = false))
+        // Older than 6 h: forgotten.
+        val late = SportsLiveEndedGames()
+        late.install(stored, endedAt) { }
+        assertNull(late.verdict(item(), null, endedAt + SportsLiveEndedGames.FORGET_AFTER_MS + MINUTE, canEstimate = false))
+    }
+
+    @Test
+    fun `Live now's further end rules are one shared rule set the panel takes too (#354)`() {
+        val games = SportsLiveEndedGames()
+        // Soccer runs at most 3 h 15 live: this one started 4 h ago, no ESPN game, no recent links.
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "over", startMs = START - 4 * HOUR)
+        // Past its estimate (4 h 05), before its longest run (4 h 30), and every lookup found no stream (#275).
+        val noLinks = item(name = "New England Patriots at New York Jets", sport = "NFL", id = "nolinks", startMs = START - 4 * HOUR - 10 * MINUTE)
+        val onAir = item(id = "on", startMs = START - HOUR)
+        val alive = item(name = "Team C vs Team D", sport = "Soccer", id = "alive", startMs = START - 4 * HOUR)
+        val live = listOf(overdue, noLinks, onAir, alive)
+        val noStreams = setOf(noLinks.streamKey, onAir.streamKey)
+        val more = games.moreEnds(live, emptyMap(), START, noStreams) { it.id == "alive" }
+        assertEquals(setOf(overdue.streamKey, noLinks.streamKey), more.moved)
+        assertEquals(START - 4 * HOUR + SportsLiveLiveDuration.maxLiveMs("Soccer"), more.ended.getValue(overdue.streamKey).endedAtMs)
+        assertEquals(START - 4 * HOUR - 10 * MINUTE + SportsLiveGameLength.of(noLinks)!!, more.ended.getValue(noLinks.streamKey).endedAtMs)
+        assertTrue(more.ended.values.all { it.signal == EndedSignal.ESTIMATE })
+        // A game ESPN shows in play is never overdue.
+        val playing = item(id = "p", startMs = START - 4 * HOUR)
+        assertTrue(games.moreEnds(listOf(playing), mapOf(playing.streamKey to live(pacersFinal)), START, emptySet()) { false }.moved.isEmpty())
+
+        // The split, with them: out of the live list, into the strip after its own cards.
+        val split = games.split(live, emptyMap(), START) { false }.with(more)
+        assertEquals(listOf(onAir, alive), split.live)
+        assertEquals(listOf(overdue, noLinks), split.justEnded)
+        assertEquals(setOf(overdue.streamKey, noLinks.streamKey), split.ended.keys)
+    }
+
+    @Test
+    fun `F9 - a game ESPN strictly matches is never overdue, scheduled or postponed too`() {
+        val games = SportsLiveEndedGames()
+        val late = item(id = "late", startMs = START - 4 * HOUR)
+        val scheduled = live(pacersFinal).copy(state = ScoreState.PRE)
+        assertTrue(games.moreEnds(listOf(late), mapOf(late.streamKey to scheduled), START, emptySet()) { false }.moved.isEmpty())
+        val postponed = live(pacersFinal).copy(state = ScoreState.OFF)
+        assertTrue(games.moreEnds(listOf(late), mapOf(late.streamKey to postponed), START, emptySet()) { false }.moved.isEmpty())
+        // No ESPN game: overdue as before.
+        assertEquals(setOf(late.streamKey), games.moreEnds(listOf(late), emptyMap(), START, emptySet()) { false }.moved)
+    }
+
+    @Test
+    fun `F8 - Up next and the dual picker leave out overdue games too, never one with links found lately`() {
+        val games = SportsLiveEndedGames()
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "over", startMs = START - 4 * HOUR)
+        val on = item(id = "on", startMs = START - HOUR)
+        assertTrue(games.overSourceKeys(listOf(overdue, on), emptyMap(), START) { false }.isEmpty())
+        assertEquals(setOf(overdue.streamKey), games.overSourceKeys(listOf(overdue, on), emptyMap(), START, hasRecentLinks = { false }) { false })
+        assertTrue(games.overSourceKeys(listOf(overdue), emptyMap(), START, hasRecentLinks = { true }) { false }.isEmpty())
+    }
+
+    @Test
+    fun `#375 - the games Home labels Probably ended are Live now's - estimates and overdue, never a final or a live game`() {
+        val games = SportsLiveEndedGames()
+        val estimated = item(name = "Leinster vs Munster", sport = "Rugby", id = "est", startMs = START - 5 * HOUR)
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "over", startMs = START - 4 * HOUR)
+        val final = item(id = "fin", startMs = START - 3 * HOUR)
+        val on = item(name = "Team C vs Team D", sport = "Soccer", id = "on", startMs = START - HOUR)
+        val keys = games.probablyEndedKeys(
+            listOf(estimated, overdue, final, on), mapOf(final.streamKey to pacersFinal), START,
+            canEstimate = { it.id == "est" }, hasRecentLinks = { false }
+        )
+        assertEquals(setOf(estimated.streamKey, overdue.streamKey), keys)
+    }
+
+    @Test
+    fun `L5 - postponed or cancelled is no live game, suspended may resume, channels never`() {
+        val card = item()
+        val postponed = live(pacersFinal).copy(state = ScoreState.OFF, clockText = "Postponed", mayResume = false)
+        assertTrue(SportsLiveEndedGames.isPostponed(card, postponed))
+        assertTrue(!SportsLiveEndedGames.isPostponed(card, postponed.copy(mayResume = true)))
+        assertTrue(!SportsLiveEndedGames.isPostponed(card, live(pacersFinal)))
+        assertTrue(!SportsLiveEndedGames.isPostponed(item(isChannel = true), postponed))
+        assertEquals(setOf(card.streamKey), SportsLiveEndedGames.postponedKeys(listOf(card, item(id = "x", name = "Team A vs Team B")), mapOf(card.streamKey to postponed)))
+    }
+
+    @Test
+    fun `F4 - what live counts leave out - Just ended, dropped and finals in their grace`() {
+        val games = SportsLiveEndedGames()
+        val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)
+        val strip = item(name = "Team C vs Team D", sport = "Soccer", id = "strip", startMs = START - 4 * HOUR)
+        val on = item(id = "on", startMs = START - HOUR)
+        val all = listOf(old, strip, on)
+        val split = games.split(all, emptyMap(), START) { false }.with(games.moreEnds(all, emptyMap(), START, emptySet()) { false })
+        assertEquals(setOf(old.streamKey, strip.streamKey), split.overKeys(all))
+        assertEquals(listOf(on), split.live)
+    }
+
+    @Test
+    fun `#354 - an overdue card past its drop time is moved out but shown nowhere`() {
+        val games = SportsLiveEndedGames()
+        val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)
+        val more = games.moreEnds(listOf(old), emptyMap(), START, emptySet()) { false }
+        assertEquals(setOf(old.streamKey), more.moved)
+        assertTrue(more.ended.isEmpty())
+        val split = games.split(listOf(old), emptyMap(), START) { false }.with(more)
+        assertTrue(split.live.isEmpty() && split.justEnded.isEmpty())
+    }
+
+    @Test
     fun `a stored time is reused only for the same ESPN event and while younger than 6 h`() {
         val card = item()
         val endedAt = START + 2 * HOUR

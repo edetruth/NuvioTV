@@ -38,7 +38,9 @@ internal fun rememberLiveNowCardArt(
     items: List<SportsLiveItem>,
     scores: State<Map<String, ScoreSnapshot>>,
     mode: ScoresMode?,
-    unmatched: State<Set<String>>
+    unmatched: State<Set<String>>,
+    /** #375: which cards wait for ESPN and which Live Now calls Probably ended ([SportsLiveHomeScores]). */
+    truth: SportsLiveHomeTruth
 ): (String) -> (@Composable () -> Unit)? {
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
@@ -46,6 +48,8 @@ internal fun rememberLiveNowCardArt(
     // The game playing in a player (live.26 TV): "▶ Watching", as Live Now's row says, never "No score yet".
     val watchingWord = stringResource(R.string.sports_live_row_watching)
     val startsFormat = stringResource(R.string.sports_live_waiting_starts)
+    val checkingWord = stringResource(R.string.sports_live_checking_score)
+    val probablyEndedWord = stringResource(R.string.sports_live_probably_ended)
     // Live Now's tag words (RC TV finding): the same league tag as its row, else the sport word, never a catalog's name.
     val context = androidx.compose.ui.platform.LocalContext.current
     val sportWord: (com.nuvio.tv.core.sportslive.SportsLiveSportKind) -> String = remember(context) {
@@ -54,7 +58,7 @@ internal fun rememberLiveNowCardArt(
     // #207: the lookup changes with the cards only, never with a score. Every card on Home reads it, so a new one on
     // each score update redrew them all; each drawn card reads its own game's score instead, and only a card whose game
     // changed is drawn again.
-    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, startsFormat, sportWord, watchingWord) {
+    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, startsFormat, sportWord, watchingWord, truth, checkingWord, probablyEndedWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
@@ -69,11 +73,16 @@ internal fun rememberLiveNowCardArt(
                 // Now's rows show its kickoff; never "● Live".
                 val scheduled = remember(snapshot) { ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.PRE }
                 val kickoff = if (scheduled) art?.let { kickoffText(it) } else null
+                // #375: as on Live Now: waiting for ESPN reads its start (or "Checking score…"); Probably ended says so.
+                val waiting by remember { derivedStateOf { item.streamKey in truth.awaiting.value } }
+                val probablyEnded by remember { derivedStateOf { item.streamKey in truth.probablyEnded.value } }
+                val waitingKickoff = if (waiting) art?.let { kickoffText(it) } else null
+                val awaiting = if (waiting) waitingKickoff ?: checkingWord else null
                 // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
                 // live.26 TV (spoiler): keyed on the Scores setting too. A setting change rebuilds this lookup, but the new
                 // card is drawn in the old card's place, so a footer keyed on the score alone kept the old setting's
                 // (a score under Hide) until the score next changed.
-                val footer = remember(snapshot, confirmedUnmatched, kickoff, mode) {
+                val footer = remember(snapshot, confirmedUnmatched, kickoff, mode, awaiting, probablyEnded) {
                     // #215: listed live by its addon, not found by ESPN ([listedLiveOnly]).
                     val listed = item.isLive && !item.isChannel && SportsLiveHomeMeta.listedLiveOnly(mode, confirmedUnmatched, ScoreChips.matchedEvent(item, snapshot) != null)
                     SportsLiveHomeMeta.cardFooter(
@@ -81,7 +90,9 @@ internal fun rememberLiveNowCardArt(
                         halves = com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves(snapshot?.league),
                         noScoreYet = noScoreYet,
                         startsAt = kickoff?.let { String.format(startsFormat, it) },
-                        watching = watchingWord.takeIf { snapshot?.watched == true }
+                        watching = watchingWord.takeIf { snapshot?.watched == true },
+                        awaiting = awaiting,
+                        probablyEnded = probablyEndedWord.takeIf { probablyEnded }
                     )
                 }
                 val tag = remember(snapshot) { liveNowItemTag(item, snapshot, sportWord).ifEmpty { null } }

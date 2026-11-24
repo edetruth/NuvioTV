@@ -22,7 +22,8 @@ internal fun rememberGameStatusStrings(): GameStatusStrings {
     val postponed = stringResource(R.string.sports_live_chip_postponed)
     val chip = rememberScoreChipStrings()
     val listedLive = stringResource(R.string.sports_live_listed_live)
-    return remember(liveClock, live, clockPeriod, timeCountdown, inHm, inH, inM, final, fullTime, probablyEnded, postponed, chip, listedLive) {
-        GameStatusStrings(liveClock, live, clockPeriod, timeCountdown, inHm, inH, inM, final, fullTime, probablyEnded, postponed, chip, listedLive)
+    val checkingScore = stringResource(R.string.sports_live_checking_score)
+    return remember(liveClock, live, clockPeriod, timeCountdown, inHm, inH, inM, final, fullTime, probablyEnded, postponed, chip, listedLive, checkingScore) {
+        GameStatusStrings(liveClock, live, clockPeriod, timeCountdown, inHm, inH, inM, final, fullTime, probablyEnded, postponed, chip, listedLive, checkingScore)
     }
 }

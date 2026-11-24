@@ -87,12 +87,19 @@ internal fun SportsLiveBoard.settledOn(previous: SportsLiveBoard?): SportsLiveBo
     return copy(rows = settled, items = settled.map { it.item })
 }
 
+/** L4: a row that reads live under LIVE: in play, or suspended / delayed (it may resume, and stays with the live games). */
+private fun readsLive(status: GameStatus): Boolean = status is GameStatus.Live || (status is GameStatus.Postponed && status.mayResume)
+
 /**
  * The rows a Live now header counts: an ended game kept in place ([endedInPlace]) no longer counts as live, so "Live
  * (12)" agrees with the chips, Home and the panel, which never count a final.
  */
 internal fun sportsLiveGroupCounts(rows: List<ScoreboardRow>): Map<ScoreboardGroup, Int> =
-    rows.filterNot { it.endedInPlace }.groupingBy { it.group }.eachCount()
+    // #373: a game still waiting for ESPN keeps its place under LIVE but is not counted there until it reads LIVE.
+    // F7: under LIVE only rows that read LIVE count: not one settled there that ESPN has as scheduled or postponed.
+    rows.filterNot {
+        it.endedInPlace || (it.group == ScoreboardGroup.LIVE && (it.awaitingScore || !readsLive(it.status)))
+    }.groupingBy { it.group }.eachCount()
 
 /**
  * OK on a Live now card ([row]: its shown row, null when none; [ended]: its Just ended verdict): a game ESPN says ended

@@ -35,7 +35,14 @@ internal fun sportsLiveUpcomingShown(
         val event = stateOf(item)
         if (event?.state == ScoreState.POST) return true
         if (event?.state == ScoreState.IN && event.eventId in liveNowEvents) return true
-        if (event?.state == ScoreState.PRE) return false
+        // #355: a late start stays, but not for ever: past ESPN's start (its own when ESPN has no valid time) by more than
+        // [UPCOMING_LATE_START_GRACE_MS], an ESPN still saying "not started" is stale, and the game leaves.
+        if (event?.state == ScoreState.PRE) {
+            val start = event.startMs?.takeIf { event.timeValid } ?: item.startMs?.takeIf { item.startHasTimeOfDay } ?: return false
+            return nowMs - start > UPCOMING_LATE_START_GRACE_MS
+        }
+        // L7: a date-only row whose date has passed everywhere goes, between sortings too.
+        if (com.nuvio.tv.core.sportslive.SportsLiveItemBucketer.dateOnlyPast(item, nowMs)) return true
         val start = item.startMs
         return item.startHasTimeOfDay && start != null && start <= nowMs
     }
@@ -51,3 +58,6 @@ internal fun sportsLiveUpcomingShown(
     val at = if (before == null) 0 else listed.indexOfFirst { it.id == before.id } + 1
     return SportsLiveUpcomingShown(listed.toMutableList().apply { add(at, focused) }, focusedId)
 }
+
+/** #355: how long past its start a game ESPN still has as not started stays on Upcoming (a late start); then ESPN is stale. */
+internal const val UPCOMING_LATE_START_GRACE_MS = 2 * 60 * 60_000L

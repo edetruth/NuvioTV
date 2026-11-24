@@ -43,7 +43,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -159,7 +158,7 @@ class SportsLiveScoresRefreshTest {
     private val threeChips = listOf(88, 91, 94).map { ScoreChip.Live(CLOCK, ChipScore(AWAY, it)) }
 
     @Test
-    fun `Live now cards show the second and third poll while the screen stays open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Live now cards show the second and third poll while the screen stays open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val chips = threePolls(LiveScoresRepository.SCREEN_SECTION, listOf(undated, upcoming)) { scores ->
             ScoreChips.of(undated, scores[undated.streamKey], ScoresMode.SHOW, revealed = false)
         }
@@ -167,7 +166,7 @@ class SportsLiveScoresRefreshTest {
     }
 
     @Test
-    fun `Scoreboard rows show the second and third poll while the screen stays open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Scoreboard rows show the second and third poll while the screen stays open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val chips = threePolls(LiveScoresRepository.SCREEN_SECTION, listOf(undated)) { scores ->
             scoreboardRows(listOf(undated), SportsLiveTab.LIVE_NOW, scores, ScoresMode.SHOW, emptySet(), nowMs()).single().chip
         }
@@ -175,7 +174,7 @@ class SportsLiveScoresRefreshTest {
     }
 
     @Test
-    fun `Timeline blocks show the second and third poll while the screen stays open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Timeline blocks show the second and third poll while the screen stays open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val chips = threePolls(LiveScoresRepository.SCREEN_SECTION, listOf(timed), alreadyTracked = listOf(upcoming)) { scores ->
             val rows = scoreboardRows(listOf(timed), SportsLiveTab.LIVE_NOW, scores, ScoresMode.SHOW, emptySet(), nowMs())
             SportsLiveTimeline.model(rows, SportsLiveTab.LIVE_NOW, nowMs(), ZoneOffset.UTC)
@@ -185,7 +184,7 @@ class SportsLiveScoresRefreshTest {
     }
 
     @Test
-    fun `the details pane shows the second and third poll while the screen stays open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the details pane shows the second and third poll while the screen stays open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val homeScores = threePolls(LiveScoresRepository.SCREEN_SECTION, listOf(undated)) { scores ->
             (ScoreDetailsBuilder.of(undated, scores[undated.streamKey], ScoresMode.SHOW, revealed = false) as? ScoreDetails.Shown)?.second?.score
         }
@@ -193,7 +192,7 @@ class SportsLiveScoresRefreshTest {
     }
 
     @Test
-    fun `Home's Live now row shows the second and third poll while Home stays open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Home's Live now row shows the second and third poll while Home stays open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val strings = ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
         val labels = threePolls(LiveScoresRepository.SCREEN_HOME, listOf(undated)) { scores ->
             SportsLiveHomeRow.scoreLabels(listOf(undated), scores, ScoresMode.SHOW, strings, "● %1\$s")[undated.streamKey]
@@ -203,7 +202,7 @@ class SportsLiveScoresRefreshTest {
     }
 
     @Test
-    fun `in-player panel rows show the second and third poll while the panel stays open`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `in-player panel rows show the second and third poll while the panel stays open`() = runPanelTest(mainDispatcherRule.dispatcher) {
         val feeds = Feeds()
         val scores = repository(feeds)
         val other = item("Los Angeles Lakers at Phoenix Suns", null)
@@ -225,7 +224,7 @@ class SportsLiveScoresRefreshTest {
         )
         fun chip() = viewModel.panel.value?.rows?.firstOrNull { it.item == undated }?.chip
 
-        viewModel.openPanel()
+        PanelTests.open(viewModel)
         runCurrent()
         feeds.yesterdayGate.complete(Unit)
         runCurrent()

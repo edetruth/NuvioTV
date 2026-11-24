@@ -23,6 +23,9 @@ object SportsLiveMoreLive {
     /** Live now's listings that are no game in progress ([SportsLiveOtherStreams], live.27). Always after [OTHER]. */
     const val OTHER_STREAMS = "other_streams"
 
+    /** 24/7 channels Live now lists (#285): a group of their own, never under a sport. After the sports, before [OTHER]. */
+    const val CHANNELS = "channels"
+
     /** MMA and boxing, one group ("Fights"). */
     const val FIGHTS = "fights"
 
@@ -49,7 +52,8 @@ object SportsLiveMoreLive {
         if (streams.isNotEmpty()) byKey[OTHER_STREAMS] = streams.toMutableList()
         return byKey.map { (key, items) -> Group(key, items) }
             .sortedWith(
-                compareBy<Group> { it.key == OTHER_STREAMS }.thenBy { it.key == OTHER }.thenByDescending { it.items.size }.thenBy { it.key }
+                compareBy<Group> { it.key == OTHER_STREAMS }.thenBy { it.key == OTHER }.thenBy { it.key == CHANNELS }
+                    .thenByDescending { it.items.size }.thenBy { it.key }
             )
     }
 
@@ -71,6 +75,8 @@ object SportsLiveMoreLive {
      * that is no sport the app names ("Volleyball": [SPORT_TEXT]).
      */
     internal fun keyOf(item: SportsLiveItem, untagged: (SportsLiveItem) -> Boolean = SportsLiveUnidentified::isUntagged): String {
+        // #285: a 24/7 channel (a sports news channel) is no game of its catalog's sport.
+        if (item.isChannel) return CHANNELS
         if (untagged(item)) return OTHER
         val kind = SportsLiveMySportsScope.kindOf(item) ?: SportsLiveSportKind.tagOf(item)
             ?: return (listOf(item) + item.alternates).firstNotNullOfOrNull { SportsLiveTeams.knownSport(it)?.trim()?.takeIf(String::isNotEmpty) }

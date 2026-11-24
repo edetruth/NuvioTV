@@ -318,7 +318,8 @@ class SportsLiveDualViewModel internal constructor(
         overKeys = { list, scoresOff ->
             SportsLiveEndedGames.shared.overSourceKeys(
                 list, liveScores.scores.value, System.currentTimeMillis(),
-                SportsLiveEndedGames.estimateGate(scoresOff, liveScores.unmatched.value)
+                hasRecentLinks = repo::hasRecentLinks,
+                canEstimate = SportsLiveEndedGames.estimateGate(scoresOff, liveScores.unmatched.value)
             ) + SportsLiveLinkVerdicts.shared.deadKeys
         },
         savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) },
