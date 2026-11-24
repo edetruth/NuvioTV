@@ -147,7 +147,7 @@ fun SportsLivePlayerCardScreen(
                         else -> itemsIndexed(card.lastGames, key = { _, game -> game.eventId }) { index, game ->
                             GameRow(
                                 game = game,
-                                showsGame = { focused -> state.showsGame(focused && keyPressed) },
+                                showsGame = { focused -> state.showsGame(game, focused && keyPressed) },
                                 modifier = if (index == 0) Modifier.focusRequester(firstGameFocus) else Modifier
                             )
                         }

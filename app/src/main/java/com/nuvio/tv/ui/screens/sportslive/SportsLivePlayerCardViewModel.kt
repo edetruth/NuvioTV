@@ -7,8 +7,10 @@ import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerCardRepository
 import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
+import com.nuvio.tv.core.sportslive.scores.PlayerGame
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -64,7 +67,12 @@ data class SportsLivePlayerCardUiState(
     val status: PlayerCardStatus = PlayerCardStatus.LOADING,
     val mode: ScoresMode = ScoresMode.SHOW,
     val revealed: Boolean = false,
-    val spoilerSafe: Boolean = false
+    val spoilerSafe: Boolean = false,
+    /**
+     * Spoiler protection (#151, tier 1 H6): a protected game's result and line stay hidden, as on the Team page. Null
+     * until the profile's is read: no last game shows meanwhile, so a protected one never flashes.
+     */
+    val protection: SpoilerProtection? = null
 ) {
     /** The last games' results and stat lines show: Scores Show (unless [spoilerSafe]), or revealed. */
     val showsLastGames: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
@@ -74,6 +82,13 @@ data class SportsLivePlayerCardUiState(
 
     /** Whether a last game's result and stat line show, its row [focused] or not. */
     fun showsGame(focused: Boolean): Boolean = showsLastGames || (revealsOnFocus && focused)
+
+    /** Whether [game]'s result and stat line show: as [showsGame], never a spoiler-protected game's, whatever Reveal. */
+    fun showsGame(game: PlayerGame, focused: Boolean): Boolean {
+        val opened = target ?: return false
+        val known = protection ?: return false
+        return !PlayerCards.protects(known, opened.league, card?.bio?.team ?: opened.team, game) && showsGame(focused)
+    }
 
     /** Reveal is offered while something is hidden (Off, or spoiler-safe) and not known to be unavailable. */
     val showsReveal: Boolean get() = !showsLastGames && !revealsOnFocus && status != PlayerCardStatus.FAILED
@@ -88,7 +103,8 @@ data class SportsLivePlayerCardUiState(
 class SportsLivePlayerCardViewModel internal constructor(
     private val request: SportsLivePlayerCardRequest?,
     private val loadCard: suspend (EspnLeague, String) -> PlayerCard?,
-    settings: Flow<ScoreSettings>
+    settings: Flow<ScoreSettings>,
+    protection: Flow<SpoilerProtection> = flowOf(SpoilerProtection())
 ) : ViewModel() {
 
     @Inject
@@ -100,7 +116,8 @@ class SportsLivePlayerCardViewModel internal constructor(
                 cards.load(league, athleteId)?.let { PlayerCards.namedOpponents(it, TeamDirectory.shared.teams(league)) }
             }
         },
-        settings = prefs.scoreSettings
+        settings = prefs.scoreSettings,
+        protection = prefs.spoilerProtection
     )
 
     private val state = MutableStateFlow(
@@ -113,6 +130,7 @@ class SportsLivePlayerCardViewModel internal constructor(
     init {
         val target = request?.target
         if (target != null) {
+            viewModelScope.launch { protection.collect { latest -> state.update { it.copy(protection = latest) } } }
             viewModelScope.launch {
                 combine(settings.map { it.mode }, revealRequested) { mode, revealed -> mode to revealed }
                     .distinctUntilChanged()

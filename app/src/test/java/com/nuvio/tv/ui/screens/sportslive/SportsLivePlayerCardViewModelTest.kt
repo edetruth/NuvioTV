@@ -10,9 +10,12 @@ import com.nuvio.tv.core.sportslive.scores.GameSummaryFixtures
 import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
+import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.core.sportslive.scores.TeamLeader
 import com.nuvio.tv.core.sportslive.scores.TeamRef
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -130,6 +133,51 @@ class SportsLivePlayerCardViewModelTest {
         vm.reveal()
         runCurrent()
         assertTrue(vm.uiState.value.showsLastGames)
+    }
+
+    // Tier 1 H6: spoiler protection (#151) holds on the Player card's last games, as on the Team page.
+
+    @Test
+    fun `a last game saved for Watch later stays hidden under Show and after Reveal, the others show`() = runTest(mainDispatcherRule.dispatcher) {
+        val saved = embiid.lastGames[0]
+        val other = embiid.lastGames[1]
+        val now = (saved.startMs ?: 0L) + 60_000L
+        val protection = MutableStateFlow(SpoilerProtection(games = listOf(ProtectedGame(saved.eventId, null, null, saved.startMs, savedAtMs = now)), nowMs = now))
+        val vm = SportsLivePlayerCardViewModel(SportsLivePlayerCardRequest(target), { _, _ -> embiid }, settings, protection)
+        runCurrent()
+        val state = vm.uiState.value
+        assertTrue(state.showsLastGames)
+        assertFalse(state.showsGame(saved, focused = true))
+        assertTrue(state.showsGame(other, focused = false))
+        vm.reveal()
+        runCurrent()
+        assertFalse(vm.uiState.value.showsGame(saved, focused = true))
+        // Its protection ended (Reveal result on its Game page): it shows.
+        protection.value = protection.value.copy(games = protection.value.games.map { it.copy(endedAtMs = now) })
+        runCurrent()
+        assertTrue(vm.uiState.value.showsGame(saved, focused = false))
+    }
+
+    @Test
+    fun `my teams' results hidden - the followed team's recent finals stay hidden on its player's card`() = runTest(mainDispatcherRule.dispatcher) {
+        val last = embiid.lastGames[0]
+        val now = (last.startMs ?: 0L) + 60_000L
+        val sixers = listOf(FollowedTeam("Philadelphia 76ers", "Basketball"))
+        val protection = MutableStateFlow(SpoilerProtection(myTeamsResults = true, followed = sixers, nowMs = now))
+        val vm = SportsLivePlayerCardViewModel(SportsLivePlayerCardRequest(target), { _, _ -> embiid }, settings, protection)
+        runCurrent()
+        assertFalse(vm.uiState.value.showsGame(last, focused = true))
+        protection.value = protection.value.copy(myTeamsResults = false)
+        runCurrent()
+        assertTrue(vm.uiState.value.showsGame(last, focused = false))
+    }
+
+    @Test
+    fun `no last game shows before the profile's spoiler protection is read`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = SportsLivePlayerCardViewModel(SportsLivePlayerCardRequest(target), { _, _ -> embiid }, settings, kotlinx.coroutines.flow.emptyFlow())
+        runCurrent()
+        assertEquals(PlayerCardStatus.READY, vm.uiState.value.status)
+        assertFalse(vm.uiState.value.showsGame(embiid.lastGames[0], focused = true))
     }
 
     @Test

@@ -106,6 +106,23 @@ object PlayerCards {
         })
     }
 
+    /**
+     * True when [game] is spoiler-protected (tier 1 H6, #151, as on the Team page): saved for Watch later by its ESPN
+     * event id, or a followed team's finished game under "Hide my teams' ..." (sides by the player's [team] name and the
+     * opponent's ESPN id or names). Its result and line then stay hidden whatever the Scores setting or Reveal.
+     */
+    fun protects(protection: SpoilerProtection, league: EspnLeague, team: String?, game: PlayerGame): Boolean {
+        fun side(id: String?, abbreviation: String?, name: String?) = ScoreTeam(id, abbreviation, name, name, name, null, null, null, emptyList())
+        val own = side(null, null, team)
+        val opponent = side(game.opponentId, game.opponent, game.opponentName ?: game.opponent)
+        val away = game.atVs == "@"
+        val event = ScoreSnapshot(
+            eventId = game.eventId, league = league, startMs = game.startMs, state = ScoreState.POST, clockText = null,
+            isFinal = true, home = if (away) opponent else own, away = if (away) own else opponent
+        )
+        return protection.protects(event)
+    }
+
     /** The card, or null when the athlete response names no player. [gameLog] null: no last games. */
     fun parse(athlete: EspnAthleteResponseDto, gameLog: EspnGameLogDto?, sport: String): PlayerCard? {
         val dto = athlete.athlete ?: return null
