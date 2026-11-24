@@ -25,7 +25,7 @@ internal fun PlayerRuntimeController.fetchMetaDetails(id: String?, type: String?
                 .first { it !is NetworkResult.Loading }
         ) {
             is NetworkResult.Success -> {
-                applyMetaDetails(result.data)
+                applyMetaDetails(com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(id, result.data))
             }
             is NetworkResult.Error -> {
             }

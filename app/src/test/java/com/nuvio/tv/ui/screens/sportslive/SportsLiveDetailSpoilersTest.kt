@@ -145,6 +145,21 @@ class SportsLiveDetailSpoilersTest {
     }
 
     @Test
+    fun `the player and the Stream screen read a hidden folder's videos and episode links masked`() {
+        // F2: the player fetches the meta again (description, Episodes panel, Next episode card) through
+        // sportsLiveDetailMeta under its content id; the Stream screen hands the player its next videos.
+        SportsLiveExtraSources.markSpoilerSafe("folder", true)
+        val inPlayer = sportsLiveDetailMeta("folder", folder)
+        assertNull(inPlayer.description)
+        assertNull(inPlayer.videos.single().overview)
+        val nextVideos = sportsLiveStreamScreenMeta(episode.id, folder).videos
+        assertEquals(listOf("Team A – Team B highlights"), nextVideos.map { it.title })
+        assertNull(nextVideos.single().thumbnail)
+        // The Episodes panel's links for another episode, read under the player's content id (the folder).
+        assertEquals(listOf("Team A – Team B"), SportsLiveExtraSources.spoilerSafeStreams("folder", listOf(scored)).map { it.name })
+    }
+
+    @Test
     fun `the folder opened again with its result shown lists its episodes as they are`() {
         SportsLiveExtraSources.markSpoilerSafe("folder", true)
         sportsLiveDetailMeta("folder", folder)

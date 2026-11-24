@@ -43,13 +43,12 @@ internal fun sportsLiveLocalStamps(context: Context, text: String?): String? {
 }
 
 /**
- * [meta], the addon's meta the Stream screen fills its missing artwork and year from, as it may use it for [videoId]: a
- * spoiler-safe replay's (#223) without its artwork or release info, either of which may show the result (as
- * [spoilerSafeReplay] plays it); any other title's as is.
+ * [meta], the addon's meta the Stream screen fills its missing artwork and year from and hands the player its next
+ * videos from, as it may use it for [videoId]: a spoiler-safe replay's (#223) masked as its Detail page shows it
+ * ([spoilerMaskedMeta]: no artwork, release info, summaries; F2: its videos too); any other title's as is.
  */
 internal fun sportsLiveStreamScreenMeta(videoId: String?, meta: Meta): Meta =
-    if (!SportsLiveExtraSources.isSpoilerSafe(videoId)) meta
-    else meta.copy(poster = null, background = null, landscapePoster = null, logo = null, rawPosterUrl = null, releaseInfo = null)
+    if (!SportsLiveExtraSources.isSpoilerSafe(videoId)) meta else spoilerMaskedMeta(meta)
 
 /**
  * Opens [item]'s Detail page (a replay team folder's episodes, More… > Details; #240, #243): a replay whose result is
@@ -77,7 +76,12 @@ internal fun sportsLiveDetailMeta(itemId: String, meta: Meta): Meta {
     val id = listOf(itemId, meta.id).firstOrNull(SportsLiveExtraSources::isSpoilerSafe) ?: return meta
     // The page plays under meta.id, which an addon may give differently from the catalog's id (F8).
     SportsLiveExtraSources.markSpoilerSafeVideos(id, meta.videos.map { it.id } + meta.id)
-    return meta.copy(
+    return spoilerMaskedMeta(meta)
+}
+
+/** [meta] with nothing that may carry a result (see [sportsLiveDetailMeta]): the one mask of an addon's meta. */
+private fun spoilerMaskedMeta(meta: Meta): Meta =
+    meta.copy(
         name = spoilerSafeLinkText(meta.name) ?: meta.name,
         description = null,
         releaseInfo = null,

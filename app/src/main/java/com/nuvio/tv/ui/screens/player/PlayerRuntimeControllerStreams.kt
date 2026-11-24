@@ -1261,14 +1261,15 @@ internal fun PlayerRuntimeController.loadEpisodesIfNeeded() {
                 .first { it !is NetworkResult.Loading }
         ) {
             is NetworkResult.Success -> {
-                val allEpisodes = result.data.videos
+                val meta = com.nuvio.tv.ui.screens.sportslive.sportsLiveDetailMeta(id, result.data) // Sports & Live F2: a hidden replay's masked
+                val allEpisodes = meta.videos
                     .sortedWith(
                         compareBy<Video> { it.season ?: Int.MAX_VALUE }
                             .thenBy { it.episode ?: Int.MAX_VALUE }
                             .thenBy { it.title }
                     )
 
-                applyMetaDetails(result.data)
+                applyMetaDetails(meta)
 
                 val seasons = allEpisodes
                     .mapNotNull { it.season }
@@ -1430,7 +1431,7 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(
             when (result) {
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, sourceOrder, preferredServerNames)
-                    val allStreams = addonStreams.flatMap { it.streams }
+                    val allStreams = SportsLiveExtraSources.spoilerSafeStreams(contentId, addonStreams.flatMap { it.streams })
                     val availableAddons = addonStreams.map { it.addonName }
                     val currentFilter = _uiState.value.episodeSelectedAddonFilter
                     val filteredStreams = if (currentFilter == null) {
