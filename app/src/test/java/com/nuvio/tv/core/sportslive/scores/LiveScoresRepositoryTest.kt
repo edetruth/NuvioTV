@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
+import com.nuvio.tv.core.sportslive.SportsLiveNoEspnGames
+import com.nuvio.tv.core.sportslive.SportsLiveOtherStreams
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -122,7 +124,8 @@ class LiveScoresRepositoryTest {
         keptFile: TeamLogoFile? = null,
         prewarm: Boolean = false,
         protection: kotlinx.coroutines.flow.Flow<SpoilerProtection> = kotlinx.coroutines.flow.flowOf(SpoilerProtection()),
-        profile: kotlinx.coroutines.flow.Flow<Int?> = kotlinx.coroutines.flow.flowOf(null)
+        profile: kotlinx.coroutines.flow.Flow<Int?> = kotlinx.coroutines.flow.flowOf(null),
+        noEspnGames: SportsLiveNoEspnGames = SportsLiveNoEspnGames()
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -145,7 +148,8 @@ class LiveScoresRepositoryTest {
             keptFile = keptFile,
             prewarm = prewarm,
             protectionSource = protection,
-            profile = profile
+            profile = profile,
+            noEspnGames = noEspnGames
         )
     }
 
@@ -2488,5 +2492,173 @@ class LiveScoresRepositoryTest {
         assertNull(repo.scores.value[clubs.streamKey])
         assertNull(repo.scores.value[oneSchool.streamKey])
         soccerHangs.complete(Unit)
+    }
+
+    // ---- live.27, TV reports #29-#36: "A vs B" listings that are no game in progress (team channels, replays, passes) ----
+
+    // Monday 2026-11-23, 18:16 US Eastern: ESPN's day is the 23rd (the Bundesliga plays no game that day).
+    private val monday = "2026-11-23T23:16:00Z"
+    private val nov23 = LocalDate.of(2026, 11, 23)
+    private val cbb = EspnLeagueMap.COLLEGE_BASKETBALL
+
+    private fun listed(id: String, display: String, short: String, abbr: String) =
+        DirectoryTeam(id, display, short, abbr, null, null, "https://a.espncdn.com/i/teamlogos/soccer/500/$id.png")
+
+    /** The team lists the directory holds: the Bundesliga's (three clubs), the NBA's and two schools. */
+    private fun tonightLists() = TeamLogoBook(directory = TeamDirectory().apply {
+        put(
+            ger1,
+            listOf(
+                listed("132", "Bayern Munich", "Bayern", "BAY"),
+                listed("7911", "TSG Hoffenheim", "Hoffenheim", "HOF"),
+                listed("124", "Borussia Dortmund", "Dortmund", "DOR")
+            ),
+            1L
+        )
+        put(EspnLeagueMap.NBA, nbaTeams, 1L)
+        put(cbb, listOf(listed("252", "BYU Cougars", "BYU", "BYU"), listed("264", "Washington Huskies", "Washington", "WASH")), 1L)
+    })
+
+    private fun side(id: String, display: String, short: String, abbr: String) = ScoreTeam(
+        id = id, abbreviation = abbr, displayName = display, shortDisplayName = short, name = short, location = short,
+        logo = null, score = 30, linescores = emptyList()
+    )
+
+    // The one real game of the list: BYU vs Washington, in play on ESPN's college basketball scoreboard.
+    private val byuWashington = ScoreSnapshot(
+        eventId = "byu-wash", league = cbb, startMs = ms("2026-11-23T23:00:00Z"), state = ScoreState.IN, clockText = "1st 4:00",
+        isFinal = false, home = side("252", "BYU Cougars", "BYU", "BYU"), away = side("264", "Washington Huskies", "Washington", "WASH")
+    )
+
+    // A team channel's schedule card ("Started 4:00 PM" Eastern), listed live by its source.
+    private val bayernChannel = item("Bayern Munich vs Hoffenheim", "Bundesliga", "2026-11-23T21:00:00Z")
+    private val byuCard = item("BYU vs Washington", "NCAAB", "2026-11-23T23:00:00Z", addon = "b")
+
+    private fun tonightFeeds(feed: ScoreFeed): ScoreboardResult =
+        ScoreboardResult(if (feed.league == cbb && feed.date == nov23) listOf(byuWashington) else emptyList())
+
+    @Test
+    fun `a listing ESPN has no game for leaves Live now for Other streams, the real game ESPN has stays`() = runTest {
+        provider.respond = ::tonightFeeds
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = tonightLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(bayernChannel, byuCard))
+        runCurrent()
+        val now = ms(monday)
+        assertEquals("byu-wash", repo.scores.value.getValue(byuCard.streamKey).eventId)
+        assertTrue(verdicts.holds(bayernChannel, now))
+        assertFalse(verdicts.holds(byuCard, now))
+        val (games, others) = SportsLiveOtherStreams.split(listOf(bayernChannel, byuCard), now, verdicts, com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents())
+        assertEquals(listOf(byuCard.streamKey), games.map { it.streamKey })
+        assertEquals(listOf(bayernChannel.streamKey), others.map { it.streamKey })
+        com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents.shared.clear()
+    }
+
+    @Test
+    fun `a scoreboard that failed moves nothing`() = runTest {
+        provider.respond = { feed -> if (feed.league == ger1) ScoreboardResult.FAILED else tonightFeeds(feed) }
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = tonightLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(bayernChannel))
+        runCurrent()
+        assertFalse(verdicts.holds(bayernChannel, ms(monday)))
+    }
+
+    @Test
+    fun `a league with no team list, a team it does not know or a card on soccer-all alone stays live`() = runTest {
+        provider.respond = ::tonightFeeds
+        val verdicts = SportsLiveNoEspnGames()
+        // The Bundesliga's list is not loaded for the first card; the others are told by the loaded lists.
+        val noLists = repository(monday, logos = TeamLogoBook(directory = TeamDirectory()), noEspnGames = verdicts)
+        collect(noLists)
+        noLists.track(SECTION, listOf(bayernChannel))
+        runCurrent()
+        assertFalse(verdicts.holds(bayernChannel, ms(monday)))
+
+        val known = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = tonightLists(), noEspnGames = known)
+        collect(repo)
+        val unknownTeam = item("Bayern Munich vs Hamburg", "Bundesliga", "2026-11-23T21:00:00Z", addon = "c")
+        val soccerOnly = item("Bayern Munich vs Hoffenheim", "Soccer", "2026-11-23T21:00:00Z", addon = "d")
+        repo.track(SECTION, listOf(unknownTeam, soccerOnly))
+        runCurrent()
+        assertFalse(known.holds(unknownTeam, ms(monday)))
+        assertFalse(known.holds(soccerOnly, ms(monday)))
+    }
+
+    @Test
+    fun `a card one of whose teams plays today stays live, whoever ESPN has it play`() = runTest {
+        // Bayern play Dortmund later tonight: "Bayern vs Hoffenheim" may be that game misnamed, so it is never moved.
+        val bayernDortmund = ScoreSnapshot(
+            eventId = "bay-dor", league = ger1, startMs = ms("2026-11-24T00:30:00Z"), state = ScoreState.PRE, clockText = null,
+            isFinal = false, home = side("132", "Bayern Munich", "Bayern", "BAY"), away = side("124", "Borussia Dortmund", "Dortmund", "DOR")
+        )
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == ger1 && feed.date == nov23) listOf(bayernDortmund) else emptyList()) }
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = tonightLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(bayernChannel))
+        runCurrent()
+        assertTrue(bayernChannel.streamKey in repo.unmatched.value)
+        assertFalse(verdicts.holds(bayernChannel, ms(monday)))
+    }
+
+    @Test
+    fun `a late game across Eastern midnight stays live, a channel with no game that night does not`() = runTest {
+        // 00:30 Eastern on Tuesday: Jazz at Lakers tipped off at 22:00 Eastern Monday, on Monday's scoreboard.
+        val jazzLakers = ScoreSnapshot(
+            eventId = "uta-lal", league = EspnLeagueMap.NBA, startMs = ms("2026-11-24T03:00:00Z"), state = ScoreState.IN,
+            clockText = "Q4 2:00", isFinal = false,
+            home = side("13", "Los Angeles Lakers", "Lakers", "LAL"), away = side("26", "Utah Jazz", "Jazz", "UTAH")
+        )
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.NBA && feed.date == nov23) listOf(jazzLakers) else emptyList()) }
+        val verdicts = SportsLiveNoEspnGames()
+        val late = "2026-11-24T05:30:00Z"
+        val repo = repository(late, logos = tonightLists(), noEspnGames = verdicts)
+        collect(repo)
+        // Undated (a channel's game): matched on ESPN's today and yesterday.
+        val game = item("Utah Jazz vs Los Angeles Lakers", "NBA", null)
+        val channel = item("Boston Celtics vs Miami Heat", "NBA", null, addon = "b")
+        repo.track(SECTION, listOf(game, channel))
+        runCurrent()
+        assertEquals("uta-lal", repo.scores.value.getValue(game.streamKey).eventId)
+        assertFalse(verdicts.holds(game, ms(late)))
+        assertTrue(verdicts.holds(channel, ms(late)))
+        com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents.shared.clear()
+    }
+
+    @Test
+    fun `a listing ESPN later has a game for is a game again`() = runTest {
+        var espnHasIt = false
+        val game = ScoreSnapshot(
+            eventId = "bay-hof", league = ger1, startMs = ms("2026-11-23T21:00:00Z"), state = ScoreState.IN, clockText = "80'",
+            isFinal = false, home = side("132", "Bayern Munich", "Bayern", "BAY"), away = side("7911", "TSG Hoffenheim", "Hoffenheim", "HOF")
+        )
+        provider.respond = { feed -> ScoreboardResult(if (espnHasIt && feed.league == ger1 && feed.date == nov23) listOf(game) else emptyList()) }
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = tonightLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(bayernChannel))
+        runCurrent()
+        assertTrue(verdicts.holds(bayernChannel, ms(monday)))
+        espnHasIt = true
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertEquals("bay-hof", repo.scores.value.getValue(bayernChannel.streamKey).eventId)
+        assertFalse(verdicts.holds(bayernChannel, ms(monday) + 30 * 60_000L))
+        com.nuvio.tv.core.sportslive.SportsLiveMatchedEvents.shared.clear()
+    }
+
+    @Test
+    fun `with Scores Off nothing moves`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        provider.respond = ::tonightFeeds
+        val verdicts = SportsLiveNoEspnGames()
+        val repo = repository(monday, logos = tonightLists(), noEspnGames = verdicts)
+        collect(repo)
+        repo.track(SECTION, listOf(bayernChannel))
+        runCurrent()
+        assertFalse(verdicts.holds(bayernChannel, ms(monday)))
     }
 }

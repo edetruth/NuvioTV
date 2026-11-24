@@ -236,7 +236,8 @@ class SportsLiveSharedBuckets(
         fun currentStamp(): Long =
             ((TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value) * 31 +
                 SportsLiveEspnStarts.shared.revision.value) * 31 +
-                SportsLiveMatchedEvents.shared.revision.value * 17 + SportsLiveWomenGames.shared.revision.value
+                SportsLiveMatchedEvents.shared.revision.value * 17 + SportsLiveWomenGames.shared.revision.value +
+                SportsLiveNoEspnGames.shared.revision.value * 13
 
         /** Every change of [currentStamp] after the current one: what lists are built again on. */
         fun stampChanges(): Flow<Long> = merge(
@@ -250,13 +251,15 @@ class SportsLiveSharedBuckets(
         const val MATCH_DEBOUNCE_MS = 1_000L
 
         /**
-         * One signal per burst of score matches that merge copies or mark women's games (live.23, TV report #10), after
-         * [MATCH_DEBOUNCE_MS] of quiet: the lists are built again once, not once per card.
+         * One signal per burst of score matches that merge copies or mark women's games (live.23, TV report #10), or move
+         * live listings ESPN has no game for to Other streams (live.27, [SportsLiveOtherStreams]), after [MATCH_DEBOUNCE_MS]
+         * of quiet: the lists are built again once, not once per card.
          */
         @OptIn(FlowPreview::class)
         fun matchChanges(
             events: SportsLiveMatchedEvents = SportsLiveMatchedEvents.shared,
-            women: SportsLiveWomenGames = SportsLiveWomenGames.shared
-        ): Flow<Long> = merge(events.revision.drop(1), women.revision.drop(1)).debounce(MATCH_DEBOUNCE_MS)
+            women: SportsLiveWomenGames = SportsLiveWomenGames.shared,
+            noEspnGames: SportsLiveNoEspnGames = SportsLiveNoEspnGames.shared
+        ): Flow<Long> = merge(events.revision.drop(1), women.revision.drop(1), noEspnGames.revision.drop(1)).debounce(MATCH_DEBOUNCE_MS)
     }
 }

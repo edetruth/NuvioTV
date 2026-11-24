@@ -11,12 +11,17 @@ import com.nuvio.tv.domain.model.SportsLiveItem
  * - games of sports not in My sports;
  * - games whose league is not known while My sports names leagues for their sport (J3);
  * - listings that are no game ([SportsLiveOtherEvents], H), under Other, with any game of unknown sport
- *   ([SportsLiveUnidentified.isUntagged]); they say LIVE only when ESPN confirms.
- * With nothing picked (every sport) there is no More live: everything is listed as before.
+ *   ([SportsLiveUnidentified.isUntagged]); they say LIVE only when ESPN confirms;
+ * - live.27: "Other streams" ([OTHER_STREAMS], always last): "A vs B" listings that are no game in progress
+ *   ([SportsLiveOtherStreams]: team channels, replays, season passes). They never say LIVE here.
+ * With nothing picked (every sport) there is no More live but for Other streams: every game is listed as before.
  */
 object SportsLiveMoreLive {
     /** The group of games whose sport is not known, and of listings that are no game. Always last. */
     const val OTHER = "other"
+
+    /** Live now's listings that are no game in progress ([SportsLiveOtherStreams], live.27). Always after [OTHER]. */
+    const val OTHER_STREAMS = "other_streams"
 
     /** MMA and boxing, one group ("Fights"). */
     const val FIGHTS = "fights"
@@ -28,30 +33,36 @@ object SportsLiveMoreLive {
     data class Group(val key: String, val items: List<SportsLiveItem>)
 
     /**
-     * The groups of [hidden] (live games My sports leaves out, in list order) and [others] (listings that are no
-     * game, always Other): the largest first, ties by key; Other last. Each keeps its games' order.
+     * The groups of [hidden] (live games My sports leaves out, in list order), [others] (listings that are no
+     * game, always Other) and [streams] (Other streams, live.27): the largest first, ties by key; Other, then Other
+     * streams last. Each keeps its games' order.
      */
     fun groups(
         hidden: List<SportsLiveItem>,
         others: List<SportsLiveItem>,
-        untagged: (SportsLiveItem) -> Boolean = SportsLiveUnidentified::isUntagged
+        untagged: (SportsLiveItem) -> Boolean = SportsLiveUnidentified::isUntagged,
+        streams: List<SportsLiveItem> = emptyList()
     ): List<Group> {
         val byKey = LinkedHashMap<String, MutableList<SportsLiveItem>>()
         for (item in hidden) byKey.getOrPut(keyOf(item, untagged)) { mutableListOf() } += item
         if (others.isNotEmpty()) byKey.getOrPut(OTHER) { mutableListOf() } += others
+        if (streams.isNotEmpty()) byKey[OTHER_STREAMS] = streams.toMutableList()
         return byKey.map { (key, items) -> Group(key, items) }
-            .sortedWith(compareBy<Group> { it.key == OTHER }.thenByDescending { it.items.size }.thenBy { it.key })
+            .sortedWith(
+                compareBy<Group> { it.key == OTHER_STREAMS }.thenBy { it.key == OTHER }.thenByDescending { it.items.size }.thenBy { it.key }
+            )
     }
 
     /**
      * What the row names: at most [named] groups as (key, count), largest first, then Other with every game left
-     * (its own and the groups past [named]); none when there is nothing to show.
+     * (its own and the groups past [named]), then Other streams on its own (live.27); none when there is nothing to show.
      */
     fun summary(groups: List<Group>, named: Int = NAMED_MAX): List<Pair<String, Int>> {
-        val sports = groups.filter { it.key != OTHER }
+        val sports = groups.filter { it.key != OTHER && it.key != OTHER_STREAMS }
         val shown = sports.take(named).map { it.key to it.items.size }
         val rest = sports.drop(named).sumOf { it.items.size } + (groups.firstOrNull { it.key == OTHER }?.items?.size ?: 0)
-        return if (rest > 0) shown + (OTHER to rest) else shown
+        val streams = groups.firstOrNull { it.key == OTHER_STREAMS }?.items?.size ?: 0
+        return (if (rest > 0) shown + (OTHER to rest) else shown) + listOfNotNull((OTHER_STREAMS to streams).takeIf { streams > 0 })
     }
 
     /**
