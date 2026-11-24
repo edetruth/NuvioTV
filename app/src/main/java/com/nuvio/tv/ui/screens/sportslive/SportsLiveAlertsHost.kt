@@ -473,17 +473,25 @@ fun SportsLiveAlertsHost(
 
     // A closed card stays composed while it fades out (#101); it takes no keys then.
     val held = remember { HeldCard() }
-    card?.let {
-        if (held.card?.id != it.id) held.countdown = null
-        held.card = it
-        held.ui = uiFor(it)
-        held.ui.countdown?.let { running -> held.countdown = running }
-    }
     var goneId by remember { mutableLongStateOf(-1L) }
     // A card taken away for the Scores setting or a profile switch goes at once: no fade keeps its score up (review R9).
     val cutId by alerts.cut.collectAsState()
-    val leaving = card == null
-    val current = card ?: held.card?.takeIf { it.id != goneId && it.id != cutId } ?: return
+    // A card on screen replaced at once by another (the next one waiting, the passive kickoff turned asking) fades out
+    // first, then the new one comes in (#101, review R11).
+    val outgoing = held.card?.takeIf { old -> card != null && old.id != card?.id && held.drawn && old.id != goneId && old.id != cutId }
+    if (outgoing == null) {
+        card?.let {
+            if (held.card?.id != it.id) {
+                held.countdown = null
+                held.drawn = false
+            }
+            held.card = it
+            held.ui = uiFor(it)
+            held.ui.countdown?.let { running -> held.countdown = running }
+        }
+    }
+    val leaving = card == null || outgoing != null
+    val current = outgoing ?: card ?: held.card?.takeIf { it.id != goneId && it.id != cutId } ?: return
     LaunchedEffect(leaving, current.id) {
         if (leaving) {
             delay(SportsLiveTokens.Motion.EXIT_MS + 50L)
@@ -493,19 +501,22 @@ fun SportsLiveAlertsHost(
     val state = if (leaving) held.ui else uiFor(current)
     val countdown = state.countdown
     val visible = countdown != null || state.clock.shownAtMs != null
+    if (!leaving) held.drawn = visible
     val actionable = SportsLiveAlertCards.actionable(current.alert)
     // Back closes a card that shows "OK", or cancels the countdown (never the screen under it), by the back callback
     // as by the key.
     TakeBack(!leaving && visible && (actionable || countdown != null)) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
     // Audit G34: nothing draws into the picture-in-picture window, a countdown card up when it opened included.
     val inPip by SportsLivePip.inPip.collectAsState()
-    if (!visible || inPip) return
+    if (inPip) return
+    // A card that goes under the screen's overlays (the player's controls, a menu) fades out and comes back in when they
+    // close, never in a single frame (#101, review R11); one not shown yet draws nothing.
     // Each card is its own overlay.
     key(current.id) {
     Box(modifier = Modifier.fillMaxSize()) {
         val alert = current.alert
         // While a kickoff card is up, the player's own Sports & Live cards wait under it (live.19 QA F11).
-        if (alert is SportsLiveAlert.Kickoff && !leaving) {
+        if (alert is SportsLiveAlert.Kickoff && !leaving && visible) {
             DisposableEffect(current.id) {
                 SportsLiveAlertSurfaces.setPromptUp(true)
                 onDispose { SportsLiveAlertSurfaces.setPromptUp(false) }
@@ -567,7 +578,7 @@ fun SportsLiveAlertsHost(
             )
             val timeLine: (() -> Float)? = if (actionable) ({ timeLeft }) else null
             val enter = remember(current.id) { MutableTransitionState(false) }
-            enter.targetState = !leaving
+            enter.targetState = !leaving && visible
             val streamReady = remember(readyMarks, alert) { SportsLiveGameReadiness.shared.of(alert.item) == SportsLiveReadyMark.READY }
             // Top right cards come in from the right edge, bottom left ones (dual screen) from the left (#101).
             SportsLiveCardEntrance(enter, fromEnd = place == null && panes == null, modifier = placed) {
@@ -924,6 +935,8 @@ private fun AlertCardView(
 /** The card shown last, kept composed while it fades out (#101). */
 private class HeldCard {
     var card: AlertCard? = null
+    /** [card] was on screen when last drawn: replaced, it fades out before the next one shows (review R11). */
+    var drawn: Boolean = false
     var ui: CardUi = CardUi(cardId = -1L)
     var countdown: AlertCountdown? = null
 }
