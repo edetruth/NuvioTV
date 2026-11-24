@@ -156,6 +156,11 @@ class SportsLiveWatchReplayRowTest {
         assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 Team B (4-2 pens)"))
         assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (4-2 on penalties)"))
         assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea [4-2 pens]"))
+        // R4-F3: a dotted tag closing the bracket ("pens.", "a.e.t.") never leaves "(–.)".
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (4-2 pens.)"))
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (4-2 pen.)"))
+        assertEquals("Arsenal – Chelsea", spoilerSafeLinkText("Arsenal 1-1 Chelsea (4-2 a.e.t.)"))
+        assertEquals("Team A –", spoilerSafeLinkText("Team A 1-1 a.e.t."))
         assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 aet Team B"))
         assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 a.e.t. Team B"))
         assertEquals("Team A – Team B", spoilerSafeLinkText("Team A 1-1 (a.e.t.) Team B"))

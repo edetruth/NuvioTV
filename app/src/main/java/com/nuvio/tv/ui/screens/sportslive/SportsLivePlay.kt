@@ -217,7 +217,7 @@ private const val SCORE_ENDING_IN_BRACKETS =
  * leave "(–)").
  */
 private const val SCORE_ENDING =
-    """(?:\s*[(\[]\s*$SCORE_ENDING_IN_BRACKETS\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w|\s*[)\]]))*"""
+    """(?:\s*[(\[]\s*$SCORE_ENDING_IN_BRACKETS\s*[)\]]|\s+$BARE_EXTRA_TIME_TAG(?!\w|\.?\s*[)\]]))*"""
 
 /** A shoot-out's goals in brackets beside a side's score: the "(4)" of "1 (4) - (2) 1" or "1 (4) - 1 (2)". */
 private const val PENALTY_GOALS = """[(\[]\s*\d{1,2}\s*[)\]]"""
