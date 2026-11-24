@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.player
 import com.nuvio.tv.core.network.StreamOrigin
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -134,7 +135,11 @@ internal object PlaybackStreamHeaders {
         return name.endsWith(".local") || '.' !in name.trimEnd('.')
     }
 
-    /** [client] with its own [HostScope] (#434), for a player client that sets the stream's headers itself. */
-    fun scoped(client: OkHttpClient): OkHttpClient =
-        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope())).build()
+    /**
+     * [client] with its own [HostScope] (#434), for a player client that sets the stream's headers itself. Give
+     * [linkUrl], the addon's link, when it is known (P2): a warm session's first request can go straight to where
+     * an earlier redirect led, and must not become the scope.
+     */
+    fun scoped(client: OkHttpClient, linkUrl: String? = null): OkHttpClient =
+        client.newBuilder().addNetworkInterceptor(StreamGuard(HostScope(linkUrl?.trim()?.toHttpUrlOrNull()))).build()
 }

@@ -104,6 +104,15 @@ class PlaybackHeaderRedirectTest {
     }
 
     @Test
+    fun `a warm parallel session going straight to the redirect target sends no login headers (P2)`() {
+        other.enqueue(MockResponse().setBody("ok"))
+        val client = PlaybackStreamHeaders.scoped(PlayerPlaybackNetworking.playbackHttpClient, link.url("/movie.mkv").toString())
+        val straight = streamRequest().newBuilder().url(other.url("/movie.mkv")).build()
+        client.newCall(straight).execute().close()
+        assertNoLogin(take(other))
+    }
+
+    @Test
     fun `a redirect target with no cookie of its own gets none of the stream's (P7)`() {
         redirectToOther()
         parallelClient(CookieJar.NO_COOKIES).newCall(streamRequest()).execute().close()

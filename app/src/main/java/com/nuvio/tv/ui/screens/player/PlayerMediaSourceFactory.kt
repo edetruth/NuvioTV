@@ -311,7 +311,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         parallelStartupPrefetchUnlocked.set(!useChunkSessionSource)
         val networkProgressiveFactory: DataSource.Factory = if (useChunkSessionSource) {
             val sessionConnections = parallelConnectionCount
-            val okHttpFactory = OkHttpDataSource.Factory(PlaybackStreamHeaders.scoped(playbackHttpClient)).apply { // Fork #434
+            val okHttpFactory = OkHttpDataSource.Factory(PlaybackStreamHeaders.scoped(playbackHttpClient, url)).apply { // Fork #434
                 setDefaultRequestProperties(sanitizedHeaders)
                 if (sanitizedHeaders.none { it.key.equals("User-Agent", ignoreCase = true) }) {
                     setUserAgent(DEFAULT_USER_AGENT)

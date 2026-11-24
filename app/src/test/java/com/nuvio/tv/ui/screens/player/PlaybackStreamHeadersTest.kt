@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,6 +59,14 @@ class PlaybackStreamHeadersTest {
         assertEquals("bytes=0-", other.header("Range"))
         // Back on the link's host they go again.
         assertEquals("Bearer t", scope.apply(request("https://cdn.invalid/live/seg2.ts")).header("Authorization"))
+    }
+
+    @Test
+    fun `a scope given the link never takes a redirect target as its link (P2)`() {
+        val scope = PlaybackStreamHeaders.HostScope(link.toHttpUrl())
+        // A warm session's first request goes straight to the CDN an earlier redirect led to.
+        assertNull(scope.apply(request("https://edge.invalid/movie.mkv")).header("Authorization"))
+        assertEquals("Bearer t", scope.apply(request(link)).header("Authorization"))
     }
 
     @Test
@@ -132,7 +141,7 @@ class PlaybackStreamHeadersTest {
     @Test
     fun `the opt-in parallel connections client gets the same host scope (#434)`() {
         val source = java.io.File("src/main/java/com/nuvio/tv/ui/screens/player/PlayerMediaSourceFactory.kt").readText()
-        assertTrue(source.contains("OkHttpDataSource.Factory(PlaybackStreamHeaders.scoped(playbackHttpClient))"))
+        assertTrue(source.contains("OkHttpDataSource.Factory(PlaybackStreamHeaders.scoped(playbackHttpClient, url))"))
     }
 
     @Test
