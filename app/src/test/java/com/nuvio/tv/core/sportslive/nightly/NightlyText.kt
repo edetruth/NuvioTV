@@ -143,8 +143,80 @@ internal object NightlyText {
      */
     class AppLive(
         val games: Int, val channels: Int, val otherStreams: Int, val corrected: Int,
-        val espnKnows: Int, val unscored: Int, val raw: Int, val addons: Int
+        val espnKnows: Int, val unscored: Int, val raw: Int, val addons: Int,
+        /** Each game shown LIVE with its best verdict (#376); empty when not measured. */
+        val shown: List<ShownGame> = emptyList(),
+        /** Games the app moves to Just ended on ESPN's final (all ESPN-verified), and how many of them. */
+        val endedShown: Int = 0, val endedVerified: Int = 0
     )
+
+    /** One game shown LIVE: its (already redacted) [name], its addon's hashed [label] and its best [verdict] over all its copies. */
+    class ShownGame(val name: String, val label: String, val verdict: Verdict)
+
+    /** Why a shown-LIVE game is not verified (#376), in the order the report and the CSV list them. */
+    enum class Reason(val heading: String) {
+        NO_SPORT("no sport"),
+        NO_TEAMS("no two teams"),
+        NO_FEED("league without feed"),
+        NOT_FOUND("not found on ESPN"),
+        FUTURE_START("listed live but start time in the future"),
+        ESPN_DISAGREES("ESPN says over or off, app still shows live")
+    }
+
+    /** The reason [verdict] leaves a shown-LIVE game unverified, or null when ESPN backs it (in play, or starting within 30 min). */
+    fun reasonOf(verdict: Verdict): Reason? = when (verdict) {
+        Verdict.IN_PLAY, Verdict.STARTS_SOON -> null
+        Verdict.UNPLACED -> Reason.NO_SPORT
+        Verdict.NO_TEAMS -> Reason.NO_TEAMS
+        Verdict.NO_FEED -> Reason.NO_FEED
+        Verdict.NOT_FOUND -> Reason.NOT_FOUND
+        Verdict.SCHEDULED_LATER -> Reason.FUTURE_START
+        else -> Reason.ESPN_DISAGREES
+    }
+
+    /** Certainty (#376): [verified] of [shown] LIVE games backed by ESPN; [byReason] the others, in [Reason] order. */
+    class Certainty(
+        val shown: Int, val verified: Int, val endedShown: Int, val endedVerified: Int,
+        val byReason: Map<Reason, List<ShownGame>>
+    ) {
+        fun count(reason: Reason) = byReason[reason]?.size ?: 0
+    }
+
+    fun certainty(app: AppLive): Certainty {
+        val unverified = app.shown.mapNotNull { game -> reasonOf(game.verdict)?.let { it to game } }
+        return Certainty(
+            shown = app.shown.size, verified = app.shown.size - unverified.size,
+            endedShown = app.endedShown, endedVerified = app.endedVerified,
+            byReason = Reason.values().associateWith { reason -> unverified.filter { it.first == reason }.map { it.second } }
+        )
+    }
+
+    /** The summary line (#376): the verified share of shown LIVE games, and of games moved to Just ended. */
+    fun certaintyLine(c: Certainty): String =
+        "Certainty: ${percent(c.verified, c.shown)} of shown LIVE verified (${c.verified} of ${c.shown}); " +
+            "ended: ${percent(c.endedVerified, c.endedShown)} (${c.endedVerified} of ${c.endedShown} Just ended rows on a feed final; " +
+            "estimates not measured here)."
+
+    val CERTAINTY_COLUMNS = listOf("date", "shown_live", "verified", "pct", "shown_ended", "verified_ended", "pct_ended") +
+        Reason.values().map { "n_" + it.name.lowercase() }
+
+    fun certaintyCsvRow(date: String, c: Certainty): String =
+        csv(listOf(date, c.shown, c.verified, percent(c.verified, c.shown), c.endedShown, c.endedVerified, percent(c.endedVerified, c.endedShown)) +
+            Reason.values().map { c.count(it) })
+
+    /** Section G: unverified shown-LIVE games by reason, with at most [MAX_EXAMPLES] example names each (no links, labels only). */
+    fun certaintySection(c: Certainty): List<String> {
+        val rows = Reason.values().filter { c.count(it) > 0 }
+        if (rows.isEmpty()) return listOf("None: every shown LIVE game is verified.")
+        return rows.flatMap { reason ->
+            val games = c.byReason.getValue(reason)
+            listOf("- ${reason.heading}: ${games.size}") +
+                games.take(MAX_EXAMPLES).map { "  - \"${it.name}\" (${it.label})" } +
+                if (games.size > MAX_EXAMPLES) listOf("  - and ${games.size - MAX_EXAMPLES} more") else emptyList()
+        }
+    }
+
+    private const val MAX_EXAMPLES = 10
 
     /** The summary line `tools/nightly/tripwire.py` reads: keep its first sentence's shape. */
     fun appLiveLine(app: AppLive): String =

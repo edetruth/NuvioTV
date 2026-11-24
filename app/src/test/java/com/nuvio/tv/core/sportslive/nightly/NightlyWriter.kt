@@ -56,7 +56,9 @@ internal class NightlyWriter(
         val stats = sources.map { source -> source.label to Stats.of(checks.filter { it.label == source.label }) }
         appendReliability(stats)
         val rolling = rollingReliability()
-        val summary = summary(checks, disagreements, fresh, dupes, nearMisses, appLive)
+        val certainty = NightlyText.certainty(appLive)
+        appendCertainty(certainty)
+        val summary = summary(checks, disagreements, fresh, dupes, nearMisses, appLive, certainty)
         val report = buildString {
             appendLine("# Nightly accuracy run $runId")
             appendLine()
@@ -124,6 +126,12 @@ internal class NightlyWriter(
             if (table.isEmpty()) appendLine("None.")
             table.forEach { appendLine(it) }
             appendLine()
+            appendLine("## G. Certainty by league/reason")
+            appendLine()
+            appendLine("Games shown LIVE whose status is not backed by ESPN (in play, or starting within 30 min), by reason; at most 10 examples each.")
+            appendLine()
+            NightlyText.certaintySection(certainty).forEach { appendLine(r(it)) }
+            appendLine()
             appendLine("## Notes")
             appendLine()
             appendLine("- Addon files: ${sources.size} loaded, $skippedFiles skipped (not a manifest URL).")
@@ -151,7 +159,8 @@ internal class NightlyWriter(
         fresh: List<Check>,
         dupes: List<SportsLiveDupes.Suspect>,
         nearMisses: List<Pair<SportsLiveItem, SportsLiveItem>>,
-        appLive: NightlyText.AppLive
+        appLive: NightlyText.AppLive,
+        certainty: NightlyText.Certainty
     ): String {
         val all = Stats.of(checks)
         val live = disagreements.filter { it.live }
@@ -159,6 +168,7 @@ internal class NightlyWriter(
         val upcoming = checks.filter { !it.live }
         return listOf(
             NightlyText.appLiveLine(appLive),
+            NightlyText.certaintyLine(certainty),
             "Listed live: ${all.listedLive} games from ${sources.size} addons; ESPN knows ${all.verified}: in play ${all.inPlay}, starting soon ${all.soon}, " +
                 "scheduled later ${all.later}, final ${all.ended}, postponed/cancelled ${all.off} (reliability ${NightlyText.percent(all.inPlay + all.soon, all.verified)}).",
             "Live disagreements: ${live.size} (the app corrects $caught, NOT ${live.size - caught}); new since earlier runs: ${fresh.size}.",
@@ -246,6 +256,14 @@ internal class NightlyWriter(
 
     private val disagreementsFile = File(outDir, "disagreements.csv")
     private val reliabilityFile = File(outDir, "reliability.csv")
+    private val certaintyFile = File(outDir, "certainty.csv")
+
+    private fun appendCertainty(certainty: NightlyText.Certainty) {
+        if (!certaintyFile.exists()) certaintyFile.writeText(NightlyText.csv(NightlyText.CERTAINTY_COLUMNS) + "
+")
+        certaintyFile.appendText(NightlyText.certaintyCsvRow(runId, certainty) + "
+")
+    }
 
     private fun previousKeys(): Set<String> =
         if (disagreementsFile.exists()) disagreementsFile.readLines().drop(1).mapTo(HashSet()) { it.substringBefore(',') } else emptySet()

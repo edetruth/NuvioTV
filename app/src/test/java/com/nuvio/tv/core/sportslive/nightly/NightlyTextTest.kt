@@ -138,4 +138,26 @@ class NightlyTextTest {
         assertTrue(NightlyText.isUnscored(Verdict.NO_TEAMS))
         assertFalse(NightlyText.isUnscored(Verdict.SCHEDULED_LATER))
     }
+
+    @Test
+    fun `certainty counts verified shown games and groups the rest by reason`() {
+        fun g(name: String, v: Verdict) = NightlyText.ShownGame(name, "addon-aaaaaa", v)
+        val shown = listOf(g("A vs B", Verdict.IN_PLAY), g("C vs D", Verdict.STARTS_SOON), g("E", Verdict.UNPLACED), g("F", Verdict.NO_TEAMS),
+            g("G vs H", Verdict.NO_FEED), g("I vs J", Verdict.NOT_FOUND), g("K vs L", Verdict.SCHEDULED_LATER), g("M vs N", Verdict.FINAL)) +
+            (1..12).map { g("X$it vs Y$it", Verdict.NOT_FOUND) }
+        val c = NightlyText.certainty(NightlyText.AppLive(20, 0, 0, 0, 0, 0, 20, 1, shown = shown, endedShown = 3, endedVerified = 3))
+        assertEquals(20, c.shown)
+        assertEquals(2, c.verified)
+        assertEquals(1, c.count(NightlyText.Reason.NO_SPORT))
+        assertEquals(13, c.count(NightlyText.Reason.NOT_FOUND))
+        assertEquals(1, c.count(NightlyText.Reason.FUTURE_START))
+        assertEquals(1, c.count(NightlyText.Reason.ESPN_DISAGREES))
+        assertEquals("Certainty: 10% of shown LIVE verified (2 of 20); ended: 100% (3 of 3 Just ended rows on a feed final; estimates not measured here).", NightlyText.certaintyLine(c))
+        val section = NightlyText.certaintySection(c)
+        assertTrue(section.contains("- not found on ESPN: 13"))
+        assertTrue(section.contains("  - and 3 more"))
+        assertEquals(10, section.count { it.startsWith("  - \"") && it.contains("vs Y") || it.startsWith("  - \"I vs J") })
+        assertEquals("2026-11-24_0859,20,2,10%,3,3,100%,1,1,1,13,1,1", NightlyText.certaintyCsvRow("2026-11-24_0859", c))
+        assertEquals("-", NightlyText.certainty(NightlyText.AppLive(0, 0, 0, 0, 0, 0, 0, 0)).let { NightlyText.percent(it.verified, it.shown) })
+    }
 }

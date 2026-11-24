@@ -148,6 +148,13 @@ internal class NightlyAccuracy(
         fun checksOf(item: SportsLiveItem) = (listOf(item) + item.alternates).filter { !it.isChannel }.flatMap { byKey[it.streamKey].orEmpty() }
         val games = listed.filter { !it.isChannel }
         val shown = games.filter { item -> checksOf(item).none { it.appCatches } }
+        val endedChecks = (games - shown.toSet()).filter { item -> checksOf(item).any { it.appCatches && it.verdict == Verdict.FINAL } }
+        val shownGames = shown.map { item ->
+            val own = checksOf(item)
+            // Best copy wins: one verified copy backs the game; else the first copy's reason.
+            val best = own.firstOrNull { NightlyText.reasonOf(it.verdict) == null } ?: own.firstOrNull()
+            NightlyText.ShownGame(titleOf(item), best?.label ?: item.addonName, best?.verdict ?: Verdict.NOT_FOUND)
+        }
         return NightlyText.AppLive(
             games = shown.size,
             channels = listed.size - games.size,
@@ -156,7 +163,10 @@ internal class NightlyAccuracy(
             espnKnows = shown.count { item -> checksOf(item).any { it.verdict.verified } },
             unscored = shown.count { item -> checksOf(item).let { it.isNotEmpty() && it.all { check -> NightlyText.isUnscored(check.verdict) } } },
             raw = liveChecks.size,
-            addons = addons
+            addons = addons,
+            shown = shownGames,
+            endedShown = endedChecks.size,
+            endedVerified = endedChecks.size
         )
     }
 
