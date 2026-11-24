@@ -84,6 +84,15 @@ class SportsLiveCrashReportTest {
     }
 
     @Test
+    fun `a shoot-out or extra-time score never reaches a crash message either`() {
+        for (score in listOf("1 (4) - (2) 1", "1 (4) - 1 (2)", "1-1 (4-2 pens)", "2-1 AET")) {
+            val text = SportsLiveCrashReport.noScores("bad event Arsenal $score Chelsea")
+            assertFalse(text, Regex("[0-9]").containsMatchIn(text))
+            assertFalse(text, text.contains("pens") || text.contains("AET"))
+        }
+    }
+
+    @Test
     fun `a score-like pair of numbers never reaches the crash or why lines`() {
         val error = IllegalArgumentException("bad event Celtics 102-99 76ers, then 3 – 0 at 14:05 in game 7")
         val text = SportsLiveCrashReport.withCrash("a\nb\n${SportsLiveReport.DETAILS}\n", "main", error, emptyList())
