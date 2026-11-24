@@ -42,6 +42,8 @@ internal object SportsLiveSettledRows {
         for (old in previous) {
             val key = old.item.streamKey
             val fresh = builtByKey[key] ?: continue
+            // #484: a final the shown row never had in play goes to its own group (below, as a new row would).
+            if (finalNotSeenInPlay(old, fresh)) continue
             if (placedKeys.add(key)) placed += inPlace(old, fresh)
         }
         if (placed.isEmpty()) return built
@@ -58,6 +60,18 @@ internal object SportsLiveSettledRows {
      * [fresh] in [shown]'s place: its group (the header it sits under, its height and tint) and its one- or two-line
      * layout as shown; everything else (status, score chip, progress, badges, logos) as built.
      */
+    /**
+     * #484 (TV QA): a game ESPN calls final whose shown row was never seen in play by ESPN (LIVE on its addon's word only:
+     * the first board built before the scores landed, "No score yet", waiting for ESPN) did not end while shown: it was
+     * over all along. It leaves the Live rows for Just ended, as built; a final never sits among live games on a fresh
+     * order. A game ESPN had in play on the shown board still ends in its place (amendment 1).
+     */
+    fun finalNotSeenInPlay(shown: ScoreboardRow, fresh: ScoreboardRow): Boolean {
+        val over = fresh.status is GameStatus.Final || fresh.status is GameStatus.JustEnded
+        val seenInPlay = (shown.status as? GameStatus.Live)?.event != null
+        return over && fresh.group != shown.group && !seenInPlay
+    }
+
     fun inPlace(shown: ScoreboardRow, fresh: ScoreboardRow): ScoreboardRow =
         if (fresh.group == shown.group && fresh.twoSided == shown.twoSided) fresh else fresh.copy(group = shown.group, twoSided = shown.twoSided)
 }

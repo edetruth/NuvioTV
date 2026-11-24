@@ -206,15 +206,21 @@ internal fun Modifier.sportsLiveMiniSlot(miniInStage: Boolean? = null): Modifier
         if (docked) SportsLiveMiniPlacement.claim(token, SportsLiveMiniSpot.STAGE)
         onDispose { SportsLiveMiniPlacement.release(token) }
     }
+    // #486: the box's place is kept whether or not the mini player plays, and handed over when it docks too. A placement
+    // callback runs only when the layout changes, so one that skipped while not docked (Back from the player: the stage
+    // laid out before the mini player started) left the video at the slot it had before, over the stage's status line.
+    val bounds = remember { androidx.compose.runtime.mutableStateOf<SportsLiveMiniSlot?>(null) }
+    androidx.compose.runtime.LaunchedEffect(docked, bounds.value) {
+        sportsLiveMiniSlotToReport(docked, bounds.value)?.let { SportsLiveMiniPlacement.moveTo(token, it) }
+    }
     return onGloballyPositioned { coordinates ->
-        if (!docked) return@onGloballyPositioned
-        val bounds = coordinates.boundsInWindow()
-        SportsLiveMiniPlacement.moveTo(
-            token,
-            SportsLiveMiniSlot(bounds.left.toInt(), bounds.top.toInt(), bounds.width.toInt(), bounds.height.toInt())
-        )
+        val box = coordinates.boundsInWindow()
+        bounds.value = SportsLiveMiniSlot(box.left.toInt(), box.top.toInt(), box.width.toInt(), box.height.toInt())
     }
 }
+
+/** #486: the slot the stage's media box hands the mini player: its last known place, only while the mini player docks there. */
+internal fun sportsLiveMiniSlotToReport(docked: Boolean, bounds: SportsLiveMiniSlot?): SportsLiveMiniSlot? = bounds?.takeIf { docked }
 
 /**
  * The 360×203 media box: preview, mini player or drawn art, never another size. [agendaArt]: Upcoming's
