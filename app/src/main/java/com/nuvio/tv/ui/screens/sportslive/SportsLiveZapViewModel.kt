@@ -519,10 +519,9 @@ class SportsLiveZapViewModel internal constructor(
             val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
             // #354: Live now's further end rules too (overdue, no stream at all past the estimate), so the panel never calls
             // LIVE a game Live now shows as Probably ended. Dead-link checks stay Live now's.
-            val noStreamKeys = repo.endedKeys.value
+            // F8: no #275 rule here: the panel's list already leaves out every game whose lookups found no stream.
             fun splitOf(items: List<SportsLiveItem>) = SportsLiveEndedGames.shared.split(items, scores, nowMs, canEstimate).let { split ->
-                val noStreams = split.live.filter { it.hasEnded(noStreamKeys) }.mapTo(HashSet()) { it.streamKey }
-                split.with(SportsLiveEndedGames.shared.moreEnds(split.live, scores, nowMs, noStreams, repo::hasRecentLinks))
+                split.with(SportsLiveEndedGames.shared.moreEnds(split.live, scores, nowMs, emptySet(), repo::hasRecentLinks))
             }
             val split = splitOf(list)
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
@@ -1067,7 +1066,7 @@ class SportsLiveZapViewModel internal constructor(
     private fun overKeys(lineupItems: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long): Set<String> {
         val canEstimate = SportsLiveEndedGames.estimateGate(lineup.value?.mode == ScoresMode.OFF, liveScores.unmatched.value)
         return repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
-            SportsLiveEndedGames.shared.overSourceKeys(lineupItems, scores, nowMs, canEstimate)
+            SportsLiveEndedGames.shared.overSourceKeys(lineupItems, scores, nowMs, hasRecentLinks = repo::hasRecentLinks, canEstimate = canEstimate)
     }
 
     /** Game ids marked ⚠ no working stream (#147), and those of [lineupItems] whose every known link failed this session. */

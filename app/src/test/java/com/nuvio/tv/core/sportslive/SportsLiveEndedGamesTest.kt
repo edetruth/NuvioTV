@@ -523,6 +523,16 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `F8 - Up next and the dual picker leave out overdue games too, never one with links found lately`() {
+        val games = SportsLiveEndedGames()
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "over", startMs = START - 4 * HOUR)
+        val on = item(id = "on", startMs = START - HOUR)
+        assertTrue(games.overSourceKeys(listOf(overdue, on), emptyMap(), START) { false }.isEmpty())
+        assertEquals(setOf(overdue.streamKey), games.overSourceKeys(listOf(overdue, on), emptyMap(), START, hasRecentLinks = { false }) { false })
+        assertTrue(games.overSourceKeys(listOf(overdue), emptyMap(), START, hasRecentLinks = { true }) { false }.isEmpty())
+    }
+
+    @Test
     fun `F4 - what live counts leave out - Just ended, dropped and finals in their grace`() {
         val games = SportsLiveEndedGames()
         val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)

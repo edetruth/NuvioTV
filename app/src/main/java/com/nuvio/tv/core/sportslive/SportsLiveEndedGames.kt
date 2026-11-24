@@ -332,10 +332,15 @@ class SportsLiveEndedGames {
         items: List<SportsLiveItem>,
         scores: Map<String, ScoreSnapshot>,
         nowMs: Long,
+        /** F8: given, overdue games ([moreEnds], links found lately excepted) count as over too, as Live now and the panel show them. */
+        hasRecentLinks: ((SportsLiveItem) -> Boolean)? = null,
         canEstimate: (SportsLiveItem) -> Boolean = { true }
-    ): Set<String> =
-        items.filter { item -> verdict(item, scores[item.streamKey], nowMs, canEstimate(item)) != null }
+    ): Set<String> {
+        val (over, live) = items.partition { item -> verdict(item, scores[item.streamKey], nowMs, canEstimate(item)) != null }
+        val moved = hasRecentLinks?.let { moreEnds(live, scores, nowMs, emptySet(), it).moved }.orEmpty()
+        return (over + live.filter { it.streamKey in moved })
             .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
+    }
 
     private fun SeenFinal.toEnded() = EndedGame(EndedSignal.FINAL, atMs, event, graced)
 
