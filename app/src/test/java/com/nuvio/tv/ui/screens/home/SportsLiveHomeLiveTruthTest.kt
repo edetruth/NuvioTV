@@ -69,6 +69,15 @@ class SportsLiveHomeLiveTruthTest {
     }
 
     @Test
+    fun `#469 - Hold OK on a Home card Live now has over offers no Watch with, and the picker leaves out every source`() {
+        val merged = covered.copy(alternates = listOf(item("alt", "Indiana Pacers at Philadelphia 76ers", "Basketball", nowMs - hour)))
+        val keys = sportsLiveHomeOverSourceKeys(listOf(merged, uncovered), setOf(merged.streamKey))
+        assertEquals(setOf(merged.streamKey, "a|alt"), keys)
+        assertTrue(merged.hasEnded(keys))
+        assertTrue(!homeCardMenuEntries(merged, null, followSides = 0, partners = 2, over = true).watchWith)
+    }
+
+    @Test
     fun `Scores Off or not read yet - nothing waits, and the wait ends with ESPN's answer or its deadline`() {
         assertTrue(truth(ScoresMode.OFF).awaiting.isEmpty())
         assertTrue(truth(null).awaiting.isEmpty())

@@ -558,6 +558,15 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `#469 - Up next and the dual pickers leave out a postponed game, with every source`() {
+        val card = item().copy(alternates = listOf(item(id = "alt")))
+        val postponed = live(pacersFinal).copy(state = ScoreState.OFF, clockText = "Postponed", mayResume = false)
+        assertEquals(setOf(card.streamKey, "a|alt"), SportsLiveEndedGames().overSourceKeys(listOf(card), mapOf(card.streamKey to postponed), START))
+        // Suspended (may resume): still a live game.
+        assertTrue(SportsLiveEndedGames().overSourceKeys(listOf(card), mapOf(card.streamKey to postponed.copy(mayResume = true)), START).isEmpty())
+    }
+
+    @Test
     fun `F4 - what live counts leave out - Just ended, dropped and finals in their grace`() {
         val games = SportsLiveEndedGames()
         val old = item(name = "Team A vs Team B", sport = "Soccer", id = "old", startMs = START - 12 * HOUR)

@@ -356,7 +356,10 @@ class SportsLiveEndedGames {
         hasRecentLinks: ((SportsLiveItem) -> Boolean)? = null,
         canEstimate: (SportsLiveItem) -> Boolean = { true }
     ): Set<String> {
-        val (over, live) = items.partition { item -> verdict(item, scores[item.streamKey], nowMs, canEstimate(item)) != null }
+        // #469: a game ESPN has postponed or cancelled is over for Up next and the dual pickers too.
+        val (over, live) = items.partition { item ->
+            verdict(item, scores[item.streamKey], nowMs, canEstimate(item)) != null || isPostponed(item, scores[item.streamKey])
+        }
         val moved = hasRecentLinks?.let { moreEnds(live, scores, nowMs, emptySet(), it).moved }.orEmpty()
         return (over + live.filter { it.streamKey in moved })
             .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }

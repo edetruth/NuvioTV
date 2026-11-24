@@ -159,7 +159,8 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
         SportsLiveHomeCardMenu(
             item = item,
             all = viewModel.liveNowAllItems,
-            ended = uiState.liveNowEnded,
+            // #469: every source of the games Home knows over (finals, Probably ended, postponed), as the picker reads them.
+            ended = sportsLiveHomeOverSourceKeys(viewModel.liveNowAllItems, uiState.liveNowEnded + uiState.liveNowOver),
             scoresViewModel = liveScoresViewModel,
             nav = nav,
             onDismiss = { router.liveNowMenuId = null }
@@ -327,6 +328,10 @@ internal fun homeLiveWork(
         SportsLiveEndedGames.postponedKeys(allItems, scores)
     return HomeLiveWork(truth, ended, over)
 }
+
+/** #469: every source key (a merged card's alternates too) of the cards of [items] whose card key is in [overKeys]. */
+internal fun sportsLiveHomeOverSourceKeys(items: List<SportsLiveItem>, overKeys: Set<String>): Set<String> =
+    items.filter { it.streamKey in overKeys }.flatMapTo(HashSet(overKeys)) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
 
 /** #375: what Home's Live now row reads of the live truth: the cards waiting for ESPN, the Probably ended ones, the wait's deadline. */
 internal data class HomeLiveTruth(val awaiting: Set<String>, val probablyEnded: Set<String>, val deadline: Long?)
