@@ -51,4 +51,15 @@ class SportsLivePostponedTest {
         assertEquals(ScoreboardGroup.JUST_ENDED, row.section)
         assertEquals(PanelRowOk.PLAY, panelRowOk(row, postponed))
     }
+
+    @Test
+    fun `L4 - the LIVE header counts a suspended game living there, never a postponed one`() {
+        val suspended = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Suspended", mayResume = true)
+        val row = scoreboardRows(listOf(card), SportsLiveTab.LIVE_NOW, mapOf(card.streamKey to suspended), ScoresMode.SHOW, emptySet(), 0L).single()
+        assertEquals(ScoreboardGroup.LIVE, row.group)
+        assertEquals(1, sportsLiveGroupCounts(listOf(row))[ScoreboardGroup.LIVE])
+        // Settled in its LIVE place after ESPN called it postponed: not counted.
+        val postponed = row.copy(status = GameStatus.Postponed("Postponed", mayResume = false))
+        assertEquals(null, sportsLiveGroupCounts(listOf(postponed))[ScoreboardGroup.LIVE])
+    }
 }

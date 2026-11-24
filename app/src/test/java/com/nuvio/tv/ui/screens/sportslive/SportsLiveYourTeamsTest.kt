@@ -133,6 +133,14 @@ class SportsLiveYourTeamsTest {
     }
 
     @Test
+    fun `L4 - the heading does not count a followed game postponed in its live place, a suspended one it does`() {
+        val postponed = liveFollowed.copy(status = com.nuvio.tv.core.sportslive.GameStatus.Postponed("Postponed", mayResume = false))
+        assertEquals(0, YourTeams.summary(YourTeams.strip(listOf(postponed), emptyList(), emptyList(), now, zone)).live)
+        val suspended = liveFollowed.copy(status = com.nuvio.tv.core.sportslive.GameStatus.Postponed("Suspended", mayResume = true))
+        assertEquals(1, YourTeams.summary(YourTeams.strip(listOf(suspended), emptyList(), emptyList(), now, zone)).live)
+    }
+
+    @Test
     fun `a game live now is not listed again as later today`() {
         val alsoUpcoming = liveFollowed.copy(group = ScoreboardGroup.LATER)
         val strip = YourTeams.strip(listOf(liveFollowed), listOf(alsoUpcoming), emptyList(), now, zone)

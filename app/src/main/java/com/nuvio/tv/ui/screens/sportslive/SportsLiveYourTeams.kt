@@ -199,7 +199,11 @@ internal object YourTeams {
     /** The heading's counts: live games, replays and games later today. */
     fun summary(strip: List<YourTeamsEntry>): YourTeamsSummary = YourTeamsSummary(
         // F5: only games that read live: not one waiting for ESPN, nor one ended in its place.
-        live = strip.count { it is YourTeamsEntry.Live && !it.row.awaitingScore && !it.row.endedInPlace },
+        live = strip.count {
+            it is YourTeamsEntry.Live && !it.row.awaitingScore && !it.row.endedInPlace &&
+                // L4: a game postponed or cancelled in its shown place is no live game.
+                !(it.row.status is com.nuvio.tv.core.sportslive.GameStatus.Postponed && !(it.row.status as com.nuvio.tv.core.sportslive.GameStatus.Postponed).mayResume)
+        },
         replays = strip.count { it is YourTeamsEntry.Replay },
         later = strip.count { it is YourTeamsEntry.LaterToday }
     )
@@ -394,7 +398,8 @@ internal fun SportsLiveYourTeamsStrip(
                                 halves = panelPlaysHalves((entry.row.status as? com.nuvio.tv.core.sportslive.GameStatus.Live)?.event?.league)
                             )
                             SlimFace(
-                                status = SlimStatus.Live(footer.lead),
+                                // L4: the red dot only for a game the footer reads live ("Suspended", "Postponed": no dot).
+                                status = if (footer.live) SlimStatus.Live(footer.lead) else SlimStatus.Time(footer.lead),
                                 corner = if (ready) SlimCorner.Ready else null,
                                 score = (footer.trailing as? DrawnCardTrailing.Score)?.text
                             )
