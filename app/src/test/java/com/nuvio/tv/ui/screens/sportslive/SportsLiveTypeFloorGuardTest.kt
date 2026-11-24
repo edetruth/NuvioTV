@@ -18,7 +18,12 @@ class SportsLiveTypeFloorGuardTest {
     fun `no sports live text is smaller than 12 sp`() {
         val root = File("src/main/java/com/nuvio/tv/ui/screens/sportslive")
         assertTrue("run from the app module", root.isDirectory)
-        val files = root.walkTopDown().filter { it.isFile && it.extension == "kt" && it.name !in dead }.toList()
+        // The section's files in the player and settings too (review R12).
+        val elsewhere = listOf("player", "settings").flatMap { dir ->
+            File("src/main/java/com/nuvio/tv/ui/screens/$dir").listFiles { file -> file.name.startsWith("SportsLive") && file.extension == "kt" }.orEmpty().toList()
+        }
+        assertTrue(elsewhere.size >= 8)
+        val files = root.walkTopDown().filter { it.isFile && it.extension == "kt" && it.name !in dead }.toList() + elsewhere
         assertTrue(files.size > 50)
         val problems = files.flatMap { file ->
             file.readLines().mapIndexedNotNull { i, line -> violation(line)?.let { "${file.name}:${i + 1} $it" } }

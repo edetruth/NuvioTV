@@ -282,7 +282,8 @@ private fun EndToast(title: String, modifier: Modifier) {
         modifier = modifier
             .widthIn(max = 520.dp)
             .clip(shape)
-            .background(SportsLiveTokens.Colors.Surface.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            // The one overlay surface (#101, review R12): opaque raised, as every toast.
+            .background(SportsLiveTokens.Colors.SurfaceRaised)
             .border(1.dp, SportsLiveTokens.Alert.Border, shape)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
