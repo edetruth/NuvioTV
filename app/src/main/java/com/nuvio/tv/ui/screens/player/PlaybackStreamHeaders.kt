@@ -10,21 +10,28 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * Fork (#434, #435): where a stream's request headers may go in the player.
  * - Login and cookie headers ([isCredential]) go only to the origin the addon's link names ([StreamOrigin]: scheme,
- *   host and port; never down from https to http); every other header (Referer, Origin, User-Agent, ...) still goes along, as content servers need them.
+ *   host and port; never down from https to http); every other header (Referer, Origin, User-Agent, ...) still goes
+ *   along, as content servers need them, except Referer and Origin down from https to http.
  * - The unchecked TLS retry ([forUncheckedRetry]) sends no stream header to a public host: only transport headers
  *   and the app's own User-Agent. A home server ([isLocalHost], self-signed certificates are common there) keeps them.
  */
 internal object PlaybackStreamHeaders {
 
     private val CREDENTIAL_NAMES = setOf("authorization", "proxy-authorization", "cookie", "cookie2")
-    private val CREDENTIAL_WORDS = listOf("auth", "token", "api-key", "apikey", "session", "secret", "password")
+    private val CREDENTIAL_WORDS = listOf(
+        "auth", "token", "key", "session", "secret", "pass", "sig", "jwt", "cred", "ticket", "login", "account"
+    )
+
+    /** Not credentials themselves, but they can carry a private link: never sent down from https to http. */
+    private val DOWNGRADE_NAMES = setOf("referer", "origin")
 
     /** Transport headers the player itself sets; the only ones kept on the unchecked retry. */
     private val TRANSPORT_NAMES = setOf("range", "if-range", "if-none-match", "if-modified-since", "accept-encoding", "icy-metadata")
 
     fun isCredential(name: String): Boolean {
         val lower = name.trim().lowercase()
-        return lower in CREDENTIAL_NAMES || CREDENTIAL_WORDS.any { it in lower }
+        if (lower in CREDENTIAL_NAMES || CREDENTIAL_WORDS.any { it in lower }) return true
+        return "user" in lower && lower != "user-agent"
     }
 
     /**
@@ -38,7 +45,8 @@ internal object PlaybackStreamHeaders {
             link.compareAndSet(null, request.url)
             val scope = link.get() ?: return request
             if (StreamOrigin.same(scope, request.url)) return request
-            val names = request.headers.names().filter(::isCredential)
+            val downgrade = StreamOrigin.isDowngrade(scope, request.url)
+            val names = request.headers.names().filter { isCredential(it) || (downgrade && it.lowercase() in DOWNGRADE_NAMES) }
             if (names.isEmpty()) return request
             return request.newBuilder().apply { names.forEach { removeHeader(it) } }.build()
         }

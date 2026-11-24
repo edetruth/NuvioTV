@@ -29,6 +29,9 @@ class PlaybackStreamHeadersTest {
     fun `login and cookie headers are credentials, other headers are not`() {
         listOf("Authorization", "proxy-authorization", "Cookie", "Cookie2", "X-Auth-Token", "X-Access-Token", "Api-Key", "X-Api-Key", "X-Session-Id")
             .forEach { assertTrue(it, PlaybackStreamHeaders.isCredential(it)) }
+        // P6: more credential shapes addons and media servers use.
+        listOf("X-Key", "X-Access-Key", "X-Stream-Key", "X-Signature", "X-Sig", "X-JWT", "X-Pass", "X-User", "X-Username", "X-Ticket", "X-Login", "X-Account", "X-Credential")
+            .forEach { assertTrue(it, PlaybackStreamHeaders.isCredential(it)) }
         listOf("Referer", "Origin", "User-Agent", "X-Custom", "Range", "Accept-Language", "X-Requested-With")
             .forEach { assertFalse(it, PlaybackStreamHeaders.isCredential(it)) }
     }
@@ -69,7 +72,12 @@ class PlaybackStreamHeadersTest {
     fun `the link's host down from https to http gets no login headers`() {
         val scope = PlaybackStreamHeaders.HostScope()
         scope.apply(request(link))
-        assertNull(scope.apply(request("http://cdn.invalid/live/seg1.ts")).header("Authorization"))
+        val down = scope.apply(request("http://cdn.invalid/live/seg1.ts"))
+        assertNull(down.header("Authorization"))
+        // P6: Referer and Origin can carry a private link; not in clear text either.
+        assertNull(down.header("Referer"))
+        assertNull(down.header("Origin"))
+        assertEquals("v", down.header("X-Custom"))
     }
 
     @Test
