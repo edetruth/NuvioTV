@@ -2232,6 +2232,11 @@ class SportsLiveViewModelTest {
         assertEquals(setOf(stillOn.streamKey), covered.uiState.value.awaitingScore)
         // Listed in place all the same: nothing hidden or held back.
         assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+        // #470: every count leaves it out while it waits (tab, Results' line, chips), as the LIVE header does; its chip stays.
+        assertEquals(0, covered.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+        assertEquals(0, covered.uiState.value.liveGameCount)
+        assertEquals(0, covered.uiState.value.filterCounts[null] ?: 0)
+        assertTrue(covered.uiState.value.filters.isNotEmpty())
 
         val uncovered = newViewModel(canEstimate = { true })
         advanceUntilIdle()
@@ -2243,6 +2248,7 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertTrue(covered.uiState.value.awaitingScore.isEmpty())
         assertEquals(listOf("on"), covered.uiState.value.visibleItems.map { it.id })
+        assertEquals(1, covered.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
     }
 
     @Test

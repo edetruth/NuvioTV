@@ -224,8 +224,10 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
     val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode, unmatchedScores, truth)
     val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
     val liveNowOver = uiState.liveNowOver
-    val liveGameCount = remember(uiState.liveNowItems, liveNowOver) {
-        sportsLiveHomeLiveGames(viewModel.liveNowAllItems, liveNowOver).count { !it.isChannel }
+    // #470: games still waiting for ESPN read their start, so the "N live" line leaves them out, as Live Now's counts do.
+    val waitingNow = truth.awaiting.value
+    val liveGameCount = remember(uiState.liveNowItems, liveNowOver, waitingNow) {
+        sportsLiveHomeLiveGames(viewModel.liveNowAllItems, liveNowOver).count { !it.isChannel && it.streamKey !in waitingNow }
     }
     val liveNowSeeAll = if (liveGameCount > 0) stringResource(R.string.sports_live_home_see_all_live, liveGameCount) else null
     return SportsLiveHome(router = router, cardArt = sportsCardArt, seeAll = liveNowSeeAll)

@@ -139,13 +139,19 @@ data class SportsLiveUiState(
      * now" line counts, so both use one live definition (QA pass 3).
      */
     val liveGameCount: Int
-        get() = tabs[SportsLiveTab.LIVE_NOW].orEmpty().count { !it.isChannel && it.streamKey !in justEnded && it.streamKey !in postponed }
+        get() = tabs[SportsLiveTab.LIVE_NOW].orEmpty().count { !it.isChannel && it.counted() }
 
     /** How many cards [tab] counts: Live now leaves its Just ended strip out. */
     fun countOf(tab: SportsLiveTab): Int {
         val items = tabs[tab].orEmpty()
-        return if (tab == SportsLiveTab.LIVE_NOW) items.count { it.streamKey !in justEnded && it.streamKey !in postponed } else items.size
+        return if (tab == SportsLiveTab.LIVE_NOW) items.count { it.counted() } else items.size
     }
+
+    /**
+     * #470: one rule for every Live now count (the tab, Results' line, the chips, the LIVE header): a game counts live
+     * unless it is in the Just ended strip, postponed or cancelled, or still waiting for ESPN's answer (it reads its start).
+     */
+    private fun SportsLiveItem.counted(): Boolean = streamKey !in justEnded && streamKey !in postponed && streamKey !in awaitingScore
 
     companion object {
         /** The "★ My teams" filter: followed teams' games only. Not a sport or group name. */

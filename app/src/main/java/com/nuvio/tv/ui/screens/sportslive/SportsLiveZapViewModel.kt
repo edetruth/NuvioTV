@@ -658,9 +658,10 @@ class SportsLiveZapViewModel internal constructor(
                 chips = panelChips(current.list.all, current.list.chip, current.list.scoped),
                 chip = current.list.chip,
                 allItems = current.list.all,
+                // #470: games waiting for ESPN read their start: not counted live, as on Live Now.
                 counts = panelChipCounts(
-                    current.list.all.filterNot { it.streamKey in current.finished },
-                    current.list.scoped.filterNot { it.streamKey in current.finished }
+                    current.list.all.filterNot { it.streamKey in current.finished || it.streamKey in current.awaiting },
+                    current.list.scoped.filterNot { it.streamKey in current.finished || it.streamKey in current.awaiting }
                 ),
                 // #83: each row drawn as the Scoreboard draws it.
                 boards = panelBoards(drawn, boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed, liveScores.unmatched.value, current.favorites)
