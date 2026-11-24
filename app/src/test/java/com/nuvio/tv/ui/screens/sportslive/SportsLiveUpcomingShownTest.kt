@@ -73,6 +73,26 @@ class SportsLiveUpcomingShownTest {
     }
 
     @Test
+    fun `L7 - a date-only row whose date has passed everywhere leaves between sortings, today's stays`() {
+        val yesterday = item("y", "Yesterday vs Game", startMs = null).copy(startMs = NOW - 36 * HOUR, startHasTimeOfDay = false)
+        val today = item("t", "Today vs Game", startMs = null).copy(startMs = NOW - 36 * HOUR + MINUTE, startHasTimeOfDay = false)
+        val result = sportsLiveUpcomingShown(emptyList(), listOf(yesterday, today, next), emptyMap(), NOW, null, emptySet())
+        assertEquals(listOf("t", "n"), result.items.map { it.id })
+        // A restored list moved by the clock alone does the same.
+        val moved = com.nuvio.tv.core.sportslive.SportsLiveItemBucketer.moveKickedOff(
+            mapOf(com.nuvio.tv.domain.model.SportsLiveTab.UPCOMING to listOf(yesterday, today)), NOW
+        )
+        assertEquals(listOf("t"), moved.getValue(com.nuvio.tv.domain.model.SportsLiveTab.UPCOMING).map { it.id })
+    }
+
+    @Test
+    fun `#355 boundary - exactly at the grace stays, a stale PRE with no time at all stays`() {
+        val atGrace = espn(ScoreState.PRE, startMs = NOW - UPCOMING_LATE_START_GRACE_MS)
+        assertEquals(listOf("p", "n"), shown(mapOf(game.streamKey to atGrace)).items.map { it.id })
+        assertEquals(listOf("p", "n"), shown(mapOf(game.streamKey to espn(ScoreState.PRE).copy(timeValid = false))).items.map { it.id })
+    }
+
+    @Test
     fun `a final leaves even with focus, an in-play game with focus is held where it was`() {
         assertEquals(listOf("n"), shown(mapOf(game.streamKey to espn(ScoreState.POST)), focusedId = "p").items.map { it.id })
         val held = shown(mapOf(game.streamKey to espn(ScoreState.IN)), liveNowEvents = setOf(pacers.eventId), focusedId = "p")

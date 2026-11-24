@@ -41,6 +41,8 @@ internal fun sportsLiveUpcomingShown(
             val start = event.startMs?.takeIf { event.timeValid } ?: item.startMs?.takeIf { item.startHasTimeOfDay } ?: return false
             return nowMs - start > UPCOMING_LATE_START_GRACE_MS
         }
+        // L7: a date-only row whose date has passed everywhere goes, between sortings too.
+        if (com.nuvio.tv.core.sportslive.SportsLiveItemBucketer.dateOnlyPast(item, nowMs)) return true
         val start = item.startMs
         return item.startHasTimeOfDay && start != null && start <= nowMs
     }
