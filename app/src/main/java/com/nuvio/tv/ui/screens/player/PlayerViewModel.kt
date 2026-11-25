@@ -246,6 +246,9 @@ class PlayerViewModel @Inject constructor(
 
     private var startedAtRelease: Boolean? = null
 
+    internal fun getStreamTypeLabel(): String =
+        streamTypeLabel(controller.currentStreamType(), uiState.value.currentStreamAddonName)
+
     fun getCurrentFileSizeBytes(): Long? = controller.currentVideoSize
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)

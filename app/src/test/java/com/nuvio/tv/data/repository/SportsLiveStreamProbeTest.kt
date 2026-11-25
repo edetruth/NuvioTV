@@ -286,7 +286,8 @@ class SportsLiveStreamProbeTest {
             forceRefresh: Boolean,
             priorityBingeGroup: String?,
             preferredPluginOnly: Boolean,
-            continuePluginOnly: Boolean
+            continuePluginOnly: Boolean,
+            contentId: String?
         ): Flow<NetworkResult<List<AddonStreams>>> = flow {
             calls += type to videoId
             forceRefreshes += forceRefresh

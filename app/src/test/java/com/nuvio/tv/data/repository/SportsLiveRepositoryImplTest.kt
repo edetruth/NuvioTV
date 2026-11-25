@@ -601,7 +601,8 @@ class SportsLiveRepositoryImplTest {
             forceRefresh: Boolean,
             priorityBingeGroup: String?,
             preferredPluginOnly: Boolean,
-            continuePluginOnly: Boolean
+            continuePluginOnly: Boolean,
+            contentId: String?
         ): Flow<NetworkResult<List<AddonStreams>>> = flow {
             calls += videoId
             emit(NetworkResult.Loading)
