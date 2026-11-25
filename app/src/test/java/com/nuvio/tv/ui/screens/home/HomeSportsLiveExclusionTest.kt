@@ -213,7 +213,9 @@ class HomeSportsLiveExclusionTest {
             serverCatalog = mockk(relaxed = true),
             sportsLiveRepository = sportsLiveRepository,
             trailerPlayerPool = mockk(relaxed = true),
-            backgroundTrailerController = mockk(relaxed = true)
+            backgroundTrailerController = mockk(relaxed = true),
+            simklSyncRepository = mockk(relaxed = true),
+            simklRewatchWriter = mockk(relaxed = true)
         )
         viewModel.startupGracePeriodActive = false
         viewModel.currentTmdbSettings = TmdbSettings(enabled = false)
