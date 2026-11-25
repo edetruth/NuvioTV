@@ -73,6 +73,7 @@ import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MDBListRatings
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.NextToWatch
+import com.nuvio.tv.domain.model.isSeriesWithWatchableEpisodes
 import com.nuvio.tv.domain.model.isWatchedAsOneItem
 import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
 import com.nuvio.tv.ui.components.MDBListRatingsRow
@@ -139,7 +140,10 @@ fun HeroContentSection(
     val isSeriesApi = remember(meta.apiType) {
         meta.apiType.equals("series", ignoreCase = true) || meta.apiType.equals("tv", ignoreCase = true)
     }
-    val logoModel = remember(context, meta.logo) {
+    val canToggleWatched = remember(meta) {
+        meta.isWatchedAsOneItem() || meta.isSeriesWithWatchableEpisodes()
+    }
+    val logoModel =remember(context, meta.logo) {
         meta.logo?.let { logo ->
             ImageRequest.Builder(context)
                 .data(logo)
@@ -291,7 +295,7 @@ fun HeroContentSection(
                         )
                         }
 
-                        if (meta.isWatchedAsOneItem()) {
+                        if (canToggleWatched) {
                             ActionIconButton(
                                 icon = if (isMovieWatched) {
                                     Icons.Default.Visibility
